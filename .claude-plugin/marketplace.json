@@ -1,0 +1,12 @@
+{
+  "name": "leon-local",
+  "owner": {"name": "Leon"},
+  "plugins": [
+    {
+      "name": "leon-engineering",
+      "source": "./",
+      "description": "Personal engineering workflow framework",
+      "version": "0.1.0"
+    }
+  ]
+}
