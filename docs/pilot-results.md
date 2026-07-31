@@ -60,3 +60,14 @@ A fresh non-interactive `repo-explorer` invocation against a disposable Git fixt
 - `claude plugin update leon-engineering@leon-local --scope user` updated the user plugin from `0.2.0` to `0.3.0`. It was then enabled at user scope. `claude plugin details leon-engineering@leon-local` reports seven skills, seven named agents, and two hooks; the installed cache contains and validates the shared Codex role-template reference.
 
 Restart Claude Code before using the updated plugin in an existing session. Codex global skills are already installed; a new Codex task sees the installed catalog, while the recorded non-interactive CLI limitation remains separate from its desktop-agent validation.
+
+## Global project framework activation
+
+**Date:** 2026-07-31
+
+- `node --test tests/*.test.mjs` passed: 15 tests, 0 failures. `node --check scripts/install-codex-adapter.mjs`, `claude plugin validate .claude-plugin/plugin.json`, JSON manifest parsing, and `git diff --check` also passed before activation.
+- Source commit `08fe70d feat: add global project framework` was installed. The source now owns a bounded policy block, six global workflow documents, and a separate global-framework manifest; the existing seven-skill manifest remains independent.
+- The prior `/Users/leon/.codex/AGENTS.md` was copied to `/Users/leon/.codex/backups/global-project-framework-20260731/AGENTS.md.before` before installation. The installer preserved text outside its marker block.
+- `node scripts/install-codex-adapter.mjs --install-global --codex-home /Users/leon/.codex` installed `GETTING_STARTED.md`, `STRUCTURE.md`, `COMMANDS_GUIDE.md`, `SKILLS_GUIDE.md`, `AGENTS_GUIDE.md`, and `SETTINGS_GUIDE.md`. Its immediate `--verify-global` result was `valid: true` with no drift.
+- The standard skill adapter then installed and verified all seven shared workflows at framework version `0.4.0`; `--verify --target /Users/leon/.codex/skills` also returned `valid: true` with no drift. Existing non-framework skills remain outside the adapter's ownership.
+- No repository below `/Users/leon/Desktop/Projects` was scanned, edited, committed, or pushed by this activation. Project-level instructions remain the higher-priority source of truth for every future task.
