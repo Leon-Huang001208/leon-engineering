@@ -1,0 +1,93 @@
+import fs from "node:fs";
+import path from "node:path";
+import test from "node:test";
+import assert from "node:assert/strict";
+import YAML from "yaml";
+
+const root = path.resolve(import.meta.dirname, "..");
+
+const skills = {
+  "project-bootstrap": ["project instructions", "CI"],
+  "feature-loop": ["acceptance criteria", "worktree"],
+  "bugfix-evidence": ["reproduce", "root cause"],
+  "review-ship": ["diff", "handoff"],
+  "logging-observability": ["structured", "redact"],
+  "agent-routing": ["worktree", "agent team"],
+  "skill-health": ["overlap", "Never delete"]
+};
+
+const agents = {
+  "repo-explorer": {model: "haiku", readOnly: true},
+  planner: {model: "sonnet", readOnly: true},
+  implementer: {model: "sonnet", worktree: true},
+  "code-reviewer": {model: "sonnet", readOnly: true},
+  "security-reviewer": {model: "opus", readOnly: true},
+  "ci-triage": {model: "haiku", readOnly: true},
+  "docs-mapper": {model: "haiku", readOnly: true}
+};
+
+function readSkill(name) {
+  return fs.readFileSync(path.join(root, "skills", name, "SKILL.md"), "utf8");
+}
+
+function readAgent(name) {
+  return fs.readFileSync(path.join(root, "agents", `${name}.md`), "utf8");
+}
+
+function frontmatter(source) {
+  const match = source.match(/^---\n([\s\S]*?)\n---\n/);
+  assert.ok(match, "expected YAML frontmatter");
+  return YAML.parse(match[1]);
+}
+
+test("ships the seven focused workflow skills", () => {
+  assert.deepEqual(
+    fs.readdirSync(path.join(root, "skills")).sort(),
+    Object.keys(skills).sort()
+  );
+
+  for (const [name, phrases] of Object.entries(skills)) {
+    const source = readSkill(name);
+    const meta = frontmatter(source);
+    assert.equal(meta.name, name);
+    assert.match(meta.description, /Use when /);
+    for (const phrase of phrases) assert.match(source, new RegExp(phrase, "i"));
+  }
+});
+
+test("ships seven bounded agents without recursive delegation", () => {
+  assert.deepEqual(
+    fs.readdirSync(path.join(root, "agents")).sort(),
+    Object.keys(agents).map(name => `${name}.md`).sort()
+  );
+
+  for (const [name, expectation] of Object.entries(agents)) {
+    const source = readAgent(name);
+    const meta = frontmatter(source);
+    assert.equal(meta.name, name);
+    assert.equal(meta.model, expectation.model);
+    assert.match(meta.description, /^(Explore|Produce|Implement|Review|Assess|Classify|Map) /);
+    assert.match(source, /Do not .*delegate/i);
+    assert.match(source, /verified|evidence/i);
+
+    if (expectation.readOnly) {
+      assert.match(meta.disallowedTools, /Write/);
+      assert.match(meta.disallowedTools, /Edit/);
+      assert.match(meta.disallowedTools, /Agent/);
+    }
+    if (expectation.worktree) {
+      assert.equal(meta.isolation, "worktree");
+      assert.match(meta.disallowedTools, /Agent/);
+      assert.match(source, /acceptance criteria/i);
+    }
+  }
+});
+
+test("documents one focused pilot scenario for every new workflow and agent", () => {
+  const source = fs.readFileSync(path.join(root, "docs", "expansion-pilot.md"), "utf8");
+  for (const name of [...Object.keys(skills), ...Object.keys(agents)]) {
+    assert.match(source, new RegExp(`### ${name}\\b`));
+  }
+  assert.match(source, /No agent may delegate/i);
+  assert.match(source, /do not use production credentials/i);
+});
