@@ -91,3 +91,13 @@ test("documents one focused pilot scenario for every new workflow and agent", ()
   assert.match(source, /No agent may delegate/i);
   assert.match(source, /do not use production credentials/i);
 });
+
+test("documents Codex role templates with explicit boundaries", () => {
+  const source = fs.readFileSync(
+    path.join(root, "skills", "agent-routing", "references", "codex-role-templates.md"),
+    "utf8"
+  );
+  for (const name of Object.keys(agents)) assert.match(source, new RegExp(`## ${name}\\b`));
+  assert.match(source, /Never create a nested agent/);
+  assert.match(source, /parent checkout remains clean/);
+});
