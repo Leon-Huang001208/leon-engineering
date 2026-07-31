@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "leon-engineering Codex adapter manifest",
+  "description": "Each skills value is the SHA-256 checksum of the complete installed workflow directory, with paths and file contents in sorted order.",
   "type": "object",
   "required": ["schemaVersion", "adapter", "frameworkVersion", "sourceCommit", "skills"],
   "properties": {

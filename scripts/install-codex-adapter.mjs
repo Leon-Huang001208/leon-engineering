@@ -22,14 +22,49 @@ function log(event, details = {}) {
   console.error(JSON.stringify({component: "codex-adapter", event, ...details}));
 }
 
-function sha256(file) {
-  return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+function listSkillFiles(directory, name, source) {
+  if (!fs.existsSync(directory)) {
+    throw new Error(`${source ? "missing canonical skill" : "missing installed skill"}: ${name}`);
+  }
+
+  const files = [];
+  function visit(relativeDirectory) {
+    const absoluteDirectory = path.join(directory, relativeDirectory);
+    const entries = fs.readdirSync(absoluteDirectory, {withFileTypes: true})
+      .sort((left, right) => left.name.localeCompare(right.name));
+    for (const entry of entries) {
+      const relative = path.join(relativeDirectory, entry.name);
+      const absolute = path.join(directory, relative);
+      if (entry.isDirectory()) {
+        visit(relative);
+      } else if (entry.isFile()) {
+        files.push({absolute, relative: relative.split(path.sep).join("/")});
+      } else {
+        throw new Error(`unsupported skill entry: ${name}/${relative}`);
+      }
+    }
+  }
+
+  visit("");
+  if (!files.some(file => file.relative === "SKILL.md")) {
+    throw new Error(`${source ? "missing canonical skill" : "missing installed skill"}: ${name}`);
+  }
+  return files;
 }
 
-function canonicalSkill(sourceRoot, name) {
-  const file = path.join(sourceRoot, "skills", name, "SKILL.md");
-  if (!fs.existsSync(file)) throw new Error(`missing canonical skill: ${name}`);
-  return file;
+function canonicalSkillFiles(sourceRoot, name) {
+  return listSkillFiles(path.join(sourceRoot, "skills", name), name, true);
+}
+
+function skillChecksum(files) {
+  const hash = crypto.createHash("sha256");
+  for (const file of files) {
+    hash.update(file.relative);
+    hash.update("\0");
+    hash.update(fs.readFileSync(file.absolute));
+    hash.update("\0");
+  }
+  return hash.digest("hex");
 }
 
 function manifestPath(targetRoot) {
@@ -83,7 +118,7 @@ function frameworkVersion(sourceRoot) {
 }
 
 function preflight(sourceRoot, targetRoot, existing) {
-  for (const name of SKILL_NAMES) canonicalSkill(sourceRoot, name);
+  for (const name of SKILL_NAMES) canonicalSkillFiles(sourceRoot, name);
   for (const name of SKILL_NAMES) {
     const target = path.join(targetRoot, name);
     if (fs.existsSync(target) && !existing?.skills?.[name]) {
@@ -112,16 +147,21 @@ export function install({sourceRoot = SOURCE_ROOT, targetRoot}) {
   try {
     const skills = {};
     for (const name of SKILL_NAMES) {
-      const staged = path.join(staging, name, "SKILL.md");
-      fs.mkdirSync(path.dirname(staged), {recursive: true});
-      fs.copyFileSync(canonicalSkill(sourceRoot, name), staged);
-      skills[name] = sha256(staged);
+      const files = canonicalSkillFiles(sourceRoot, name);
+      for (const file of files) {
+        const staged = path.join(staging, name, file.relative);
+        fs.mkdirSync(path.dirname(staged), {recursive: true});
+        fs.copyFileSync(file.absolute, staged);
+      }
+      skills[name] = skillChecksum(files);
     }
 
     for (const name of SKILL_NAMES) {
-      const destination = path.join(targetRoot, name, "SKILL.md");
-      fs.mkdirSync(path.dirname(destination), {recursive: true});
-      writeAtomically(destination, fs.readFileSync(path.join(staging, name, "SKILL.md")));
+      for (const file of listSkillFiles(path.join(staging, name), name, false)) {
+        const destination = path.join(targetRoot, name, file.relative);
+        fs.mkdirSync(path.dirname(destination), {recursive: true});
+        writeAtomically(destination, fs.readFileSync(file.absolute));
+      }
     }
 
     const manifest = {
@@ -148,11 +188,15 @@ export function verify({sourceRoot = SOURCE_ROOT, targetRoot}) {
   if (!manifest) throw new Error("adapter manifest not found");
 
   const drift = SKILL_NAMES.filter(name => {
-    const source = canonicalSkill(sourceRoot, name);
-    const installed = path.join(targetRoot, name, "SKILL.md");
-    return !fs.existsSync(installed)
-      || sha256(source) !== sha256(installed)
-      || manifest.skills[name] !== sha256(installed);
+    try {
+      const sourceChecksum = skillChecksum(canonicalSkillFiles(sourceRoot, name));
+      const installedChecksum = skillChecksum(
+        listSkillFiles(path.join(targetRoot, name), name, false)
+      );
+      return sourceChecksum !== installedChecksum || manifest.skills[name] !== installedChecksum;
+    } catch {
+      return true;
+    }
   });
   log("verified", {valid: drift.length === 0, driftCount: drift.length});
   return {valid: drift.length === 0, drift};

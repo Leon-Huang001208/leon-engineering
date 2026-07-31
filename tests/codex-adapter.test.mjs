@@ -23,6 +23,13 @@ test("installs every canonical skill and writes a checksum manifest", t => {
   const manifest = JSON.parse(fs.readFileSync(path.join(target, ".leon-engineering.json"), "utf8"));
   assert.equal(manifest.schemaVersion, 1);
   assert.deepEqual(Object.keys(manifest.skills).sort(), SKILL_NAMES);
+  assert.match(
+    fs.readFileSync(
+      path.join(target, "agent-routing", "references", "codex-role-templates.md"),
+      "utf8"
+    ),
+    /## repo-explorer/
+  );
 });
 
 test("refuses to overwrite a foreign skill directory", t => {

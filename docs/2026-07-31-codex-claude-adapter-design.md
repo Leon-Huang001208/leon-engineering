@@ -15,16 +15,16 @@ It does not migrate legacy Claude commands, legacy global skills or agents, cred
 
 ## Architecture
 
-`/Users/leon/Developer/claude-engineering/skills/*/SKILL.md` remains the sole human-maintained workflow source.
+`/Users/leon/Developer/claude-engineering/skills/*/` remains the sole human-maintained workflow source. Each workflow body is in `SKILL.md`; companion references are installed with it so that a workflow never points to a missing local resource.
 
 ```text
-canonical workflows in leon-engineering/skills
+canonical workflow directories in leon-engineering/skills
              ├── Claude Code plugin discovery
              └── Codex adapter installer
-                        └── ~/.codex/skills/<workflow>/SKILL.md
+                        └── ~/.codex/skills/<workflow>/...
 ```
 
-The Codex adapter makes explicit copies, not symlinks. An installed manifest records the framework version, source commit, copied workflow names, and checksums. This keeps a running Codex installation stable until an explicit adapter update and makes drift detectable.
+The Codex adapter makes explicit copies, not symlinks. It copies every regular file in each workflow directory and rejects unsupported entries such as symlinks. An installed manifest records the framework version, source commit, copied workflow names, and a checksum of each complete workflow directory. This keeps a running Codex installation stable until an explicit adapter update and makes drift detectable.
 
 The existing Claude Code `agents/*.md` stay as persistent, tool-restricted named agents. Codex receives the same responsibilities through a reference owned by `agent-routing`: it supplies precise delegation templates and verification requirements, while the primary Codex agent selects the route and creates a short-lived agent.
 
@@ -34,7 +34,7 @@ Codex roles are therefore not generic by default: each delegated task must name 
 
 | Path | Change | Responsibility |
 |---|---|---|
-| `scripts/install-codex-adapter.mjs` | Create | Dry-run, install, verify, and rollback the Codex skill copies and manifest. |
+| `scripts/install-codex-adapter.mjs` | Create | Dry-run, install, verify, and rollback complete Codex workflow-directory copies and manifest. |
 | `tests/codex-adapter.test.mjs` | Create | Test ownership checks, installation, drift detection, and rollback in a temporary target. |
 | `adapters/codex/` | Create | Codex-only skill metadata and the installation manifest schema. |
 | `skills/agent-routing/references/codex-role-templates.md` | Create | Bounded role prompts and evidence requirements for Codex delegation. |
@@ -49,8 +49,8 @@ The adapter supports these commands:
 
 1. `--dry-run`: print the exact targets without changing files.
 2. `--target <directory>`: use a temporary test directory instead of `~/.codex/skills`.
-3. `--install`: reject an existing non-adapter-owned target, copy all workflows and Codex metadata, write the manifest atomically, and verify checksums.
-4. `--verify`: compare every installed skill and manifest checksum to the canonical source.
+3. `--install`: reject an existing non-adapter-owned target, copy every regular workflow file and Codex metadata, write the manifest atomically, and verify directory checksums.
+4. `--verify`: compare every installed workflow directory and manifest checksum to the canonical source.
 5. `--rollback`: remove only directories listed in the adapter-owned manifest and preserve pre-existing skills.
 
 Before the real install, create a timestamped backup of `/Users/leon/.codex/AGENTS.md`. The installer never overwrites an unrelated skill directory, deletes Claude assets, or changes Codex model, approval, sandbox, plugin, MCP, or provider configuration.
@@ -79,7 +79,7 @@ The installer returns a non-zero result and a clear actionable message for missi
 
 ## Acceptance criteria
 
-- The seven workflow bodies have one maintained source and are verified identical after Codex installation.
+- The seven workflow directories have one maintained source and are verified identical after Codex installation, including companion references.
 - Codex has an explicit, inspectable catalog manifest and cannot overwrite `pdf`, `playwright`, or another foreign global skill.
 - Codex role delegation is bounded, testable, and differentiates read-only roles from the worktree-only implementer.
 - The existing Claude plugin remains valid and unchanged in behavior except for the shared role-template reference.

@@ -4,9 +4,11 @@
 
 **Goal:** Install the seven canonical `leon-engineering` workflows into Codex safely, provide bounded Codex role templates, and record independent Codex and Claude Code evidence.
 
-**Architecture:** `skills/*/SKILL.md` remains the only maintained workflow text. A Node adapter copies these files into an explicit Codex target, writes a checksum manifest, refuses foreign conflicts, and can verify or rollback only what it owns. Claude Code continues to discover the same canonical skills and its existing named agents through the plugin.
+**Architecture:** `skills/*/` remains the only maintained workflow source: workflow bodies live in `SKILL.md` and companion references live beside them. A Node adapter copies every regular workflow file into an explicit Codex target, writes a directory-checksum manifest, refuses foreign conflicts, and can verify or rollback only what it owns. Claude Code continues to discover the same canonical skills and its existing named agents through the plugin.
 
 **Tech Stack:** Node.js built-in modules and test runner, SHA-256, JSON, Markdown, Git worktrees, Codex CLI/Desktop, Claude Code plugin CLI.
+
+**Implementation adjustment:** The initial file-only installer contract was extended after `agent-routing` gained `references/codex-role-templates.md`. The adapter now copies and verifies each complete workflow directory, which prevents an installed `SKILL.md` from referring to an absent local resource.
 
 ---
 
