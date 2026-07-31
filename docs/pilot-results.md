@@ -71,3 +71,13 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - `node scripts/install-codex-adapter.mjs --install-global --codex-home /Users/leon/.codex` installed `GETTING_STARTED.md`, `STRUCTURE.md`, `COMMANDS_GUIDE.md`, `SKILLS_GUIDE.md`, `AGENTS_GUIDE.md`, and `SETTINGS_GUIDE.md`. Its immediate `--verify-global` result was `valid: true` with no drift.
 - The standard skill adapter then installed and verified all seven shared workflows at framework version `0.4.0`; `--verify --target /Users/leon/.codex/skills` also returned `valid: true` with no drift. Existing non-framework skills remain outside the adapter's ownership.
 - No repository below `/Users/leon/Desktop/Projects` was scanned, edited, committed, or pushed by this activation. Project-level instructions remain the higher-priority source of truth for every future task.
+
+## Project adapter activation
+
+**Date:** 2026-07-31
+
+- The source profile-generator tests covered bounded evidence discovery, default read-only behavior, explicit persistence, overwrite refusal, unsafe-root rejection, malformed `package.json`, and CLI output. `node --test tests/*.test.mjs` passed: 21 tests, 0 failures.
+- `node --check scripts/profile-project.mjs`, `git diff --check`, `claude plugin validate .claude-plugin/plugin.json`, and JSON parsing for both adapter manifests and the profile schema passed before activation.
+- Source commit `48e5e97 docs: guide project adapter workflow` was installed as framework version `0.5.0`. The adapter now owns eight shared skills, including `project-adapter`; the global-document and skill manifests verified with `valid: true` and no drift.
+- `project-adapter` was not run against any real project during this activation. No project profile, `.ai/` directory, project source, project configuration, repository history, remote, or CI configuration was created or changed.
+- Future tasks may run the generator only for a user-selected project. Its normal mode is read-only; writing `.ai/project-profile.json` remains a separate explicit authorization and replacement remains opt-in.
