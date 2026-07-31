@@ -16,6 +16,7 @@ export const SKILL_NAMES = [
   "bugfix-evidence",
   "feature-loop",
   "logging-observability",
+  "project-adapter",
   "project-bootstrap",
   "review-ship",
   "skill-health"

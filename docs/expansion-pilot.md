@@ -6,6 +6,10 @@ Run each scenario in a disposable Git repository or against non-sensitive fixtur
 
 Ask for a verified onboarding map of a small repository with a test script and CI workflow. Confirm that it identifies existing project instructions, commands, logging conventions, and open uncertainties without creating files.
 
+### project-adapter
+
+Run the adapter against a disposable fixture with project instructions, manifests, a CI workflow, and a desktop directory. Confirm it returns only bounded evidence and candidate commands, does not execute anything or write `.ai/` by default, and refuses a second persistent-profile write without explicit replacement.
+
 ### feature-loop
 
 Give a narrow feature with acceptance criteria and a fixture test. Confirm the response maps tests, worktree conditions, review, and handoff evidence without inventing validation.

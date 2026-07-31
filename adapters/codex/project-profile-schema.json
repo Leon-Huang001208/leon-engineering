@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "leon-engineering project profile",
+  "description": "A bounded, evidence-based project profile. Candidate commands are not execution evidence.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "projectRoot",
+    "instructions",
+    "ecosystems",
+    "commands",
+    "ci",
+    "platformSignals",
+    "evidence",
+    "uncertainties"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "projectRoot": {"type": "string"},
+    "instructions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "path"],
+        "properties": {
+          "kind": {"type": "string"},
+          "path": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "ecosystems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "evidence"],
+        "properties": {
+          "kind": {"type": "string"},
+          "evidence": {"type": "array", "items": {"type": "string"}}
+        },
+        "additionalProperties": false
+      }
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "command", "source", "status"],
+        "properties": {
+          "kind": {"type": "string"},
+          "command": {"type": "string"},
+          "source": {"type": "string"},
+          "status": {"const": "candidate"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "ci": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "path"],
+        "properties": {
+          "kind": {"const": "workflow"},
+          "path": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "platformSignals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "path"],
+        "properties": {
+          "kind": {"type": "string"},
+          "path": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "path"],
+        "properties": {
+          "kind": {"type": "string"},
+          "path": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "uncertainties": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": false
+}

@@ -3,6 +3,7 @@ import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 import YAML from "yaml";
+import {SKILL_NAMES} from "../scripts/install-codex-adapter.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 
@@ -13,7 +14,8 @@ const skills = {
   "review-ship": ["diff", "handoff"],
   "logging-observability": ["structured", "redact"],
   "agent-routing": ["worktree", "agent team"],
-  "skill-health": ["overlap", "Never delete"]
+  "skill-health": ["overlap", "Never delete"],
+  "project-adapter": ["read-only", "candidate"]
 };
 
 const agents = {
@@ -100,4 +102,30 @@ test("documents Codex role templates with explicit boundaries", () => {
   for (const name of Object.keys(agents)) assert.match(source, new RegExp(`## ${name}\\b`));
   assert.match(source, /Never create a nested agent/);
   assert.match(source, /parent checkout remains clean/);
+});
+
+test("keeps the Codex adapter aligned with the focused skill catalog", () => {
+  assert.deepEqual([...SKILL_NAMES].sort(), Object.keys(skills).sort());
+});
+
+test("defines a stable project profile schema", () => {
+  const schema = JSON.parse(fs.readFileSync(
+    path.join(root, "adapters", "codex", "project-profile-schema.json"),
+    "utf8"
+  ));
+  assert.deepEqual(
+    schema.required,
+    [
+      "schemaVersion",
+      "projectRoot",
+      "instructions",
+      "ecosystems",
+      "commands",
+      "ci",
+      "platformSignals",
+      "evidence",
+      "uncertainties"
+    ]
+  );
+  assert.equal(schema.properties.commands.items.properties.status.const, "candidate");
 });
