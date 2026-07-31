@@ -13,3 +13,11 @@ node scripts/install-codex-adapter.mjs --rollback-global --codex-home "$HOME/.co
 `--install-global` 会先拒绝与用户文件冲突的文档或未受管策略区块。`--verify-global` 只读检查策略和六份文档。`--rollback-global` 只在内容未漂移时移除该框架拥有的文档和标记区块；它不会修改技能、插件、模型、MCP、凭据或项目。
 
 技能安装与全局文档安装是独立操作。不要用全局框架命令代替目标项目的测试、lint、构建、浏览器检查或平台验证。实际运行过的命令和结果才可作为交付证据。
+
+对用户指定的陌生项目，可从源仓库运行以下只读命令：
+
+```bash
+node scripts/profile-project.mjs --project /absolute/project --format markdown
+```
+
+它只检查固定的指令、清单、CI 和平台路径，输出的命令均标为 `candidate`，不会执行。只有用户针对该项目明确授权后，才可加入 `--write-profile` 创建 `.ai/project-profile.json`；已有档案还需要 `--replace-profile` 才会更新。安装全局框架本身不会调用该命令或扫描任何项目。
