@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "leon-engineering Codex adapter manifest",
+  "type": "object",
+  "required": ["schemaVersion", "adapter", "frameworkVersion", "sourceCommit", "skills"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "adapter": {"const": "leon-engineering"},
+    "frameworkVersion": {"type": "string"},
+    "sourceCommit": {"type": "string", "pattern": "^[0-9a-f]{7,64}$"},
+    "skills": {
+      "type": "object",
+      "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    }
+  },
+  "additionalProperties": false
+}
