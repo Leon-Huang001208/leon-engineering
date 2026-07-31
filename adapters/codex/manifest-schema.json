@@ -1,18 +1,50 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "leon-engineering Codex adapter manifest",
-  "description": "Each skills value is the SHA-256 checksum of the complete installed workflow directory, with paths and file contents in sorted order.",
-  "type": "object",
-  "required": ["schemaVersion", "adapter", "frameworkVersion", "sourceCommit", "skills"],
-  "properties": {
-    "schemaVersion": {"const": 1},
-    "adapter": {"const": "leon-engineering"},
-    "frameworkVersion": {"type": "string"},
-    "sourceCommit": {"type": "string", "pattern": "^[0-9a-f]{7,64}$"},
-    "skills": {
+  "title": "leon-engineering Codex adapter manifests",
+  "description": "The skill manifest records directory checksums. The global manifest records the bounded policy block and six named global-document checksums.",
+  "oneOf": [
+    {
+      "title": "Skill manifest",
       "type": "object",
-      "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      "required": ["schemaVersion", "adapter", "frameworkVersion", "sourceCommit", "skills"],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "adapter": {"const": "leon-engineering"},
+        "frameworkVersion": {"type": "string"},
+        "sourceCommit": {"type": "string", "pattern": "^[0-9a-f]{7,64}$"},
+        "skills": {
+          "type": "object",
+          "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "title": "Global framework manifest",
+      "type": "object",
+      "required": ["schemaVersion", "adapter", "frameworkVersion", "sourceCommit", "policy", "documents"],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "adapter": {"const": "leon-engineering"},
+        "frameworkVersion": {"type": "string"},
+        "sourceCommit": {"type": "string", "pattern": "^[0-9a-f]{7,64}$"},
+        "policy": {
+          "type": "object",
+          "required": ["checksum", "prefix", "suffix", "hadAgentsFile"],
+          "properties": {
+            "checksum": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "prefix": {"type": "string"},
+            "suffix": {"type": "string"},
+            "hadAgentsFile": {"type": "boolean"}
+          },
+          "additionalProperties": false
+        },
+        "documents": {
+          "type": "object",
+          "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      },
+      "additionalProperties": false
     }
-  },
-  "additionalProperties": false
+  ]
 }

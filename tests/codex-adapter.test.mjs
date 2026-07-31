@@ -1,9 +1,19 @@
 import fs from "node:fs";
+import {spawnSync} from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
-import {install, verify, rollback, SKILL_NAMES} from "../scripts/install-codex-adapter.mjs";
+import {
+  install,
+  verify,
+  rollback,
+  SKILL_NAMES,
+  GLOBAL_DOCUMENT_NAMES,
+  installGlobalFramework,
+  verifyGlobalFramework,
+  rollbackGlobalFramework
+} from "../scripts/install-codex-adapter.mjs";
 
 const sourceRoot = path.resolve(import.meta.dirname, "..");
 
@@ -12,6 +22,83 @@ function makeTarget(t) {
   t.after(() => fs.rmSync(target, {recursive: true, force: true}));
   return target;
 }
+
+function makeCodexHome(t) {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "leon-codex-global-"));
+  t.after(() => fs.rmSync(home, {recursive: true, force: true}));
+  return home;
+}
+
+test("installs the global framework without replacing custom global rules", t => {
+  const codexHome = makeCodexHome(t);
+  const original = "# User rules\n\nKeep this text.\n";
+  fs.writeFileSync(path.join(codexHome, "AGENTS.md"), original);
+
+  const result = installGlobalFramework({sourceRoot, codexHome});
+  assert.deepEqual(result.documents, GLOBAL_DOCUMENT_NAMES);
+  assert.equal(verifyGlobalFramework({sourceRoot, codexHome}).valid, true);
+
+  const agents = fs.readFileSync(path.join(codexHome, "AGENTS.md"), "utf8");
+  assert.match(agents, /^# User rules/m);
+  assert.match(agents, /Keep this text\./);
+  assert.match(agents, /leon-engineering:global-framework:start/);
+  for (const name of GLOBAL_DOCUMENT_NAMES) {
+    assert.equal(fs.existsSync(path.join(codexHome, "docs", name)), true);
+  }
+});
+
+test("rejects a foreign global document before installing the framework", t => {
+  const codexHome = makeCodexHome(t);
+  const docs = path.join(codexHome, "docs");
+  fs.mkdirSync(docs);
+  fs.writeFileSync(path.join(docs, "GETTING_STARTED.md"), "foreign");
+
+  assert.throws(
+    () => installGlobalFramework({sourceRoot, codexHome}),
+    /foreign global document: GETTING_STARTED\.md/
+  );
+  assert.equal(fs.readFileSync(path.join(docs, "GETTING_STARTED.md"), "utf8"), "foreign");
+  assert.equal(fs.existsSync(path.join(codexHome, ".leon-engineering-global.json")), false);
+});
+
+test("reports global drift and rolls back only framework-owned content", t => {
+  const codexHome = makeCodexHome(t);
+  const original = "# User rules\n";
+  fs.writeFileSync(path.join(codexHome, "AGENTS.md"), original);
+  installGlobalFramework({sourceRoot, codexHome});
+
+  fs.appendFileSync(path.join(codexHome, "docs", "SKILLS_GUIDE.md"), "changed\n");
+  assert.deepEqual(
+    verifyGlobalFramework({sourceRoot, codexHome}).drift,
+    ["document:SKILLS_GUIDE.md"]
+  );
+  assert.throws(() => rollbackGlobalFramework({codexHome}), /drifted global framework/);
+
+  installGlobalFramework({sourceRoot, codexHome});
+  rollbackGlobalFramework({codexHome});
+  assert.equal(fs.readFileSync(path.join(codexHome, "AGENTS.md"), "utf8"), original);
+  assert.equal(fs.existsSync(path.join(codexHome, "docs", "SKILLS_GUIDE.md")), false);
+});
+
+test("installs and verifies the global framework through the command line", t => {
+  const codexHome = makeCodexHome(t);
+  const script = path.join(sourceRoot, "scripts", "install-codex-adapter.mjs");
+
+  const installed = spawnSync(
+    process.execPath,
+    [script, "--install-global", "--codex-home", codexHome],
+    {encoding: "utf8"}
+  );
+  assert.equal(installed.status, 0, installed.stderr);
+
+  const verified = spawnSync(
+    process.execPath,
+    [script, "--verify-global", "--codex-home", codexHome],
+    {encoding: "utf8"}
+  );
+  assert.equal(verified.status, 0, verified.stderr);
+  assert.match(verified.stdout, /"valid": true/);
+});
 
 test("installs every canonical skill and writes a checksum manifest", t => {
   const target = makeTarget(t);
