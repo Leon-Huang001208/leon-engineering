@@ -233,3 +233,32 @@ test("proactively promotes low-risk reusable framework learning", () => {
   }
   assert.match(learning, /不记录项目特定的事实/);
 });
+
+test("governs the audited Claude catalog through explicit shared boundaries", () => {
+  const codexPolicy = fs.readFileSync(
+    path.join(root, "adapters", "codex", "global-policy.md"),
+    "utf8"
+  );
+  const claudePolicy = fs.readFileSync(
+    path.join(root, "adapters", "claude", "global-policy.md"),
+    "utf8"
+  );
+  const agentGuide = fs.readFileSync(
+    path.join(root, "adapters", "codex", "global-docs", "AGENTS_GUIDE.md"),
+    "utf8"
+  );
+  const routing = readSkill("agent-routing");
+  const catalog = fs.readFileSync(path.join(root, "docs", "shared-capability-catalog.md"), "utf8");
+
+  for (const policy of [codexPolicy, claudePolicy]) {
+    assert.match(policy, /共享能力目录/);
+    assert.match(policy, /不在共享目录/);
+    assert.match(policy, /skill.*同步.*文档/);
+    assert.match(policy, /Python.*依赖/);
+  }
+  assert.match(agentGuide, /七个规范职责代理/);
+  assert.match(routing, /不把 Claude 专用 agent 或 skill 隐式当成共享能力/);
+  for (const phrase of ["52 个", "230 个", "ecc", "zq", "## 共享工作流", "## Claude 专用排除项"]) {
+    assert.match(catalog, new RegExp(phrase));
+  }
+});

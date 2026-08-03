@@ -4,6 +4,8 @@
 
 代理是按任务临时创建的，不是自动运行的后台系统；不得因代理存在而派发。仅当独立产出能减少主任务等待或上下文拥塞时才派发。Claude Code 使用插件命名代理，Codex 使用同职责短生命周期角色模板，宿主分别执行隔离与工具限制。`agent-routing` 规定以下边界：
 
+跨宿主只使用共享目录中的七个规范职责代理：`repo-explorer`、`planner`、`implementer`、`code-reviewer`、`security-reviewer`、`ci-triage` 与 `docs-mapper`。Claude 本地的行业 persona、同名旧代理或来源/权限不清的代理不自动成为共享能力；必须经过单独审查、明确映射和验证。
+
 - 已知文件和小范围改动由主会话直接完成。
 - 只读调研可使用一个边界明确的只读代理；父会话验证没有产生改动。
 - 并发、风险较高或多条实现路径使用独立 Git worktree。
