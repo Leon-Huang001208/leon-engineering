@@ -235,11 +235,14 @@ const manifest = {
   adapter: "leon-engineering",
   frameworkVersion,
   sourceCommit,
-  policy: {checksum, prefix, suffix, hadClaudeFile}
+  state: "installing" | "active" | "rolling_back",
+  policy: {checksum, prefix, suffix, hadClaudeFile, placementChecksum}
 };
 ```
 
-实现必须：拒绝孤立、重复或外来标记；以 SHA-256 校验完整标记区块；只原子写入 `CLAUDE.md` 和此清单；回滚前重新校验，且仅去除自身区块并恢复原前后缀；所有成功与失败路径向 stderr 输出不含路径、命令或秘密的 JSON 日志。CLI 支持：
+实现必须：拒绝孤立、重复或外来标记；以 SHA-256 校验完整标记区块和 `{prefix,suffix,hadClaudeFile}` 的独立 `placementChecksum`。安装使用可恢复的 staged 提交：先原子写入 `installing` 清单，再写入 `CLAUDE.md` 标记区块，最后原子升级为 `active`；对自身 `installing` 的无标记状态清理 pending 后重试，对完整且未漂移的标记升级或安全完成。回滚先写 `rolling_back`，再恢复 `CLAUDE.md`，最后删除清单；无标记的 `rolling_back` pending 在下一次操作清理。任何标记/清单不一致或漂移都必须拒绝，不能自动吞掉。
+
+`writeAtomically` 在写入或 rename 失败时必须尽力清理 0600 临时文件。安装中 active 清单升级失败时须补偿恢复原 `CLAUDE.md` 与原清单，避免留下半安装状态；回滚失败则保留可识别的 pending 状态。回滚前重新校验 placement，且仅去除自身区块并恢复原前后缀。所有成功与失败路径向 stderr 输出不含路径、命令、秘密或用户内容的 JSON 日志；CLI 失败日志使用稳定安全的 `code`（如 `invalid_arguments`、`foreign_policy`、`drifted_policy`、`invalid_manifest`、`operation_failed`）。CLI 支持：
 
 ```bash
 node scripts/install-claude-adapter.mjs --install --claude-home /tmp/home
@@ -256,7 +259,14 @@ node --check scripts/install-claude-adapter.mjs
 node --test tests/claude-adapter.test.mjs
 ```
 
-预期：2 个测试通过；每个临时目录由测试清理，真实全局目录未变。
+预期：基础保留、外来区块、内容漂移与 CLI 成功路径通过，并新增四类回归测试：
+
+1. 注入 active 清单 rename 失败，确认补偿恢复原内容、无 pending/临时文件且后续可安装。
+2. 仅篡改清单 `policy.prefix`，确认 placement 校验使 verify 失败、rollback 拒绝且用户换行不丢失。
+3. 构造自身 `installing` 清单的完整标记与无标记两种中断状态，确认下一次安装恢复为 `active` 且有效。
+4. 对 unsupported、多个动作和缺少 `--claude-home` 参数断言 CLI 以退出码 1 和安全 `invalid_arguments` 错误码失败。
+
+每个临时目录由测试清理，真实全局目录未变。
 
 - [ ] **步骤 5：提交 Claude 安装器**
 
