@@ -131,3 +131,13 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - 可复用结论：共享内容等价、直接目录存在、插件运行时加载和第三方管理器登记是四个不同口径，必须以可执行同步检查统一第三方管理器的启用标记，不能只在对话中解释。
 - 实际修正：对 CC-Switch 数据库先创建可恢复快照，再下线已迁移 `zq` 的 Claude 标记、下线 Codex 缺失的 `data-connector-development` 标记，并登记 Claude 插件实际启用的 `feature-loop`、`project-adapter`、`project-bootstrap`。结果为 Claude 60、Codex 27；没有删除任何 skill 文件。
 - 受管源新增 `scripts/sync-cc-switch-skills.mjs`：默认只读审计，`--apply` 才写入，写入前自动备份，且只更新启用标记。新增回归测试覆盖目录、插件和下线能力同时存在时的期望结果。
+
+## Harness v1 激活
+
+**日期：**2026-08-03
+
+- 新增 `project-harness` 作为第 9 个共享核心 workflow。它为用户明确选择的项目和任务生成只读预览，只有 `--write-harness` 才创建本地 Agent Map、任务账本和 JSONL 指标；`--record-outcome` 只记录执行者已观察到的验证状态，绝不执行其声明的命令。
+- 自动化夹具验证了：默认不创建 `.ai/harness/`；显式写入只创建 `agent-map.md`、单任务记录和指标事件；重复写入被拒绝；结果记录不会执行声明命令；符号链接目录被拒绝，不能写出项目根目录。
+- 主分支提交 `7e990f7 feat: add project delivery harness` 的完整测试为 47/47 通过；`node --check scripts/harness-project.mjs`、`node --check scripts/install-codex-adapter.mjs`、`node --check scripts/sync-cc-switch-skills.mjs`、插件清单校验和 `git diff --check` 均通过。
+- 已安装 Codex 全局文档与 9 个受管 skills，三个适配器校验均返回 `valid: true`、零漂移。Claude 用户级插件已从 `0.6.3` 更新到 `0.7.0` 并启用；CC-Switch 自动登记新 workflow，当前统计为 Claude 61、Codex 28，并已生成可恢复数据库备份。
+- 本次仅使用临时夹具验证 Harness 行为；没有向任意真实项目写入 `.ai/harness/`。实际项目的持久化必须仍由用户对该项目明确授权。
