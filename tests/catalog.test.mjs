@@ -194,13 +194,42 @@ test("checks installed capabilities before choosing the execution route", () => 
   assert.match(routing, /不能把未检查可用能力合理化为直接执行/);
 });
 
-test("persists authorized framework corrections instead of leaving them in chat", () => {
+test("persists proactive framework corrections instead of leaving them in chat", () => {
   const policy = fs.readFileSync(
     path.join(root, "adapters", "codex", "global-policy.md"),
     "utf8"
   );
 
-  assert.match(policy, /经用户授权的可复用框架修正/);
-  assert.match(policy, /不得只停留在对话答复/);
+  assert.match(policy, /主动提炼跨项目可复用的错误和经验/);
+  assert.match(policy, /自动更新受管源、测试和安装副本/);
   assert.match(policy, /受管源、测试和安装副本/);
+});
+
+test("proactively promotes low-risk reusable framework learning", () => {
+  const codexPolicy = fs.readFileSync(
+    path.join(root, "adapters", "codex", "global-policy.md"),
+    "utf8"
+  );
+  const claudePolicy = fs.readFileSync(
+    path.join(root, "adapters", "claude", "global-policy.md"),
+    "utf8"
+  );
+  const gettingStarted = fs.readFileSync(
+    path.join(root, "adapters", "codex", "global-docs", "GETTING_STARTED.md"),
+    "utf8"
+  );
+  const routing = readSkill("agent-routing");
+  const learning = fs.readFileSync(path.join(root, "docs", "framework-learning.md"), "utf8");
+
+  for (const policy of [codexPolicy, claudePolicy]) {
+    assert.match(policy, /主动提炼跨项目可复用的错误和经验/);
+    assert.match(policy, /低风险.*自动/);
+    assert.match(policy, /高风险.*明确确认/);
+  }
+  assert.match(gettingStarted, /框架学习/);
+  assert.match(routing, /不等待用户再次指出/);
+  for (const heading of ["## 触发条件", "## 自动推广", "## 升级确认", "## 记录格式"]) {
+    assert.match(learning, new RegExp(heading));
+  }
+  assert.match(learning, /不记录项目特定的事实/);
 });
