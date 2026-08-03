@@ -267,7 +267,7 @@ node --test tests/claude-adapter.test.mjs
 2. 仅篡改清单 `policy.prefix`，确认 placement 校验使 verify 失败、rollback 拒绝且用户换行不丢失。
 3. 构造自身 `installing` 清单的完整标记与无标记两种中断状态，确认下一次安装恢复为 `active` 且有效。
 4. 对 unsupported、多个动作和缺少 `--claude-home` 参数断言 CLI 以退出码 1 和安全 `invalid_arguments` 错误码失败。
-5. 篡改已安装区块后断言 API 仍返回可检查的漂移结果，而 CLI `--verify` 以退出码 1 和不含临时目录路径的 `drifted_policy` JSON 失败。
+5. 篡改已安装区块后精确断言 API 返回 `{valid:false, drift:["policy"]}`；CLI `--verify` 必须以退出码 1 失败、stdout 为空，stderr 仅有一行且 JSON 严格等于 `{component:"claude-adapter",event:"command_failed",code:"drifted_policy"}`，并且不得泄露临时目录、用户哨兵、篡改文本或错误消息。
 
 每个临时目录由测试清理，真实全局目录未变。
 

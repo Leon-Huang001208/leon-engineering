@@ -57,7 +57,10 @@ test("detects policy drift and refuses to roll it back", t => {
   const installed = fs.readFileSync(policyFile, "utf8");
   fs.writeFileSync(policyFile, installed.replace("默认走快路径", "外来改动"));
 
-  assert.equal(verifyClaudePolicy({sourceRoot, claudeHome}).valid, false);
+  assert.deepEqual(
+    verifyClaudePolicy({sourceRoot, claudeHome}),
+    {valid: false, drift: ["policy"]}
+  );
   assert.throws(
     () => rollbackClaudePolicy({sourceRoot, claudeHome}),
     /drifted Claude policy/
@@ -88,6 +91,8 @@ test("fails CLI verification safely when the managed policy has drifted", t => {
   const claudeHome = makeClaudeHome(t);
   const policyFile = path.join(claudeHome, "CLAUDE.md");
   const script = path.join(sourceRoot, "scripts", "install-claude-adapter.mjs");
+  const sentinel = "USER_PRIVATE_SENTINEL_9c7e";
+  fs.writeFileSync(policyFile, `# User rules\n${sentinel}\n`);
   installClaudePolicy({sourceRoot, claudeHome});
   fs.writeFileSync(
     policyFile,
@@ -101,9 +106,18 @@ test("fails CLI verification safely when the managed policy has drifted", t => {
   );
 
   assert.equal(verified.status, 1, verified.stderr);
-  assert.match(verified.stderr, /"code":"drifted_policy"/);
+  assert.equal(verified.stdout, "");
+  const stderrLines = verified.stderr.trim().split("\n");
+  assert.equal(stderrLines.length, 1);
+  assert.deepEqual(JSON.parse(stderrLines[0]), {
+    component: "claude-adapter",
+    event: "command_failed",
+    code: "drifted_policy"
+  });
   assert.doesNotMatch(verified.stderr, new RegExp(claudeHome.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  assert.doesNotMatch(verified.stdout, /"valid": true/);
+  assert.doesNotMatch(verified.stderr, new RegExp(sentinel));
+  assert.doesNotMatch(verified.stderr, /外来改动/);
+  assert.doesNotMatch(verified.stderr, /drifted Claude policy/);
 });
 
 test("compensates if active manifest promotion fails without leaving adapter files", t => {
