@@ -122,3 +122,12 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - 已完整备份至 `/Users/leon/.claude/backups/catalog-governance-20260803/`，随后把 99 个旧 rules、`ecc`、`zq` 与 8 个冲突/无效/说明 agent 可恢复地移动到 `/Users/leon/.claude/legacy/catalog-governance-20260803/`；没有删除文件。剩余 52 个已验证共用源的 skill 和 227 个 Claude 专用候选 agent 保持原位，但只有共享目录已映射的能力可成为跨宿主默认。
 - 新增 `docs/shared-capability-catalog.md` 记录逐项裁决：8 个 `leon-engineering` 核心工作流、52 个同源可发现 skill 和 7 个规范职责代理可跨宿主路由；`ecc`、`zq`、来源或权限不明的行业 persona 不自动推广。
 - 源码验证 `node --test tests/*.test.mjs` 为 41/41 通过，两个安装器语法检查、插件清单校验和 `git diff --check` 均通过。主分支提交 `0c0ac73 feat: govern shared Claude capability catalog` 已安装；Codex 和 Claude 受管策略均为 `valid: true`、零漂移。Claude 用户插件已从 `0.6.2` 更新为 `0.6.3` 并确认启用，详情为 8 个 skills、7 个 agents 和 2 个 hooks；现有 Claude Code 会话需要重启。
+
+## CC-Switch 能力登记纠偏
+
+**日期：**2026-08-03
+
+- 触发信号：用户发现 CC-Switch 显示 Claude 58、Codex 28，与此前“52 个同源可发现 skill”的审查结论混淆。排查确认前者是 CC-Switch 数据库的启用标记，不是直接目录或插件运行时能力的统一计数。
+- 可复用结论：共享内容等价、直接目录存在、插件运行时加载和第三方管理器登记是四个不同口径，必须以可执行同步检查统一第三方管理器的启用标记，不能只在对话中解释。
+- 实际修正：对 CC-Switch 数据库先创建可恢复快照，再下线已迁移 `zq` 的 Claude 标记、下线 Codex 缺失的 `data-connector-development` 标记，并登记 Claude 插件实际启用的 `feature-loop`、`project-adapter`、`project-bootstrap`。结果为 Claude 60、Codex 27；没有删除任何 skill 文件。
+- 受管源新增 `scripts/sync-cc-switch-skills.mjs`：默认只读审计，`--apply` 才写入，写入前自动备份，且只更新启用标记。新增回归测试覆盖目录、插件和下线能力同时存在时的期望结果。

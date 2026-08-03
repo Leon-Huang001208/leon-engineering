@@ -4,6 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import YAML from "yaml";
 import {SKILL_NAMES} from "../scripts/install-codex-adapter.mjs";
+import {buildReconciliation} from "../scripts/sync-cc-switch-skills.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 
@@ -258,7 +259,31 @@ test("governs the audited Claude catalog through explicit shared boundaries", ()
   }
   assert.match(agentGuide, /七个规范职责代理/);
   assert.match(routing, /不把 Claude 专用 agent 或 skill 隐式当成共享能力/);
-  for (const phrase of ["52 个", "230 个", "ecc", "zq", "## 共享工作流", "## Claude 专用排除项"]) {
+  for (const phrase of ["52 个", "51 个", "230 个", "ecc", "zq", "data-connector-development", "## 共享工作流", "## Claude 专用排除项"]) {
     assert.match(catalog, new RegExp(phrase));
   }
+});
+
+test("reconciles CC-Switch flags from active directories and the enabled framework plugin", () => {
+  const result = buildReconciliation({
+    rows: [
+      {id: "local:zq", directory: "zq", enabled_claude: 1, enabled_codex: 0},
+      {id: "local:data-connector-development", directory: "data-connector-development", enabled_claude: 1, enabled_codex: 1},
+      {id: "local:feature-loop", directory: "feature-loop", enabled_claude: 0, enabled_codex: 1},
+      {id: "local:project-adapter", directory: "project-adapter", enabled_claude: 0, enabled_codex: 1},
+      {id: "local:document", directory: "document", enabled_claude: 0, enabled_codex: 0}
+    ],
+    claudeDirectories: new Set(["data-connector-development", "document"]),
+    codexDirectories: new Set(["feature-loop"]),
+    pluginEnabled: true
+  });
+
+  assert.deepEqual(result.counts, {claude: 4, codex: 1});
+  assert.deepEqual(result.changes, [
+    {id: "local:zq", before: {claude: 1, codex: 0}, after: {claude: 0, codex: 0}},
+    {id: "local:data-connector-development", before: {claude: 1, codex: 1}, after: {claude: 1, codex: 0}},
+    {id: "local:feature-loop", before: {claude: 0, codex: 1}, after: {claude: 1, codex: 1}},
+    {id: "local:project-adapter", before: {claude: 0, codex: 1}, after: {claude: 1, codex: 0}},
+    {id: "local:document", before: {claude: 0, codex: 0}, after: {claude: 1, codex: 0}}
+  ]);
 });
