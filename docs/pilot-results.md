@@ -170,3 +170,4 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - 临时项目验证覆盖：依赖任务仅在上游完成后解锁；未知依赖和环被拒绝；失败任务仅能通过 `--retry` 增加尝试次数后恢复；worktree 只保存绝对路径、分支和基准提交；符号链接 Harness 被拒绝；CLI 的预览零写入。脚本源码也被回归测试锁定为不导入子进程 API，因此不会运行 Git、测试、构建或任务命令。
 - Skill 压力基线与复核均已执行。无 P2 指引时，agent 已拒绝擅自创建 worktree、重试或运行命令，但缺少固定恢复入口；更新后，agent 先给出只读 DAG 预览，明确每一项写入、重试和 worktree 登记的命令边界，并保留“不自动执行”的限制。
 - 完整框架验证为 `node --test tests/*.test.mjs` 61/61 通过；`harness-control`、Harness、评估器、两端适配器与 CC-Switch 脚本的语法检查通过；插件 JSON 已解析，`git diff --check` 通过。此证据来自临时夹具和本地框架测试，未创建真实项目控制文件，也未触发 GitHub 或 Windows runner。
+- 框架主分支已快进合并 P2。Codex 的受管 skill、全局策略和六份全局说明已安装并验证零漂移，版本为 `0.10.0`；Claude 受管策略也验证零漂移。Claude 用户插件已通过 `claude plugin update leon-engineering@leon-local --scope user` 从 `0.9.0` 更新至 `0.10.0` 并保持启用；已有 Claude Code 会话必须重启后才会加载该版本。

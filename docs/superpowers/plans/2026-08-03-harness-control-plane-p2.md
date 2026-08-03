@@ -42,7 +42,7 @@
 - [x] 用同一场景复核 skill，确认它给出 P2 的只读预览和明确授权边界。
 - [x] 编写 `docs/harness-control-plane.md`，并更新 Harness v1、文档索引、Codex/Claude 全局技能指南和插件版本。
 - [x] 运行 `node --test tests/*.test.mjs`、`node --check scripts/harness-control.mjs`、插件 JSON 校验与 `git diff --check`；均以零失败结束。
-- [ ] 提交并在主分支快进合并；之后通过受管适配器安装/验证 Codex 与 Claude 的共享副本。真实 GitHub/Windows runner 未触发前，只报告其未验证状态。
+- [x] 提交并在主分支快进合并；之后通过受管适配器安装/验证 Codex 与 Claude 的共享副本。真实 GitHub/Windows runner 未触发前，只报告其未验证状态。
 
 ## 覆盖审查
 
