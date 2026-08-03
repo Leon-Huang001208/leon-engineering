@@ -103,3 +103,12 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - 规则同时要求：用户授权的可复用框架修正必须同步更新受管源、回归测试和安装副本，并在交付中提供验证证据；未获授权时只记录建议，不能擅自改变全局行为。
 - 回归测试新增两项，完整源码测试 `node --test tests/*.test.mjs` 为 39/39 通过；两个安装器语法检查、插件清单校验与 `git diff --check` 均通过。
 - 主分支提交 `104d075 feat: route work through installed capabilities` 已安装。Codex 全局策略、八个共享 skills 和 Claude 受管策略均验证为 `valid: true`、零漂移；Claude 用户插件已从 `0.6.0` 更新为 `0.6.1`，详情确认 8 个 skills、7 个 agents 和 2 个 hooks。已打开的 Claude Code 会话必须重启后才会载入新版本。
+
+## 主动框架学习激活
+
+**日期：**2026-08-03
+
+- 用户明确授权：面对跨项目可复用的执行错误和经验，框架不再等待再次指出；有实际证据的低风险修正自动完成“受管源 → 回归测试 → 安装副本 → 记录”，高风险或影响面不明的修正仍须明确确认。
+- 新增 `docs/framework-learning.md` 定义触发条件、自动推广、升级确认和非敏感记录格式；项目特定事实、用户内容、秘密、路径和一次性偏好不进入全局学习。
+- 新增一项目录契约测试，并将原“用户授权后持久化”契约升级为主动持久化契约。完整源码验证 `node --test tests/*.test.mjs` 为 40/40 通过；两个安装器语法检查、插件清单校验和 `git diff --check` 均通过。
+- 主分支提交 `9c3839c feat: proactively promote reusable framework learning` 已安装。Codex 全局策略、八个共享 skills 和 Claude 受管策略均验证为 `valid: true`、零漂移；Claude 用户插件已从 `0.6.1` 更新为 `0.6.2`，详情确认 8 个 skills、7 个 agents 和 2 个 hooks。已打开的 Claude Code 会话必须重启后才会载入新版本。
