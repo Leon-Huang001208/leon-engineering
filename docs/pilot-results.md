@@ -151,3 +151,13 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - Codex 受管文档和 9 个 skills 已重新安装，两个 Codex 校验均为 `valid: true`、零漂移，清单版本为 `0.8.0`、源提交为 `efd400d`。Claude 受管策略也验证为 `valid: true`、零漂移。CC-Switch 同步后为 Claude 61、Codex 28，未产生数据库变更。
 - 激活中发现：对已安装插件执行 `claude plugin install` 只返回“already installed”，仍显示 0.7.0；这不等于已更新。改用 `claude plugin update leon-engineering@leon-local --scope user` 后，用户级插件实际从 0.7.0 更新到 0.8.0；`claude plugin details` 确认 9 个 skills、7 个 agents 和 2 个 hooks。该修正已写入受管命令指南。现有 Claude Code 会话仍需重启后加载新版本。
 - 已对用户明确选择的 AlphaFoundry 运行只读 Markdown 评估：仅有 1 条历史 Harness 初始化结果，显示一次通过率 100%，但验证耗时覆盖率为 0%、无阻塞分类。因此它不是业务交付速度结论；后续真实任务必须补齐新字段并积累跨项目样本。该命令未写入 AlphaFoundry。
+
+## P1 项目机械约束激活
+
+**日期：**2026-08-03
+
+- 新增第十个共享 workflow `project-constraints`，以及只读 `project-constraints.mjs`。项目以受跟踪 JSON 声明必需文件、源码改动的文档联动、内容模式、禁止依赖模式和 CI 工作流文本。检查器只接收调用方显式给出的相对变更路径，不执行 Git、测试、构建或项目命令；有违反时输出 JSON 并以退出码 1 阻断。路径越界、未知配置键和符号链接均被拒绝。
+- 为使 GitHub CI 不依赖开发机路径，新增 `install-project-constraints.mjs`。它默认仅预览；明确 `--write` 后才原子复制检查器到项目 `.agents/project-constraints.mjs`，拒绝未经 `--replace` 的覆盖和所有符号链接。测试先行记录了模块缺失、目录缺失、未知配置键和未识别依赖规则的失败，再完成实现。
+- 框架完整验证为 `node --test tests/*.test.mjs` 57/57 通过；约束检查器、安装器、适配器和 CC-Switch 脚本语法检查，插件清单校验及 `git diff --check` 均通过。Skill 压力复核确认：默认只读、只接收显式变更路径、项目配置/CI 写入须授权、静态通过不等于 Windows 或运行时验证。
+- 主分支提交 `f2cafd6 feat: enforce project mechanical constraints` 和 `a794baa feat: check architecture dependency constraints` 已安装。Codex 全局文档与 10 个受管 skills、Claude 受管策略均验证为零漂移；Claude 用户插件已从 0.8.0 更新至 0.9.0 并启用。CC-Switch 已登记 `project-constraints`，统计为 Claude 62、Codex 29，并生成可恢复数据库备份。
+- AlphaFoundry 在隔离分支 `codex/project-constraints-p1` 中新增并合并 `ae3af82 ci: enforce AlphaFoundry project constraints`：`.agents/project-constraints.json`、受管检查器副本及轻量 `.github/workflows/project-constraints.yml`。该 workflow 在 PR 和 master 推送中以 Ubuntu 运行静态门禁，同时要求现有桌面 workflow 持续具备 Windows sidecar 健康检查和 `setup_required` 证据。实际本地检查显示：空变更与 `services/wind_realtime_workbook.py` 加 `docs/CHANGELOG.md` 的合规变更通过；`services/configuration_catalog.py` 被正确阻断，原因是缺少 `get_logger` 与 `except`。工作流 YAML 已解析，GitHub Actions runner 尚未实际运行，因此未宣称 CI 或 Windows 验证已通过。

@@ -30,7 +30,7 @@
 **Files:**
 - Create: `tests/project-constraints.test.mjs`
 
-- [ ] **Step 1：写入 fixture 和期望 API**
+- [x] **Step 1：写入 fixture 和期望 API**
 
 ```js
 import {checkProjectConstraints} from "../scripts/project-constraints.mjs";
@@ -48,7 +48,7 @@ test("reports machine-readable violations without writing or executing project c
 });
 ```
 
-- [ ] **Step 2：运行并确认失败**
+- [x] **Step 2：运行并确认失败**
 
 Run: `node --test tests/project-constraints.test.mjs`
 
@@ -60,15 +60,15 @@ Expected: FAIL，原因是 `scripts/project-constraints.mjs` 尚不存在。
 - Create: `scripts/project-constraints.mjs`
 - Modify: `tests/project-constraints.test.mjs`
 
-- [ ] **Step 1：实现受限 JSON 配置与安全路径**
+- [x] **Step 1：实现受限 JSON 配置与安全路径**
 
 配置路径固定为 `.agents/project-constraints.json`，只允许项目根目录内的相对普通文件；绝不跟随配置、规则目标或工作流的符号链接。配置键仅允许 `schemaVersion`、`requiredFiles`、`changeRules`、`contentRules`、`ciRules`；未知或类型错误必须失败。
 
-- [ ] **Step 2：实现四类检查与稳定结果**
+- [x] **Step 2：实现四类检查与稳定结果**
 
 返回 `{schemaVersion:1, projectRoot, checkedFiles, violations}`。违反项含稳定 `code`、`rule`、`path` 与中文 `message`。`changeRules` 只在调用方传入的 `--changed-file` 匹配 `sourcePrefixes` 时，要求同批次变更包含任一 `requiredDocuments`；`contentRules` 对匹配文件要求每个 `requireAll` 文本存在；`ciRules` 对点名工作流要求每个文本存在。无违反时退出 0，有违反时 CLI 退出 1。
 
-- [ ] **Step 3：实现 CLI 且不读取 Git 状态**
+- [x] **Step 3：实现 CLI 且不读取 Git 状态**
 
 ```bash
 node scripts/project-constraints.mjs --project /absolute/project
@@ -77,7 +77,7 @@ node scripts/project-constraints.mjs --project /absolute/project --changed-file 
 
 未知参数、绝对变更路径、`..` 越界、符号链接和无效 JSON 必须非零失败；结果必须只输出 JSON，且不得执行配置以外的命令。
 
-- [ ] **Step 4：运行目标测试**
+- [x] **Step 4：运行目标测试**
 
 Run: `node --test tests/project-constraints.test.mjs`
 
@@ -96,15 +96,15 @@ Expected: PASS，覆盖成功、违反、CLI、只读与符号链接拒绝。
 - Modify: `.claude-plugin/plugin.json`
 - Modify: `.claude-plugin/marketplace.json`
 
-- [ ] **Step 1：对新 Skill 运行无文档基线场景**
+- [x] **Step 1：对新 Skill 运行无文档基线场景**
 
 场景：用户要求“把项目规则接入 CI”。合格基线应指出需要项目级配置和用户授权，但当前目录没有 workflow 强制先执行只读检查、区分变更路径或拒绝符号链接的共享 Skill。
 
-- [ ] **Step 2：写入最小中文 Skill 与文档**
+- [x] **Step 2：写入最小中文 Skill 与文档**
 
 Skill 必须要求先读取项目规则，默认只读检查；创建或替换 `.agents/project-constraints.json` 必须取得对该项目的明确授权；CI 只能将变更路径显式传给检查器，不能让检查器自行执行 Git 或项目命令。文档定义四类规则、限制和示例。插件版本同步升至 0.9.0。
 
-- [ ] **Step 3：运行目录和技能验证**
+- [x] **Step 3：运行目录和技能验证**
 
 Run: `node --test tests/catalog.test.mjs && claude plugin validate .claude-plugin/plugin.json`
 
@@ -116,15 +116,15 @@ Expected: PASS，第十个 workflow 被安装器和插件发现。
 - Create: `tests/project-constraints-install.test.mjs`
 - Create: `scripts/install-project-constraints.mjs`
 
-- [ ] **Step 1：写入安装器失败测试**
+- [x] **Step 1：写入安装器失败测试**
 
 预览 `node scripts/install-project-constraints.mjs --project /absolute/project` 只输出目标 `.agents/project-constraints.mjs` 与源校验和；只有 `--write` 才创建文件。已有副本必须拒绝，除非同时传入 `--replace`；项目目录、`.agents/` 和目标副本任一符号链接都必须拒绝。
 
-- [ ] **Step 2：实现最小受管复制**
+- [x] **Step 2：实现最小受管复制**
 
 安装器只能复制规范 `scripts/project-constraints.mjs` 的字节内容到 `.agents/project-constraints.mjs`，使用原子写入与 0600 权限；不读取 Git、不运行项目命令、不创建或覆盖 JSON 约束配置。默认预览不写入。
 
-- [ ] **Step 3：运行安装器测试**
+- [x] **Step 3：运行安装器测试**
 
 Run: `node --test tests/project-constraints-install.test.mjs`
 
@@ -136,15 +136,15 @@ Expected: PASS。
 - Create: `/Users/leon/Desktop/Projects/AlphaFoundry/.agents/project-constraints.json`
 - Modify: `/Users/leon/Desktop/Projects/AlphaFoundry/.github/workflows/<已确认的 CI 文件>`
 
-- [ ] **Step 1：只读确认 AlphaFoundry 的 CI 入口和约束范围**
+- [x] **Step 1：只读确认 AlphaFoundry 的 CI 入口和约束范围**
 
 读取现有 workflow 与项目规则，确认实际 Windows desktop workflow 文件。配置至少要求 `AGENTS.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT_MAP.md`、`docs/AGENT_WORKFLOW.md` 和 `docs/desktop_packaging.md` 存在；对服务层 Python 改动检查既有 `get_logger` 与显式错误处理模式；对桌面路径改动要求同批次更新 `docs/desktop_packaging.md`，并验证 workflow 中存在 `windows-latest` 与健康检查文本。
 
-- [ ] **Step 2：在新的 AlphaFoundry worktree 写入配置与 CI 调用**
+- [x] **Step 2：在新的 AlphaFoundry worktree 写入配置与 CI 调用**
 
 先用受管安装器显式复制检查器到 `.agents/project-constraints.mjs`。CI 使用项目自身的 Git 变更命令生成相对文件列表，再将每个路径以 `--changed-file` 传给该受跟踪副本；检查器本身仍不运行 Git。不得把用户主工作区的未提交文件带入该 worktree。
 
-- [ ] **Step 3：执行真实检查与现有相关 CI 静态验证**
+- [x] **Step 3：执行真实检查与现有相关 CI 静态验证**
 
 Run:
 
@@ -157,7 +157,7 @@ node /Users/leon/Developer/claude-engineering/scripts/project-constraints.mjs --
 
 ### Task 6：验证、安装、记录与合并
 
-- [ ] **Step 1：完整框架验证**
+- [x] **Step 1：完整框架验证**
 
 Run:
 
@@ -170,7 +170,7 @@ claude plugin validate .claude-plugin/plugin.json
 git diff --check
 ```
 
-- [ ] **Step 2：更新两个宿主并验证**
+- [x] **Step 2：更新两个宿主并验证**
 
 ```bash
 node scripts/install-codex-adapter.mjs --install-global --codex-home /Users/leon/.codex
@@ -182,7 +182,7 @@ node scripts/install-claude-adapter.mjs --verify --claude-home /Users/leon/.clau
 node scripts/sync-cc-switch-skills.mjs --apply
 ```
 
-- [ ] **Step 3：提交、合并、清理与记录真实证据**
+- [x] **Step 3：提交、合并、清理与记录真实证据**
 
 框架和 AlphaFoundry 各自提交；仅在对应验证实际通过后记录结果。框架合并到 `main` 后再更新全局安装；AlphaFoundry worktree 经验证后快进或保留单独分支，不覆盖主工作区的用户改动。
 
