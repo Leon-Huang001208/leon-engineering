@@ -19,6 +19,12 @@ P1 将项目已经存在的工程规则写成受版本控制的 `.agents/project
     "extensions": [".py"],
     "requireAll": ["get_logger", "except "]
   }],
+  "dependencyRules": [{
+    "name": "核心层不依赖服务层",
+    "sourcePrefixes": ["core/"],
+    "extensions": [".py"],
+    "forbiddenPatterns": ["from services.", "import services."]
+  }],
   "ciRules": [{
     "name": "桌面 Windows 健康检查",
     "workflow": ".github/workflows/desktop.yml",
@@ -30,6 +36,7 @@ P1 将项目已经存在的工程规则写成受版本控制的 `.agents/project
 - `requiredFiles`：项目必须存在且不能是符号链接的规则或架构文件。
 - `changeRules`：本次变更触及 `sourcePrefixes` 时，变更集合必须包含至少一个 `requiredDocuments`。
 - `contentRules`：本次变更的匹配文件必须包含全部 `requireAll` 文本。只适用于项目确认适合机械检查的范围。
+- `dependencyRules`：本次变更的匹配文件不得包含任一 `forbiddenPatterns` 文本，用于锁定已确认的分层依赖边界。
 - `ciRules`：点名工作流必须存在，且包含全部平台或健康检查文本。
 
 未知键、绝对路径、`..` 越界和符号链接都会失败；检查器不会执行配置中的文本，也不会运行 Git、测试或构建。

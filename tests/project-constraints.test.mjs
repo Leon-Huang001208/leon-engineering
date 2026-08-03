@@ -25,6 +25,7 @@ function makeFixture(t, {serviceSource = "from core.observability import get_log
     requiredFiles: ["AGENTS.md", "docs/ARCHITECTURE.md"],
     changeRules: [{name: "服务改动需要变更日志", sourcePrefixes: ["services/"], requiredDocuments: ["docs/CHANGELOG.md"]}],
     contentRules: [{name: "服务日志与错误处理", sourcePrefixes: ["services/"], extensions: [".py"], requireAll: ["get_logger", "except "]}],
+    dependencyRules: [{name: "核心层不依赖服务层", sourcePrefixes: ["core/"], extensions: [".py"], forbiddenPatterns: ["from services."]}],
     ciRules: [{name: "桌面 Windows 健康检查", workflow: ".github/workflows/desktop.yml", requireAll: ["windows-latest", "health"]}]
   }, null, 2)}\n`);
   return project;
@@ -53,6 +54,16 @@ test("passes declared checks when changed documentation, content, and CI evidenc
   });
 
   assert.deepEqual(result.violations, []);
+});
+
+test("reports a forbidden architecture dependency only for matching changed source", t => {
+  const project = makeFixture(t);
+  writeFile(path.join(project, "core", "bad.py"), "from services.work import run\n");
+
+  const result = checkProjectConstraints({projectRoot: project, changedFiles: ["core/bad.py"]});
+
+  assert.deepEqual(result.violations.map(item => item.code), ["forbidden_dependency"]);
+  assert.equal(result.violations[0].rule, "核心层不依赖服务层");
 });
 
 test("CLI exits nonzero for violations and refuses parent traversal", t => {

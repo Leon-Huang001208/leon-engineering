@@ -3,7 +3,7 @@ import path from "node:path";
 import {fileURLToPath} from "node:url";
 
 const CONFIGURATION_PATH = ".agents/project-constraints.json";
-const TOP_LEVEL_KEYS = new Set(["schemaVersion", "requiredFiles", "changeRules", "contentRules", "ciRules"]);
+const TOP_LEVEL_KEYS = new Set(["schemaVersion", "requiredFiles", "changeRules", "contentRules", "dependencyRules", "ciRules"]);
 
 function isWithin(root, candidate) {
   return candidate === root || candidate.startsWith(`${root}${path.sep}`);
@@ -78,12 +78,18 @@ function loadConfiguration(root) {
     extensions: assertTextArray(item.extensions, "content rule extensions"),
     requireAll: assertTextArray(item.requireAll, "content rule required content")
   })));
+  const dependencyRules = (configuration.dependencyRules ?? []).map(rule => assertRule(rule, "dependency rule", item => ({
+    name: item.name.trim(),
+    sourcePrefixes: assertStringArray(item.sourcePrefixes, "dependency rule source prefixes"),
+    extensions: assertTextArray(item.extensions, "dependency rule extensions"),
+    forbiddenPatterns: assertTextArray(item.forbiddenPatterns, "dependency rule forbidden patterns")
+  })));
   const ciRules = (configuration.ciRules ?? []).map(rule => assertRule(rule, "CI rule", item => ({
     name: item.name.trim(),
     workflow: normalizeRelative(item.workflow, "CI workflow"),
     requireAll: assertTextArray(item.requireAll, "CI rule required content")
   })));
-  return {requiredFiles, changeRules, contentRules, ciRules};
+  return {requiredFiles, changeRules, contentRules, dependencyRules, ciRules};
 }
 
 function violation(code, rule, pathValue, message) {
@@ -120,6 +126,18 @@ export function checkProjectConstraints({projectRoot, changedFiles = []}) {
       const missing = rule.requireAll.filter(text => !content.includes(text));
       if (missing.length > 0) {
         violations.push(violation("required_content_missing", rule.name, file, `文件缺少约束内容：${missing.join("、")}`));
+      }
+    }
+  }
+  for (const rule of configuration.dependencyRules) {
+    for (const file of checkedFiles) {
+      if (!matchesPrefix(file, rule.sourcePrefixes) || !rule.extensions.some(extension => file.endsWith(extension))) continue;
+      const target = safeTarget(root, file, {missing: "null", label: "changed file"});
+      if (!target) continue;
+      const content = fs.readFileSync(target, "utf8");
+      const forbidden = rule.forbiddenPatterns.filter(text => content.includes(text));
+      if (forbidden.length > 0) {
+        violations.push(violation("forbidden_dependency", rule.name, file, `文件包含禁止依赖：${forbidden.join("、")}`));
       }
     }
   }
