@@ -167,3 +167,40 @@ test("documents fast path, investigation, and worktree pilots", () => {
   }
   assert.match(source, /不以耗时宣称代替实际证据/);
 });
+
+test("checks installed capabilities before choosing the execution route", () => {
+  const codexPolicy = fs.readFileSync(
+    path.join(root, "adapters", "codex", "global-policy.md"),
+    "utf8"
+  );
+  const claudePolicy = fs.readFileSync(
+    path.join(root, "adapters", "claude", "global-policy.md"),
+    "utf8"
+  );
+  const gettingStarted = fs.readFileSync(
+    path.join(root, "adapters", "codex", "global-docs", "GETTING_STARTED.md"),
+    "utf8"
+  );
+  const skillsGuide = fs.readFileSync(
+    path.join(root, "adapters", "codex", "global-docs", "SKILLS_GUIDE.md"),
+    "utf8"
+  );
+  const routing = readSkill("agent-routing");
+
+  assert.match(codexPolicy, /优先检查已安装的 skill、agent 和工具/);
+  assert.match(claudePolicy, /优先检查已安装的 skill、agent 和工具/);
+  assert.match(gettingStarted, /已安装能力/);
+  assert.match(skillsGuide, /发现外部候选不等于安装/);
+  assert.match(routing, /不能把未检查可用能力合理化为直接执行/);
+});
+
+test("persists authorized framework corrections instead of leaving them in chat", () => {
+  const policy = fs.readFileSync(
+    path.join(root, "adapters", "codex", "global-policy.md"),
+    "utf8"
+  );
+
+  assert.match(policy, /经用户授权的可复用框架修正/);
+  assert.match(policy, /不得只停留在对话答复/);
+  assert.match(policy, /受管源、测试和安装副本/);
+});
