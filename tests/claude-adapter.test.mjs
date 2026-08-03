@@ -22,13 +22,13 @@ function makeClaudeHome(t) {
 
 test("installs alongside user CLAUDE.md content and restores it exactly", t => {
   const claudeHome = makeClaudeHome(t);
-  const original = "# User rules\\n\\nKeep every byte here.\\n";
+  const original = "# User rules\n\nKeep every byte here.\n";
   fs.writeFileSync(path.join(claudeHome, "CLAUDE.md"), original);
 
   installClaudePolicy({sourceRoot, claudeHome});
 
   const installed = fs.readFileSync(path.join(claudeHome, "CLAUDE.md"), "utf8");
-  assert.match(installed, /Keep every byte here\\./);
+  assert.match(installed, /Keep every byte here\./);
   assert.equal(verifyClaudePolicy({sourceRoot, claudeHome}).valid, true);
 
   rollbackClaudePolicy({sourceRoot, claudeHome});
@@ -39,7 +39,7 @@ test("refuses a foreign Claude policy block without an owned manifest", t => {
   const claudeHome = makeClaudeHome(t);
   fs.writeFileSync(
     path.join(claudeHome, "CLAUDE.md"),
-    `${START}\\nforeign\\n${END}\\n`
+    `${START}\nforeign\n${END}\n`
   );
 
   assert.throws(
