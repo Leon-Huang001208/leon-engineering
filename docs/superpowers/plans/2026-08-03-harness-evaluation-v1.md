@@ -1,12 +1,12 @@
-# Harness v1 交付评估闭环 Implementation Plan
+# Harness v1 交付评估闭环实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **面向代理执行者：**必须使用 `executing-plans`，按任务逐项实施本计划；步骤使用复选框（`- [ ]`）记录状态。
 
-**Goal:** 让用户明确选择项目的 Harness 能以只读方式汇总真实交付证据，并从此记录验证耗时与阻塞分类，计算一次通过率、澄清轮次、返工、验证耗时和数据覆盖率。
+**目标：**让用户明确选择项目的 Harness 能以只读方式汇总真实交付证据，并从此记录验证耗时与阻塞分类，计算一次通过率、澄清轮次、返工、验证耗时和数据覆盖率。
 
-**Architecture:** 保持 `harness-project.mjs` 的任务创建与结果写入边界不变，仅为 outcome 增加显式、可验证的度量字段。新增 `harness-evaluate.mjs`，只读取一个项目内安全的 `.ai/harness/tasks/*.json`，绝不运行任务命令、访问网络或创建文件；它返回稳定 JSON 或 Markdown 汇总。报告把缺失的时长/阻塞数据明确算入覆盖率，避免把历史记录误称为完整数据。
+**架构：**保持 `harness-project.mjs` 的任务创建与结果写入边界不变，仅为 outcome 增加显式、可验证的度量字段。新增 `harness-evaluate.mjs`，只读取一个项目内安全的 `.ai/harness/tasks/*.json`，绝不运行任务命令、访问网络或创建文件；它返回稳定 JSON 或 Markdown 汇总。报告把缺失的时长/阻塞数据明确算入覆盖率，避免把历史记录误称为完整数据。
 
-**Tech Stack:** Node.js 内置 `node:test`、`fs`、`path`、JSONL/JSON、现有受限项目画像与 Harness 路径安全机制。
+**技术栈：**Node.js 内置 `node:test`、`fs`、`path`、JSONL/JSON、现有受限项目画像与 Harness 路径安全机制。
 
 ---
 
