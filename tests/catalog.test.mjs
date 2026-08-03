@@ -159,3 +159,11 @@ test("keeps fast path documentation aligned", () => {
     assert.match(source, phrase);
   }
 });
+
+test("documents fast path, investigation, and worktree pilots", () => {
+  const source = fs.readFileSync(path.join(root, "docs", "high-throughput-pilot.md"), "utf8");
+  for (const heading of ["## 快路径", "## 只读调研", "## 隔离实现"]) {
+    assert.match(source, new RegExp(heading));
+  }
+  assert.match(source, /不以耗时宣称代替实际证据/);
+});
