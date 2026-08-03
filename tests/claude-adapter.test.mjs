@@ -87,6 +87,29 @@ test("installs and verifies Claude policy through the command line", t => {
   assert.match(verified.stdout, /"valid": true/);
 });
 
+test("redacts user CLAUDE.md text from successful CLI installation output", t => {
+  const claudeHome = makeClaudeHome(t);
+  const script = path.join(sourceRoot, "scripts", "install-claude-adapter.mjs");
+  const sentinel = "USER_PRIVATE_SENTINEL_CLAUDE_INSTALL";
+  fs.writeFileSync(path.join(claudeHome, "CLAUDE.md"), `# User rules\n${sentinel}\n`);
+
+  const installed = spawnSync(
+    process.execPath,
+    [script, "--install", "--claude-home", claudeHome],
+    {encoding: "utf8"}
+  );
+
+  assert.equal(installed.status, 0, installed.stderr);
+  assert.doesNotMatch(installed.stdout, new RegExp(sentinel));
+  assert.doesNotMatch(installed.stderr, new RegExp(sentinel));
+  assert.deepEqual(JSON.parse(installed.stdout), {
+    installed: true,
+    frameworkVersion: JSON.parse(
+      fs.readFileSync(path.join(sourceRoot, ".claude-plugin", "plugin.json"), "utf8")
+    ).version
+  });
+});
+
 test("fails CLI verification safely when the managed policy has drifted", t => {
   const claudeHome = makeClaudeHome(t);
   const policyFile = path.join(claudeHome, "CLAUDE.md");

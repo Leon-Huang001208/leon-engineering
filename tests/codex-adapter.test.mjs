@@ -100,6 +100,30 @@ test("installs and verifies the global framework through the command line", t =>
   assert.match(verified.stdout, /"valid": true/);
 });
 
+test("redacts user AGENTS.md text from successful global CLI installation output", t => {
+  const codexHome = makeCodexHome(t);
+  const script = path.join(sourceRoot, "scripts", "install-codex-adapter.mjs");
+  const sentinel = "USER_PRIVATE_SENTINEL_CODEX_GLOBAL_INSTALL";
+  fs.writeFileSync(path.join(codexHome, "AGENTS.md"), `# User rules\n${sentinel}\n`);
+
+  const installed = spawnSync(
+    process.execPath,
+    [script, "--install-global", "--codex-home", codexHome],
+    {encoding: "utf8"}
+  );
+
+  assert.equal(installed.status, 0, installed.stderr);
+  assert.doesNotMatch(installed.stdout, new RegExp(sentinel));
+  assert.doesNotMatch(installed.stderr, new RegExp(sentinel));
+  assert.deepEqual(JSON.parse(installed.stdout), {
+    installed: true,
+    documents: GLOBAL_DOCUMENT_NAMES,
+    frameworkVersion: JSON.parse(
+      fs.readFileSync(path.join(sourceRoot, ".claude-plugin", "plugin.json"), "utf8")
+    ).version
+  });
+});
+
 test("installs every canonical skill and writes a checksum manifest", t => {
   const target = makeTarget(t);
   const result = install({sourceRoot, targetRoot: target});

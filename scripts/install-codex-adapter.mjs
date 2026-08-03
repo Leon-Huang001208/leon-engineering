@@ -549,7 +549,12 @@ function main(args) {
   }
 
   if (args.includes("--install-global")) {
-    console.log(JSON.stringify(installGlobalFramework({codexHome}), null, 2));
+    const {documents, manifest} = installGlobalFramework({codexHome});
+    console.log(JSON.stringify({
+      installed: true,
+      documents,
+      frameworkVersion: manifest.frameworkVersion
+    }));
     return;
   }
   if (args.includes("--verify-global")) {

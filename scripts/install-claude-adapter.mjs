@@ -553,7 +553,8 @@ function parseCli(args) {
 function main(args) {
   const {action, claudeHome} = parseCli(args);
   if (action === "--install") {
-    console.log(JSON.stringify(installClaudePolicy({claudeHome}), null, 2));
+    const {manifest} = installClaudePolicy({claudeHome});
+    console.log(JSON.stringify({installed: true, frameworkVersion: manifest.frameworkVersion}));
   } else if (action === "--verify") {
     const verification = verifyClaudePolicy({claudeHome, logResult: false});
     if (!verification.valid) {

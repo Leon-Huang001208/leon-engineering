@@ -252,6 +252,8 @@ const manifest = {
 
 `verifyClaudePolicy()` API 在漂移时仍返回 `{valid:false, drift:["policy"]}` 供调用方检查；但 CLI 的 `--verify` 检测到漂移时必须以 `drifted_policy` 安全错误码写入 stderr 并非零退出，不能将失败结果作为成功的 stdout 响应。
 
+CLI 成功执行 `--install` 时，stdout 只能返回 `{installed:true, frameworkVersion}` 安全摘要；库 API 仍返回完整清单供内部调用。stdout 和 stderr 均不得输出清单、前后缀、用户文本、路径或 `sourceCommit`。
+
 ```bash
 node scripts/install-claude-adapter.mjs --install --claude-home /tmp/home
 node scripts/install-claude-adapter.mjs --verify --claude-home /tmp/home
@@ -403,7 +405,7 @@ claude plugin update leon-engineering@leon-local --scope user
 claude plugin enable leon-engineering@leon-local --scope user
 ```
 
-预期：三份受管清单写入并声明 `0.6.0`；Claude 插件更新后显示启用。任何冲突、漂移或插件更新失败均停止，不手工覆盖。
+预期：三份受管清单写入并声明 `0.6.0`；Claude 插件更新后显示启用。成功安装 CLI 的 stdout 仅返回安全摘要（Claude 为 `{installed:true, frameworkVersion}`；Codex 全局安装为 `{installed:true, documents, frameworkVersion}`），不得输出清单、前后缀、用户文本、路径或 `sourceCommit`，stderr 成功日志也不得包含用户内容。任何冲突、漂移或插件更新失败均停止，不手工覆盖。
 
 - [ ] **步骤 3：最终双端验证与试点**
 
