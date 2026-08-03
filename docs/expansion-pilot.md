@@ -10,6 +10,10 @@ Ask for a verified onboarding map of a small repository with a test script and C
 
 Run the adapter against a disposable fixture with project instructions, manifests, a CI workflow, and a desktop directory. Confirm it returns only bounded evidence and candidate commands, does not execute anything or write `.ai/` by default, and refuses a second persistent-profile write without explicit replacement.
 
+### project-harness
+
+Run the Harness against a disposable fixture with one task ID, goal and acceptance criterion. Confirm preview creates no project files; only explicit `--write-harness` creates the local map, task record and metrics file; recording an outcome appends only stated evidence and never executes the declared verification command.
+
 ### feature-loop
 
 Give a narrow feature with acceptance criteria and a fixture test. Confirm the response maps tests, worktree conditions, review, and handoff evidence without inventing validation.

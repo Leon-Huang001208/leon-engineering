@@ -12,6 +12,7 @@ export const LEON_ENGINEERING_SKILLS = [
   "logging-observability",
   "project-adapter",
   "project-bootstrap",
+  "project-harness",
   "review-ship",
   "skill-health"
 ];
@@ -91,12 +92,26 @@ export function buildReconciliation({rows, claudeDirectories, codexDirectories, 
   return {changes, counts: {claude: claudeEnabled, codex: codexEnabled}};
 }
 
+export function buildPluginAdditions({rows, pluginSkills = LEON_ENGINEERING_SKILLS, pluginEnabled, claudeDirectories, codexDirectories}) {
+  if (!pluginEnabled) return [];
+  const knownDirectories = new Set(rows.map(row => row.directory));
+  return pluginSkills
+    .filter(directory => !knownDirectories.has(directory))
+    .map(directory => ({
+      id: `local:${directory}`,
+      name: directory,
+      directory,
+      enabledClaude: 1,
+      enabledCodex: Number(codexDirectories.has(directory))
+    }));
+}
+
 function escapeSql(value) {
   return String(value).replaceAll("'", "''");
 }
 
-function applyChanges(database, backupDirectory, changes) {
-  if (changes.length === 0) return null;
+function applyChanges(database, backupDirectory, changes, additions) {
+  if (changes.length === 0 && additions.length === 0) return null;
   fs.mkdirSync(backupDirectory, {recursive: true, mode: 0o700});
   const timestamp = new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-");
   const backup = path.join(backupDirectory, `cc-switch.db.${timestamp}.before`);
@@ -104,7 +119,10 @@ function applyChanges(database, backupDirectory, changes) {
   const updates = changes.map(change => (
     `UPDATE skills SET enabled_claude = ${change.after.claude}, enabled_codex = ${change.after.codex}, updated_at = CAST(strftime('%s','now') AS INTEGER) WHERE id = '${escapeSql(change.id)}';`
   ));
-  execFileSync("sqlite3", [database, `BEGIN IMMEDIATE;\n${updates.join("\n")}\nCOMMIT;`], {encoding: "utf8"});
+  const inserts = additions.map(addition => (
+    `INSERT INTO skills (id, name, directory, enabled_claude, enabled_codex, installed_at, updated_at) VALUES ('${escapeSql(addition.id)}', '${escapeSql(addition.name)}', '${escapeSql(addition.directory)}', ${addition.enabledClaude}, ${addition.enabledCodex}, CAST(strftime('%s','now') AS INTEGER), CAST(strftime('%s','now') AS INTEGER));`
+  ));
+  execFileSync("sqlite3", [database, `BEGIN IMMEDIATE;\n${[...updates, ...inserts].join("\n")}\nCOMMIT;`], {encoding: "utf8"});
   return backup;
 }
 
@@ -121,17 +139,24 @@ function main() {
   if (options.plugin_enabled !== undefined && !["true", "false"].includes(options.plugin_enabled)) {
     throw new Error("--plugin-enabled must be true or false");
   }
+  const rows = readRows(database);
+  const claudeDirectories = readDirectoryNames(claudeSkills);
+  const codexDirectories = readDirectoryNames(codexSkills);
   const reconciliation = buildReconciliation({
-    rows: readRows(database),
-    claudeDirectories: readDirectoryNames(claudeSkills),
-    codexDirectories: readDirectoryNames(codexSkills),
+    rows,
+    claudeDirectories,
+    codexDirectories,
     pluginEnabled
   });
-  const backup = options.apply ? applyChanges(database, backupDirectory, reconciliation.changes) : null;
+  const additions = buildPluginAdditions({rows, pluginEnabled, claudeDirectories, codexDirectories});
+  reconciliation.counts.claude += additions.reduce((total, addition) => total + addition.enabledClaude, 0);
+  reconciliation.counts.codex += additions.reduce((total, addition) => total + addition.enabledCodex, 0);
+  const backup = options.apply ? applyChanges(database, backupDirectory, reconciliation.changes, additions) : null;
   process.stdout.write(`${JSON.stringify({
     applied: options.apply,
     pluginEnabled,
     ...reconciliation,
+    additions,
     backup
   })}\n`);
 }

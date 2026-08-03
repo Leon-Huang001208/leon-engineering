@@ -21,3 +21,11 @@ node scripts/profile-project.mjs --project /absolute/project --format markdown
 ```
 
 它只检查固定的指令、清单、CI 和平台路径，输出的命令均标为 `candidate`，不会执行。只有用户针对该项目明确授权后，才可加入 `--write-profile` 创建 `.ai/project-profile.json`；已有档案还需要 `--replace-profile` 才会更新。安装全局框架本身不会调用该命令或扫描任何项目。
+
+需要跨会话交接一个已授权的项目任务时，先预览 Harness；它不会执行项目命令：
+
+```bash
+node scripts/harness-project.mjs --project /absolute/project --task-id task-id --goal "目标" --acceptance "验收标准"
+```
+
+只有明确授权后才加 `--write-harness`。完成任务后，执行者先独立运行验证，再用 `--record-outcome` 写入已经观察到的状态、澄清轮次、返工次数和验证命令；记录命令本身不会运行该验证命令。

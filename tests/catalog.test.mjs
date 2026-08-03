@@ -4,7 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import YAML from "yaml";
 import {SKILL_NAMES} from "../scripts/install-codex-adapter.mjs";
-import {buildReconciliation} from "../scripts/sync-cc-switch-skills.mjs";
+import {buildReconciliation, buildPluginAdditions} from "../scripts/sync-cc-switch-skills.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 
@@ -16,7 +16,8 @@ const skills = {
   "logging-observability": ["structured", "redact"],
   "agent-routing": ["worktree", "agent team"],
   "skill-health": ["overlap", "Never delete"],
-  "project-adapter": ["read-only", "candidate"]
+  "project-adapter": ["read-only", "candidate"],
+  "project-harness": ["handoff", "--write-harness"]
 };
 
 const agents = {
@@ -43,7 +44,7 @@ function frontmatter(source) {
   return YAML.parse(match[1]);
 }
 
-test("ships the seven focused workflow skills", () => {
+test("ships the focused workflow skills", () => {
   assert.deepEqual(
     fs.readdirSync(path.join(root, "skills")).sort(),
     Object.keys(skills).sort()
@@ -192,6 +193,7 @@ test("checks installed capabilities before choosing the execution route", () => 
   assert.match(claudePolicy, /优先检查已安装的 skill、agent 和工具/);
   assert.match(gettingStarted, /已安装能力/);
   assert.match(skillsGuide, /发现外部候选不等于安装/);
+  assert.match(skillsGuide, /project-harness/);
   assert.match(routing, /不能把未检查可用能力合理化为直接执行/);
 });
 
@@ -259,7 +261,7 @@ test("governs the audited Claude catalog through explicit shared boundaries", ()
   }
   assert.match(agentGuide, /七个规范职责代理/);
   assert.match(routing, /不把 Claude 专用 agent 或 skill 隐式当成共享能力/);
-  for (const phrase of ["52 个", "51 个", "230 个", "ecc", "zq", "data-connector-development", "## 共享工作流", "## Claude 专用排除项"]) {
+  for (const phrase of ["52 个", "51 个", "230 个", "9 个工作流", "project-harness", "ecc", "zq", "data-connector-development", "## 共享工作流", "## Claude 专用排除项"]) {
     assert.match(catalog, new RegExp(phrase));
   }
 });
@@ -286,4 +288,20 @@ test("reconciles CC-Switch flags from active directories and the enabled framewo
     {id: "local:project-adapter", before: {claude: 0, codex: 1}, after: {claude: 1, codex: 0}},
     {id: "local:document", before: {claude: 0, codex: 0}, after: {claude: 1, codex: 0}}
   ]);
+});
+
+test("adds a missing enabled framework workflow to the CC-Switch catalog", () => {
+  assert.deepEqual(buildPluginAdditions({
+    rows: [{id: "local:agent-routing", directory: "agent-routing"}],
+    pluginSkills: ["agent-routing", "project-harness"],
+    pluginEnabled: true,
+    claudeDirectories: new Set(),
+    codexDirectories: new Set(["project-harness"])
+  }), [{
+    id: "local:project-harness",
+    name: "project-harness",
+    directory: "project-harness",
+    enabledClaude: 1,
+    enabledCodex: 1
+  }]);
 });
