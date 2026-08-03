@@ -244,6 +244,8 @@ const manifest = {
 
 `writeAtomically` 在写入或 rename 失败时必须尽力清理 0600 临时文件。安装中 active 清单升级失败时须补偿恢复原 `CLAUDE.md` 与原清单，避免留下半安装状态；回滚失败则保留可识别的 pending 状态。回滚前重新校验 placement，且仅去除自身区块并恢复原前后缀。所有成功与失败路径向 stderr 输出不含路径、命令、秘密或用户内容的 JSON 日志；CLI 失败日志使用稳定安全的 `code`（如 `invalid_arguments`、`foreign_policy`、`drifted_policy`、`invalid_manifest`、`operation_failed`）。CLI 支持：
 
+`verifyClaudePolicy()` API 在漂移时仍返回 `{valid:false, drift:["policy"]}` 供调用方检查；但 CLI 的 `--verify` 检测到漂移时必须以 `drifted_policy` 安全错误码写入 stderr 并非零退出，不能将失败结果作为成功的 stdout 响应。
+
 ```bash
 node scripts/install-claude-adapter.mjs --install --claude-home /tmp/home
 node scripts/install-claude-adapter.mjs --verify --claude-home /tmp/home
@@ -265,6 +267,7 @@ node --test tests/claude-adapter.test.mjs
 2. 仅篡改清单 `policy.prefix`，确认 placement 校验使 verify 失败、rollback 拒绝且用户换行不丢失。
 3. 构造自身 `installing` 清单的完整标记与无标记两种中断状态，确认下一次安装恢复为 `active` 且有效。
 4. 对 unsupported、多个动作和缺少 `--claude-home` 参数断言 CLI 以退出码 1 和安全 `invalid_arguments` 错误码失败。
+5. 篡改已安装区块后断言 API 仍返回可检查的漂移结果，而 CLI `--verify` 以退出码 1 和不含临时目录路径的 `drifted_policy` JSON 失败。
 
 每个临时目录由测试清理，真实全局目录未变。
 

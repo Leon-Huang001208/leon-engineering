@@ -84,6 +84,28 @@ test("installs and verifies Claude policy through the command line", t => {
   assert.match(verified.stdout, /"valid": true/);
 });
 
+test("fails CLI verification safely when the managed policy has drifted", t => {
+  const claudeHome = makeClaudeHome(t);
+  const policyFile = path.join(claudeHome, "CLAUDE.md");
+  const script = path.join(sourceRoot, "scripts", "install-claude-adapter.mjs");
+  installClaudePolicy({sourceRoot, claudeHome});
+  fs.writeFileSync(
+    policyFile,
+    fs.readFileSync(policyFile, "utf8").replace("默认走快路径", "外来改动")
+  );
+
+  const verified = spawnSync(
+    process.execPath,
+    [script, "--verify", "--claude-home", claudeHome],
+    {encoding: "utf8"}
+  );
+
+  assert.equal(verified.status, 1, verified.stderr);
+  assert.match(verified.stderr, /"code":"drifted_policy"/);
+  assert.doesNotMatch(verified.stderr, new RegExp(claudeHome.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(verified.stdout, /"valid": true/);
+});
+
 test("compensates if active manifest promotion fails without leaving adapter files", t => {
   const claudeHome = makeClaudeHome(t);
   const original = "# User rules\n";

@@ -406,7 +406,7 @@ export function installClaudePolicy({sourceRoot = SOURCE_ROOT, claudeHome}) {
   }
 }
 
-export function verifyClaudePolicy({sourceRoot = SOURCE_ROOT, claudeHome}) {
+export function verifyClaudePolicy({sourceRoot = SOURCE_ROOT, claudeHome, logResult = true}) {
   if (!claudeHome) throw fail("claudeHome is required", "invalid_arguments");
   let record = readManifestRecord(claudeHome);
   if (!record) throw fail("Claude policy manifest not found", "invalid_manifest");
@@ -438,7 +438,7 @@ export function verifyClaudePolicy({sourceRoot = SOURCE_ROOT, claudeHome}) {
     drift.push("policy");
   }
   const result = {valid: drift.length === 0, drift};
-  log("verified", {valid: result.valid, driftCount: drift.length});
+  if (logResult) log("verified", {valid: result.valid, driftCount: drift.length});
   return result;
 }
 
@@ -536,7 +536,11 @@ function main(args) {
   if (action === "--install") {
     console.log(JSON.stringify(installClaudePolicy({claudeHome}), null, 2));
   } else if (action === "--verify") {
-    console.log(JSON.stringify(verifyClaudePolicy({claudeHome}), null, 2));
+    const verification = verifyClaudePolicy({claudeHome, logResult: false});
+    if (!verification.valid) {
+      throw fail("Claude policy drift detected", "drifted_policy");
+    }
+    console.log(JSON.stringify(verification, null, 2));
   } else {
     rollbackClaudePolicy({claudeHome});
   }
