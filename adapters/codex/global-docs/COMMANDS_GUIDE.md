@@ -46,6 +46,14 @@ node scripts/harness-evaluate.mjs --project /absolute/project --format markdown
 
 报告中的一次通过率、平均值只针对已有结果；验证耗时覆盖率不足时，不得把它解释为项目实际速度。
 
+对已经初始化 Harness 的依赖任务、中断恢复或显式重试，先预览项目内任务计划；它不创建控制文件、不运行任务命令：
+
+```bash
+node scripts/harness-control.mjs --project /absolute/project --task-plan /absolute/project/control-plan.json
+```
+
+只有获得对该项目的明确写入授权后才加 `--write-control-plane`。状态转换、失败/阻塞重试和 worktree 登记均须使用独立显式命令与实际理由。该脚本不创建、切换或删除 worktree，不自动重试，也不运行 Git、测试、构建或任务命令；登记的 worktree 路径、分支和基准提交只是恢复定位信息。
+
 需要把用户已授权项目的架构、文档联动、日志/错误处理或平台规则作为机械检查时，使用受跟踪的项目配置和只读检查器：
 
 ```bash

@@ -6,7 +6,7 @@
       "name": "leon-engineering",
       "source": "./",
       "description": "Personal engineering workflow framework",
-      "version": "0.9.0"
+      "version": "0.10.0"
     }
   ]
 }

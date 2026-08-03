@@ -16,6 +16,8 @@
 - [CC-Switch 能力登记同步脚本](../scripts/sync-cc-switch-skills.mjs)
 - [Harness v1：项目级持续交付状态](harness-v1.md)
 - [Harness v1 交付评估闭环实施计划](superpowers/plans/2026-08-03-harness-evaluation-v1.md)
+- [Harness P2：任务控制平面](harness-control-plane.md)
+- [Harness P2 任务控制平面实施计划](superpowers/plans/2026-08-03-harness-control-plane-p2.md)
 - [项目机械约束](project-constraints.md)
 - [P1 项目机械约束实施计划](superpowers/plans/2026-08-03-project-constraints-p1.md)
 
