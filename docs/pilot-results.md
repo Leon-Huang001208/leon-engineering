@@ -161,3 +161,12 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - 框架完整验证为 `node --test tests/*.test.mjs` 57/57 通过；约束检查器、安装器、适配器和 CC-Switch 脚本语法检查，插件清单校验及 `git diff --check` 均通过。Skill 压力复核确认：默认只读、只接收显式变更路径、项目配置/CI 写入须授权、静态通过不等于 Windows 或运行时验证。
 - 主分支提交 `f2cafd6 feat: enforce project mechanical constraints` 和 `a794baa feat: check architecture dependency constraints` 已安装。Codex 全局文档与 10 个受管 skills、Claude 受管策略均验证为零漂移；Claude 用户插件已从 0.8.0 更新至 0.9.0 并启用。CC-Switch 已登记 `project-constraints`，统计为 Claude 62、Codex 29，并生成可恢复数据库备份。
 - AlphaFoundry 在隔离分支 `codex/project-constraints-p1` 中新增并合并 `ae3af82 ci: enforce AlphaFoundry project constraints`：`.agents/project-constraints.json`、受管检查器副本及轻量 `.github/workflows/project-constraints.yml`。该 workflow 在 PR 和 master 推送中以 Ubuntu 运行静态门禁，同时要求现有桌面 workflow 持续具备 Windows sidecar 健康检查和 `setup_required` 证据。实际本地检查显示：空变更与 `services/wind_realtime_workbook.py` 加 `docs/CHANGELOG.md` 的合规变更通过；`services/configuration_catalog.py` 被正确阻断，原因是缺少 `get_logger` 与 `except`。工作流 YAML 已解析，GitHub Actions runner 尚未实际运行，因此未宣称 CI 或 Windows 验证已通过。
+
+## Harness P2 控制平面激活
+
+**日期：**2026-08-03
+
+- 新增 `harness-control.mjs`，用于已初始化 Harness 的单项目任务 DAG、状态机、显式重试和 worktree 恢复定位。默认任务计划命令只输出预览；只有 `--write-control-plane` 才创建 `.ai/harness/control-plane.json`。状态转换、重试和登记都是独立显式命令，并要求真实理由。
+- 临时项目验证覆盖：依赖任务仅在上游完成后解锁；未知依赖和环被拒绝；失败任务仅能通过 `--retry` 增加尝试次数后恢复；worktree 只保存绝对路径、分支和基准提交；符号链接 Harness 被拒绝；CLI 的预览零写入。脚本源码也被回归测试锁定为不导入子进程 API，因此不会运行 Git、测试、构建或任务命令。
+- Skill 压力基线与复核均已执行。无 P2 指引时，agent 已拒绝擅自创建 worktree、重试或运行命令，但缺少固定恢复入口；更新后，agent 先给出只读 DAG 预览，明确每一项写入、重试和 worktree 登记的命令边界，并保留“不自动执行”的限制。
+- 完整框架验证为 `node --test tests/*.test.mjs` 61/61 通过；`harness-control`、Harness、评估器、两端适配器与 CC-Switch 脚本的语法检查通过；插件 JSON 已解析，`git diff --check` 通过。此证据来自临时夹具和本地框架测试，未创建真实项目控制文件，也未触发 GitHub 或 Windows runner。
