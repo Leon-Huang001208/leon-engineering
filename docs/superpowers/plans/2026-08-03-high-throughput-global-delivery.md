@@ -395,7 +395,7 @@ node scripts/install-codex-adapter.mjs --verify --target /Users/leon/.codex/skil
 
 实际证据：已备份至 `/Users/leon/.codex/backups/high-throughput-20260803/`；真实目录安装后的三项校验均为 `valid: true`、零漂移。
 
-- [ ] **步骤 2：安装双端策略和 Codex 技能**
+- [x] **步骤 2：安装双端策略和 Codex 技能**
 
 运行：
 
@@ -409,9 +409,9 @@ claude plugin enable leon-engineering@leon-local --scope user
 
 预期：三份受管清单写入并声明 `0.6.0`；Claude 插件更新后显示启用。成功安装 CLI 的 stdout 仅返回安全摘要（Claude 为 `{installed:true, frameworkVersion}`；Codex 全局安装为 `{installed:true, documents, frameworkVersion}`），不得输出清单、前后缀、用户文本、路径或 `sourceCommit`，stderr 成功日志也不得包含用户内容。任何冲突、漂移或插件更新失败均停止，不手工覆盖。
 
-实际证据：Codex 全局策略、八个共享工作流和 Claude 受管策略均已安装并声明 `0.6.0`；源码完整测试已确认成功摘要不泄露用户内容。`claude plugin update` 必须等待本分支合并到主分支（本地市场源指向主分支），因此本步骤在合并前保持未完成。
+实际证据：Codex 全局策略、八个共享工作流和 Claude 受管策略均已安装并声明 `0.6.0`；源码完整测试已确认成功摘要不泄露用户内容。实施分支合并至主分支后，用户级 Claude 插件已从 `0.3.0` 更新至 `0.6.0`，并确认原本已在用户范围启用。
 
-- [ ] **步骤 3：最终双端验证与试点**
+- [x] **步骤 3：最终双端验证与试点**
 
 运行：
 
@@ -424,9 +424,9 @@ claude plugin details leon-engineering@leon-local
 
 随后按 `docs/high-throughput-pilot.md` 运行三种合成夹具，并记录实际命令、差异检查、目标测试和非交互限制。不得把未返回的模型调用记录为通过。
 
-实际证据：三项受管策略校验已通过，三条合成夹具也已完成并记录于 `docs/pilot-results.md`；尚缺合并后的 `claude plugin details`，故本步骤保持未完成。
+实际证据：三项受管策略校验均返回 `valid: true`、零漂移；三条合成夹具已完成并记录于 `docs/pilot-results.md`。合并后 `claude plugin details leon-engineering@leon-local` 确认版本 `0.6.0`、八个工作流、七个命名代理和两个 hooks。
 
-- [ ] **步骤 4：记录结果并提交**
+- [x] **步骤 4：记录结果并提交**
 
 在 `docs/pilot-results.md` 增加中文条目，记录：源码提交、插件与两份策略的版本、三条试点的实际证据、未验证项以及 Claude Code 重启要求。然后运行：
 
@@ -434,6 +434,8 @@ claude plugin details leon-engineering@leon-local
 git add docs/pilot-results.md
 git commit -m "docs: record high-throughput protocol activation"
 ```
+
+实际证据：试运行与合并后的插件激活已写入 `docs/pilot-results.md`，将在最终中文记录提交中交付。
 
 ## 计划自检
 

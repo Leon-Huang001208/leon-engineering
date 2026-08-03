@@ -91,5 +91,5 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - 快路径夹具位于 `/tmp/leon-high-throughput-pilot-20260803`：主会话只改动 `src/greet.js` 与 `test/greet.test.js`，为已点名函数补充默认值 `World`，直接执行 `node --test test/greet.test.js`，结果 2/2 通过，并以 `git diff --check` 检查。该路径没有创建计划、代理或 worktree；改动随后作为夹具提交，父检出保持干净。
 - 只读调研夹具：`repo-explorer` 仅读取同一夹具的 `README.md`、`src/greet.js` 与 `test/greet.test.js`，正确识别函数入口、默认值和 Node 内置测试入口；其未执行测试，明确标记该限制。之后以父检出的 `git diff --exit-code` 与空 `git status --short` 独立确认没有改动。
 - 隔离实现夹具位于 `/tmp/leon-high-throughput-implementer-20260803`：`implementer` 只改动独立 worktree 中的 `src/greet.js` 与 `test/greet.test.js`，先复现空格输入返回 `Hello,  Leon ` 的失败，再以 `name.trim()` 完成最小修复。独立复核 `node --test test/greet.test.js` 为 3/3 通过、`git diff --check` 通过；父检出仍无未提交改动，执行者没有提交。
-- Claude 插件 `0.6.0` 的用户级更新尚未执行：本地市场源指向主分支，因此必须在本分支合并后运行 `claude plugin update`、启用并以 `claude plugin details` 复核，不能提前宣称完成。更新后，已打开的 Claude Code 会话必须重启。
+- 实施分支已快进合并至主分支。随后 `claude plugin update leon-engineering@leon-local --scope user` 已将用户级插件从 `0.3.0` 更新到 `0.6.0`；启用命令确认该插件原本已在用户范围启用。`claude plugin details leon-engineering@leon-local` 确认当前目录包含八个共享工作流、七个 Claude 命名代理和两个 hooks。已打开的 Claude Code 会话必须重启后才会载入新版本。
 - 非交互式 `codex exec` 与 `claude -p` 未返回的既有响应性限制，继续只作为限制记录，不作为加载或试运行成功的证据。
