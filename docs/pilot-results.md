@@ -81,3 +81,15 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - Source commit `48e5e97 docs: guide project adapter workflow` was installed as framework version `0.5.0`. The adapter now owns eight shared skills, including `project-adapter`; the global-document and skill manifests verified with `valid: true` and no drift.
 - `project-adapter` was not run against any real project during this activation. No project profile, `.ai/` directory, project source, project configuration, repository history, remote, or CI configuration was created or changed.
 - Future tasks may run the generator only for a user-selected project. Its normal mode is read-only; writing `.ai/project-profile.json` remains a separate explicit authorization and replacement remains opt-in.
+
+## 高吞吐全局交付协议试运行
+
+**日期：**2026-08-03
+
+- 源码分支 `codex/high-throughput-delivery` 已完成源码验证：`node --test tests/*.test.mjs` 为 37/37 通过；`node --check scripts/install-codex-adapter.mjs`、`node --check scripts/install-claude-adapter.mjs`、`claude plugin validate .claude-plugin/plugin.json` 与 `git diff --check` 均通过。
+- 在实际全局目录安装前，原文件已备份至 `/Users/leon/.codex/backups/high-throughput-20260803/AGENTS.md.before` 与 `/Users/leon/.codex/backups/high-throughput-20260803/CLAUDE.md.before`。随后安装并校验 Codex 全局策略、八个共享工作流和 Claude 受管策略；三项校验均返回 `valid: true`、零漂移，受管清单版本均为 `0.6.0`。
+- 快路径夹具位于 `/tmp/leon-high-throughput-pilot-20260803`：主会话只改动 `src/greet.js` 与 `test/greet.test.js`，为已点名函数补充默认值 `World`，直接执行 `node --test test/greet.test.js`，结果 2/2 通过，并以 `git diff --check` 检查。该路径没有创建计划、代理或 worktree；改动随后作为夹具提交，父检出保持干净。
+- 只读调研夹具：`repo-explorer` 仅读取同一夹具的 `README.md`、`src/greet.js` 与 `test/greet.test.js`，正确识别函数入口、默认值和 Node 内置测试入口；其未执行测试，明确标记该限制。之后以父检出的 `git diff --exit-code` 与空 `git status --short` 独立确认没有改动。
+- 隔离实现夹具位于 `/tmp/leon-high-throughput-implementer-20260803`：`implementer` 只改动独立 worktree 中的 `src/greet.js` 与 `test/greet.test.js`，先复现空格输入返回 `Hello,  Leon ` 的失败，再以 `name.trim()` 完成最小修复。独立复核 `node --test test/greet.test.js` 为 3/3 通过、`git diff --check` 通过；父检出仍无未提交改动，执行者没有提交。
+- Claude 插件 `0.6.0` 的用户级更新尚未执行：本地市场源指向主分支，因此必须在本分支合并后运行 `claude plugin update`、启用并以 `claude plugin details` 复核，不能提前宣称完成。更新后，已打开的 Claude Code 会话必须重启。
+- 非交互式 `codex exec` 与 `claude -p` 未返回的既有响应性限制，继续只作为限制记录，不作为加载或试运行成功的证据。
