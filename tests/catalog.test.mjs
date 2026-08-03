@@ -129,3 +129,32 @@ test("defines a stable project profile schema", () => {
   );
   assert.equal(schema.properties.commands.items.properties.status.const, "candidate");
 });
+
+test("defaults bounded work to the documented fast path", () => {
+  const policy = fs.readFileSync(
+    path.join(root, "adapters", "codex", "global-policy.md"),
+    "utf8"
+  );
+  const routing = readSkill("agent-routing");
+
+  assert.match(policy, /默认走快路径/);
+  assert.match(policy, /不创建计划、不调用子代理、不创建 worktree/);
+  assert.match(routing, /只有在.*明确速度收益.*时才派发代理/);
+  assert.match(routing, /不得为了流程而向用户提问/);
+});
+
+test("keeps user-facing framework documents in Chinese", () => {
+  const source = fs.readFileSync(
+    path.join(
+      root,
+      "docs",
+      "superpowers",
+      "specs",
+      "2026-08-03-high-throughput-global-delivery-design.md"
+    ),
+    "utf8"
+  );
+
+  assert.match(source, /^# 高吞吐全局交付协议设计/m);
+  assert.doesNotMatch(source, /^# High-Throughput/m);
+});
