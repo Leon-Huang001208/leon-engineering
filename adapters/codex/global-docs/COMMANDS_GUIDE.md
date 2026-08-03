@@ -45,3 +45,14 @@ node scripts/harness-evaluate.mjs --project /absolute/project --format markdown
 ```
 
 报告中的一次通过率、平均值只针对已有结果；验证耗时覆盖率不足时，不得把它解释为项目实际速度。
+
+需要把用户已授权项目的架构、文档联动、日志/错误处理或平台规则作为机械检查时，使用受跟踪的项目配置和只读检查器：
+
+```bash
+node scripts/project-constraints.mjs --project /absolute/project
+node scripts/project-constraints.mjs --project /absolute/project --changed-file services/example.py --changed-file docs/CHANGELOG.md
+```
+
+检查器不执行 Git、测试或构建；CI 应自行取得相对变更路径并传给 `--changed-file`。创建或修改 `.agents/project-constraints.json` 与 CI 仍需要用户对该项目的明确授权。
+
+供 CI 调用的项目内副本也必须显式安装：`node scripts/install-project-constraints.mjs --project /absolute/project --write`。它只复制检查器到 `.agents/project-constraints.mjs`；升级已有副本必须额外传入 `--replace`。

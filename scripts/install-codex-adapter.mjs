@@ -18,6 +18,7 @@ export const SKILL_NAMES = [
   "logging-observability",
   "project-adapter",
   "project-bootstrap",
+  "project-constraints",
   "project-harness",
   "review-ship",
   "skill-health"

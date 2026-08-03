@@ -14,6 +14,10 @@ Run the adapter against a disposable fixture with project instructions, manifest
 
 Run the Harness against a disposable fixture with one task ID, goal and acceptance criterion. Confirm preview creates no project files; only explicit `--write-harness` creates the local map, task record and metrics file; recording an outcome appends only stated evidence and never executes the declared verification command.
 
+### project-constraints
+
+在一次性夹具中声明必需架构文档、服务日志/错误处理文本和 Windows CI 健康检查文本。确认检查器只读取配置和显式变更路径，返回 JSON 违反项与非零退出码，不运行项目命令、不写入文件，并拒绝符号链接配置。
+
 ### feature-loop
 
 Give a narrow feature with acceptance criteria and a fixture test. Confirm the response maps tests, worktree conditions, review, and handoff evidence without inventing validation.

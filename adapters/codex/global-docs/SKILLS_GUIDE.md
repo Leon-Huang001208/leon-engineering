@@ -6,6 +6,7 @@
 |---|---|
 | `project-adapter` | 进入用户指定的陌生项目、生成只读档案并选择后续工作流前。 |
 | `project-bootstrap` | 首次进入陌生项目、确认项目约束或建立经授权的项目档案。 |
+| `project-constraints` | 需要把用户已授权项目的架构、文档、日志/错误处理或平台规则作为本地/CI 门禁时。 |
 | `project-harness` | 需要让一个已授权项目的目标、验收、交接状态和交付指标跨会话延续时。 |
 | `feature-loop` | 交付边界清晰的功能。 |
 | `bugfix-evidence` | 修复已有行为回归或缺陷。 |
@@ -31,3 +32,5 @@
 `project-adapter` 的输出是路径证据与候选命令，不是已执行的测试结果。它默认不写入项目；持久化档案需要针对该项目的明确授权。
 
 `project-harness` 同样默认只读。只有用户明确授权写入该项目时才可创建 `.ai/harness/`；结果记录只接受已观察到的验证状态，不能把候选命令或未运行检查写成通过。
+
+`project-constraints` 默认也只读。它只读取受跟踪的 `.agents/project-constraints.json` 与调用方明确传入的相对变更路径；有违反时以 JSON 和退出码交给 CI，不能把静态检查当作运行时或 Windows 平台验证。

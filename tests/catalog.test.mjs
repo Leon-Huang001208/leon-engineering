@@ -17,7 +17,8 @@ const skills = {
   "agent-routing": ["worktree", "agent team"],
   "skill-health": ["overlap", "Never delete"],
   "project-adapter": ["read-only", "candidate"],
-  "project-harness": ["handoff", "--write-harness"]
+  "project-harness": ["handoff", "--write-harness"],
+  "project-constraints": ["read-only", "--changed-file"]
 };
 
 const agents = {
@@ -261,7 +262,7 @@ test("governs the audited Claude catalog through explicit shared boundaries", ()
   }
   assert.match(agentGuide, /七个规范职责代理/);
   assert.match(routing, /不把 Claude 专用 agent 或 skill 隐式当成共享能力/);
-  for (const phrase of ["52 个", "51 个", "230 个", "9 个工作流", "project-harness", "ecc", "zq", "data-connector-development", "## 共享工作流", "## Claude 专用排除项"]) {
+  for (const phrase of ["52 个", "51 个", "230 个", "10 个工作流", "project-constraints", "project-harness", "ecc", "zq", "data-connector-development", "## 共享工作流", "## Claude 专用排除项"]) {
     assert.match(catalog, new RegExp(phrase));
   }
 });
