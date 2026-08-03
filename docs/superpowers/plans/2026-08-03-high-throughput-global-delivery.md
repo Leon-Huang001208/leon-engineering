@@ -36,7 +36,7 @@
 - 修改：`tests/catalog.test.mjs`
 - 测试：`tests/catalog.test.mjs`
 
-- [ ] **步骤 1：写出会失败的快路径断言**
+- [x] **步骤 1：写出会失败的快路径断言**
 
 在 `tests/catalog.test.mjs` 添加：
 
@@ -71,7 +71,7 @@ test("keeps fast path documentation aligned", () => {
 });
 ```
 
-- [ ] **步骤 2：确认 RED**
+- [x] **步骤 2：确认 RED**
 
 运行：
 
@@ -81,12 +81,14 @@ node --test tests/catalog.test.mjs
 
 预期：第一项因现有策略没有“默认走快路径”及相应路由文字而失败；质量审查后，第二项已将语言标题检查收敛为实际快路径文档契约，并因三个全局文档尚未包含相应快路径文本而失败。
 
-- [ ] **步骤 3：提交失败测试**
+- [x] **步骤 3：提交失败测试**
 
 ```bash
 git add tests/catalog.test.mjs
 git commit -m "test: define fast path delivery contract"
 ```
+
+实际证据：已提交 `083df36`（`test: define fast path delivery contract`）。
 
 ### 任务 2：实现共享快路径与正向代理门槛
 
@@ -99,7 +101,7 @@ git commit -m "test: define fast path delivery contract"
 - 修改：`skills/agent-routing/references/codex-role-templates.md`
 - 测试：`tests/catalog.test.mjs`
 
-- [ ] **步骤 1：在 Codex 策略加入明确快路径**
+- [x] **步骤 1：在 Codex 策略加入明确快路径**
 
 在 `adapters/codex/global-policy.md` 的优先级说明之后插入以下两条，保留现有风险升级条目：
 
@@ -108,7 +110,7 @@ git commit -m "test: define fast path delivery contract"
 - 只有范围不明、探索会明显阻塞主任务、并行编辑有明确速度收益，或风险/耦合需要隔离时，才升级为只读调研、worktree 或代理；主代理负责汇总和验证。
 ```
 
-- [ ] **步骤 2：把入门与代理文档改为先判定快路径**
+- [x] **步骤 2：把入门与代理文档改为先判定快路径**
 
 将 `GETTING_STARTED.md` 的任务顺序替换为：先识别目标和相关项目规则；若符合快路径则直接完成；只有陌生且需要证据时才运行 `project-adapter`；随后才选择验证和代理。向 `AGENTS_GUIDE.md` 加入：
 
@@ -119,7 +121,7 @@ git commit -m "test: define fast path delivery contract"
 
 在 `COMMANDS_GUIDE.md` 明确：快路径只运行目标验证命令，不把项目档案生成、全量测试或全局适配器校验混入普通项目交付。
 
-- [ ] **步骤 3：更新 `agent-routing` 与 Codex 模板**
+- [x] **步骤 3：更新 `agent-routing` 与 Codex 模板**
 
 将 `skills/agent-routing/SKILL.md` 的首段替换为：
 
@@ -129,7 +131,7 @@ git commit -m "test: define fast path delivery contract"
 
 在角色模板顶部加入：`先复用主任务已确认的结果、范围和验收；除真实阻塞外不得要求用户重复说明或增加流程性问题。`
 
-- [ ] **步骤 4：确认 GREEN**
+- [x] **步骤 4：确认 GREEN**
 
 运行：
 
@@ -140,12 +142,16 @@ node --test tests/codex-adapter.test.mjs
 
 预期：全部通过；后者证明现有 Codex 安装器仍能复制更新后的完整技能目录。
 
-- [ ] **步骤 5：提交共享策略**
+实际证据：`tests/catalog.test.mjs` 8/8、`tests/codex-adapter.test.mjs` 7/7 通过。
+
+- [x] **步骤 5：提交共享策略**
 
 ```bash
 git add adapters/codex/global-policy.md adapters/codex/global-docs skills/agent-routing tests/catalog.test.mjs
 git commit -m "feat: default bounded work to the fast path"
 ```
+
+实际证据：已提交 `1ae2a4f`、`c2d64a4`、`fbf1248`。
 
 ### 任务 3：以测试驱动加入 Claude 受管策略安装器
 
@@ -154,7 +160,7 @@ git commit -m "feat: default bounded work to the fast path"
 - 新建：`scripts/install-claude-adapter.mjs`
 - 新建：`tests/claude-adapter.test.mjs`
 
-- [ ] **步骤 1：写 Claude 安装器的失败测试**
+- [x] **步骤 1：写 Claude 安装器的失败测试**
 
 创建 `tests/claude-adapter.test.mjs`：
 
@@ -205,7 +211,7 @@ test("rejects foreign or drifted Claude policy blocks", t => {
 });
 ```
 
-- [ ] **步骤 2：确认 RED**
+- [x] **步骤 2：确认 RED**
 
 运行：
 
@@ -215,7 +221,7 @@ node --test tests/claude-adapter.test.mjs
 
 预期：因 `scripts/install-claude-adapter.mjs` 不存在而失败，且没有改动真实 `~/.claude`。
 
-- [ ] **步骤 3：实现受管区块和清单**
+- [x] **步骤 3：实现受管区块和清单**
 
 创建 `adapters/claude/global-policy.md`，内容与 Codex 的快路径和升级边界等价，并以以下句子开头：
 
@@ -252,7 +258,7 @@ node scripts/install-claude-adapter.mjs --verify --claude-home /tmp/home
 node scripts/install-claude-adapter.mjs --rollback --claude-home /tmp/home
 ```
 
-- [ ] **步骤 4：确认 GREEN**
+- [x] **步骤 4：确认 GREEN**
 
 运行：
 
@@ -271,12 +277,16 @@ node --test tests/claude-adapter.test.mjs
 
 每个临时目录由测试清理，真实全局目录未变。
 
-- [ ] **步骤 5：提交 Claude 安装器**
+实际证据：`node --test tests/claude-adapter.test.mjs` 当前 11/11 通过；`node --check scripts/install-claude-adapter.mjs` 通过。
+
+- [x] **步骤 5：提交 Claude 安装器**
 
 ```bash
 git add adapters/claude/global-policy.md scripts/install-claude-adapter.mjs tests/claude-adapter.test.mjs
 git commit -m "feat: add managed Claude fast path policy"
 ```
+
+实际证据：已提交 `551bfac`、`625a8de`、`1989279`、`d6f9371`、`f1a2e6d`。
 
 ### 任务 4：加入双端版本和试点验收
 

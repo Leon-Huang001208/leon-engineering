@@ -77,8 +77,15 @@ function markerRange(content) {
 
 function readClaudeFile(claudeHome) {
   const file = claudeFile(claudeHome);
-  if (!fs.existsSync(file)) return {content: "", hadClaudeFile: false};
-  if (!fs.statSync(file).isFile()) throw fail("CLAUDE.md is not a file");
+  let stat;
+  try {
+    stat = fs.lstatSync(file);
+  } catch (error) {
+    if (error.code === "ENOENT") return {content: "", hadClaudeFile: false};
+    throw fail("cannot inspect CLAUDE.md target", "invalid_target");
+  }
+  if (stat.isSymbolicLink()) throw fail("CLAUDE.md cannot be a symbolic link", "invalid_target");
+  if (!stat.isFile()) throw fail("CLAUDE.md is not a file", "invalid_target");
   return {content: fs.readFileSync(file, "utf8"), hadClaudeFile: true};
 }
 
@@ -175,8 +182,17 @@ function previousPolicyChecksum(manifest) {
 
 function readManifestRecord(claudeHome) {
   const file = manifestFile(claudeHome);
-  if (!fs.existsSync(file)) return null;
-  if (!fs.statSync(file).isFile()) {
+  let stat;
+  try {
+    stat = fs.lstatSync(file);
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw fail("cannot inspect Claude policy manifest target", "invalid_target");
+  }
+  if (stat.isSymbolicLink()) {
+    throw fail("Claude policy manifest cannot be a symbolic link", "invalid_target");
+  }
+  if (!stat.isFile()) {
     throw fail("invalid Claude policy manifest", "invalid_manifest");
   }
   const raw = fs.readFileSync(file, "utf8");
@@ -318,15 +334,18 @@ function recoverPendingForVerify({claudeHome, manifest, claude, range}) {
 }
 
 function restoreInstallSnapshot({claudeHome, claude, manifestRaw}) {
+  let claudeRestored = false;
   try {
     if (!claude.hadClaudeFile && claude.content.length === 0) {
       fs.rmSync(claudeFile(claudeHome), {force: true});
     } else {
       writeAtomically(claudeFile(claudeHome), claude.content);
     }
+    claudeRestored = true;
   } catch {
     // The pending state retains enough evidence for a later safe recovery.
   }
+  if (!claudeRestored) return;
   try {
     if (manifestRaw === null) {
       removeManifest(claudeHome);

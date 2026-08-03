@@ -151,6 +151,74 @@ test("compensates if active manifest promotion fails without leaving adapter fil
   assert.equal(verifyClaudePolicy({sourceRoot, claudeHome}).valid, true);
 });
 
+test("preserves the installing manifest when snapshot recovery also fails", t => {
+  const claudeHome = makeClaudeHome(t);
+  const original = "# User rules\n";
+  const policyFile = path.join(claudeHome, "CLAUDE.md");
+  const manifestPath = path.join(claudeHome, MANIFEST);
+  fs.writeFileSync(policyFile, original);
+  const originalRename = fs.renameSync;
+  let manifestRenames = 0;
+  let activeManifestFailed = false;
+
+  fs.renameSync = (source, destination) => {
+    if (path.basename(destination) === MANIFEST && ++manifestRenames === 2) {
+      activeManifestFailed = true;
+      throw new Error("simulated active manifest failure");
+    }
+    if (activeManifestFailed && destination === policyFile) {
+      throw new Error("simulated snapshot recovery failure");
+    }
+    return originalRename(source, destination);
+  };
+  try {
+    assert.throws(
+      () => installClaudePolicy({sourceRoot, claudeHome}),
+      /simulated active manifest failure/
+    );
+  } finally {
+    fs.renameSync = originalRename;
+  }
+
+  assert.equal(JSON.parse(fs.readFileSync(manifestPath, "utf8")).state, "installing");
+  assert.match(fs.readFileSync(policyFile, "utf8"), /leon-engineering:claude-policy:start/);
+
+  installClaudePolicy({sourceRoot, claudeHome});
+  assert.equal(verifyClaudePolicy({sourceRoot, claudeHome}).valid, true);
+});
+
+test("refuses CLAUDE.md and manifest symlink targets", t => {
+  const claudeHome = makeClaudeHome(t);
+  const claudeTarget = path.join(claudeHome, "user-rules.md");
+  const policyFile = path.join(claudeHome, "CLAUDE.md");
+  const manifestPath = path.join(claudeHome, MANIFEST);
+  fs.writeFileSync(claudeTarget, "private user rules\n");
+  fs.symlinkSync(claudeTarget, policyFile);
+
+  assert.throws(
+    () => installClaudePolicy({sourceRoot, claudeHome}),
+    error => error.code === "invalid_target"
+  );
+  assert.equal(fs.lstatSync(policyFile).isSymbolicLink(), true);
+  assert.equal(fs.readFileSync(claudeTarget, "utf8"), "private user rules\n");
+  assert.equal(fs.existsSync(manifestPath), false);
+
+  const manifestHome = makeClaudeHome(t);
+  const manifestTarget = path.join(manifestHome, "manifest-target.json");
+  const manifestLink = path.join(manifestHome, MANIFEST);
+  fs.writeFileSync(manifestTarget, "private manifest\n");
+  fs.symlinkSync(manifestTarget, manifestLink);
+
+  for (const operation of [installClaudePolicy, verifyClaudePolicy]) {
+    assert.throws(
+      () => operation({sourceRoot, claudeHome: manifestHome}),
+      error => error.code === "invalid_target"
+    );
+  }
+  assert.equal(fs.lstatSync(manifestLink).isSymbolicLink(), true);
+  assert.equal(fs.readFileSync(manifestTarget, "utf8"), "private manifest\n");
+});
+
 test("detects manifest placement tampering before rollback can remove user spacing", t => {
   const claudeHome = makeClaudeHome(t);
   const original = "# User rules\n\n";
