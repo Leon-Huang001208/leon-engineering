@@ -5,7 +5,7 @@ description: Route a coding task between the main session, one isolated read-onl
 
 # Agent Routing
 
-已知文件、窄范围改动或明确命令默认由主会话直接完成；不得为了流程而向用户提问；不得仅因可用就创建计划、代理或 worktree。只有在只读探索能减少主会话等待或上下文拥塞，或并行编辑有明确速度收益时才派发代理，并且须在派发前说明预期收益和边界。
+已知文件、窄范围改动或明确命令默认由主会话直接完成；不得为了流程而向用户提问；不得仅因可用就创建计划、代理或 worktree。只有在只读探索能减少主会话等待或上下文拥塞，或并行编辑有明确速度收益时才派发代理，并且须在派发前说明预期收益和边界。风险或耦合需要隔离时必须升级，必要时使用 worktree；该条件不以速度收益为前提。
 
 State the route and why. Give editing agents a clean worktree, acceptance criteria, changed-file summary, and validation. Never give a subagent authority to spawn another agent.
 

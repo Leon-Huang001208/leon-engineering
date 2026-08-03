@@ -143,18 +143,19 @@ test("defaults bounded work to the documented fast path", () => {
   assert.match(routing, /不得为了流程而向用户提问/);
 });
 
-test("keeps user-facing framework documents in Chinese", () => {
-  const source = fs.readFileSync(
-    path.join(
-      root,
-      "docs",
-      "superpowers",
-      "specs",
-      "2026-08-03-high-throughput-global-delivery-design.md"
-    ),
-    "utf8"
-  );
+test("keeps fast path documentation aligned", () => {
+  const documents = [
+    {name: "GETTING_STARTED.md", phrase: /快路径/},
+    {name: "AGENTS_GUIDE.md", phrase: /Claude Code.*Codex/},
+    {name: "COMMANDS_GUIDE.md", phrase: /不把项目档案/}
+  ];
 
-  assert.match(source, /^# 高吞吐全局交付协议设计/m);
-  assert.doesNotMatch(source, /^# High-Throughput/m);
+  for (const {name, phrase} of documents) {
+    const source = fs.readFileSync(
+      path.join(root, "adapters", "codex", "global-docs", name),
+      "utf8"
+    );
+    assert.match(source, /^# .*[一-鿿]/m);
+    assert.match(source, phrase);
+  }
 });
