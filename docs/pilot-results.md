@@ -141,3 +141,13 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - 主分支提交 `7e990f7 feat: add project delivery harness` 的完整测试为 47/47 通过；`node --check scripts/harness-project.mjs`、`node --check scripts/install-codex-adapter.mjs`、`node --check scripts/sync-cc-switch-skills.mjs`、插件清单校验和 `git diff --check` 均通过。
 - 已安装 Codex 全局文档与 9 个受管 skills，三个适配器校验均返回 `valid: true`、零漂移。Claude 用户级插件已从 `0.6.3` 更新到 `0.7.0` 并启用；CC-Switch 自动登记新 workflow，当前统计为 Claude 61、Codex 28，并已生成可恢复数据库备份。
 - 本次仅使用临时夹具验证 Harness 行为；没有向任意真实项目写入 `.ai/harness/`。实际项目的持久化必须仍由用户对该项目明确授权。
+
+## Harness 交付评估闭环激活
+
+**日期：**2026-08-03
+
+- 主分支提交 `efd400d feat: add harness delivery evaluation` 新增只读 `harness-evaluate.mjs`。它以最后一条任务结果计算完成通过数、一次通过率、澄清/返工均值、验证耗时覆盖率与阻塞分类；不执行账本命令、不写项目文件，并拒绝符号链接任务目录。新结果记录强制要求实际测得的验证秒数；`blocked` 结果还强制要求标准化阻塞分类。历史记录仍可读，但缺字段会显示为覆盖率不足。
+- 实施前后的 RED/GREEN 测试均有记录：评估器初始因模块不存在失败，指标字段初始因未被保留及 CLI 参数未识别失败；实现后目标测试通过。完整验证 `node --test tests/*.test.mjs` 为 50/50 通过；四个脚本语法检查、插件清单校验与 `git diff --check` 均通过。更新后的 `project-harness` Skill 压力复核确认：先只读评估并报告样本/覆盖率，不执行账本命令，不猜测回填历史字段。
+- Codex 受管文档和 9 个 skills 已重新安装，两个 Codex 校验均为 `valid: true`、零漂移，清单版本为 `0.8.0`、源提交为 `efd400d`。Claude 受管策略也验证为 `valid: true`、零漂移。CC-Switch 同步后为 Claude 61、Codex 28，未产生数据库变更。
+- 激活中发现：对已安装插件执行 `claude plugin install` 只返回“already installed”，仍显示 0.7.0；这不等于已更新。改用 `claude plugin update leon-engineering@leon-local --scope user` 后，用户级插件实际从 0.7.0 更新到 0.8.0；`claude plugin details` 确认 9 个 skills、7 个 agents 和 2 个 hooks。该修正已写入受管命令指南。现有 Claude Code 会话仍需重启后加载新版本。
+- 已对用户明确选择的 AlphaFoundry 运行只读 Markdown 评估：仅有 1 条历史 Harness 初始化结果，显示一次通过率 100%，但验证耗时覆盖率为 0%、无阻塞分类。因此它不是业务交付速度结论；后续真实任务必须补齐新字段并积累跨项目样本。该命令未写入 AlphaFoundry。

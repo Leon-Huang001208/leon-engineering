@@ -12,6 +12,13 @@ node scripts/install-codex-adapter.mjs --rollback-global --codex-home "$HOME/.co
 
 `--install-global` 会先拒绝与用户文件冲突的文档或未受管策略区块。`--verify-global` 只读检查策略和六份文档。`--rollback-global` 只在内容未漂移时移除该框架拥有的文档和标记区块；它不会修改技能、插件、模型、MCP、凭据或项目。
 
+本地 Claude 插件已经安装时，`claude plugin install` 只会报告“已安装”，不会刷新缓存版本。框架源码的插件版本升级后，应使用下面命令，并在现有 Claude Code 会话中重启后才会生效：
+
+```bash
+claude plugin update leon-engineering@leon-local --scope user
+claude plugin list
+```
+
 技能安装与全局文档安装是独立操作。不要用全局框架命令代替目标项目的测试、lint、构建、浏览器检查或平台验证。实际运行过的命令和结果才可作为交付证据。
 
 对用户指定的陌生项目，可从源仓库运行以下只读命令：

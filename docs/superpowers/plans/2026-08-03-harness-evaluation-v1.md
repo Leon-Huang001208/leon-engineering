@@ -175,27 +175,27 @@ git diff --check
 
 Expected: 全部通过。
 
-- [ ] **Step 2: 安装到两个宿主并验证漂移**
+- [x] **Step 2: 安装到两个宿主并验证漂移**
 
 ```bash
 node scripts/install-codex-adapter.mjs --install-global --codex-home /Users/leon/.codex
 node scripts/install-codex-adapter.mjs --verify-global --codex-home /Users/leon/.codex
 node scripts/install-codex-adapter.mjs --install --target /Users/leon/.codex/skills
 node scripts/install-codex-adapter.mjs --verify --target /Users/leon/.codex/skills
-claude plugin install leon-engineering@leon-local --scope user
+claude plugin update leon-engineering@leon-local --scope user
 node scripts/install-claude-adapter.mjs --install --claude-home /Users/leon/.claude
 node scripts/install-claude-adapter.mjs --verify --claude-home /Users/leon/.claude
 ```
 
 Expected: 两端适配器无 drift；若 Claude 需要重启，明确记录为未在本会话验证的 UI 激活项。
 
-- [ ] **Step 3: 对 AlphaFoundry 执行只读评估预览**
+- [x] **Step 3: 对 AlphaFoundry 执行只读评估预览**
 
 Run: `node scripts/harness-evaluate.mjs --project /Users/leon/Desktop/Projects/AlphaFoundry --format markdown`
 
 Expected: 只读取现有 `.ai/harness`，并诚实显示历史 pilot 缺少新时长字段的覆盖率；不得把它当成业务任务速度结论。
 
-- [ ] **Step 4: 记录实际证据、提交与合并**
+- [x] **Step 4: 记录实际证据、提交与合并**
 
 仅写入实际执行过的命令和结果；不记录未跑的第二项目业务任务。提交后 fast-forward 合并到 `main`，再清理该隔离 worktree。
 
