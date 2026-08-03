@@ -112,3 +112,13 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - 新增 `docs/framework-learning.md` 定义触发条件、自动推广、升级确认和非敏感记录格式；项目特定事实、用户内容、秘密、路径和一次性偏好不进入全局学习。
 - 新增一项目录契约测试，并将原“用户授权后持久化”契约升级为主动持久化契约。完整源码验证 `node --test tests/*.test.mjs` 为 40/40 通过；两个安装器语法检查、插件清单校验和 `git diff --check` 均通过。
 - 主分支提交 `9c3839c feat: proactively promote reusable framework learning` 已安装。Codex 全局策略、八个共享 skills 和 Claude 受管策略均验证为 `valid: true`、零漂移；Claude 用户插件已从 `0.6.1` 更新为 `0.6.2`，详情确认 8 个 skills、7 个 agents 和 2 个 hooks。已打开的 Claude Code 会话必须重启后才会载入新版本。
+
+## Claude 全量目录审查与治理激活
+
+**日期：**2026-08-03
+
+- 对 `~/.claude` 完成只读全量审查：54 个 skill 入口中 52 个与 Codex/Claude 共用技能源逐文件一致；235 个 agent 文件中 230 个元数据完整、2 个 YAML 无效、3 个为说明文件；用户级 rules 有 99 个 Markdown 文件，`ecc` 包含 55 个嵌套 skill。
+- 发现并处理的活动冲突包括：旧 rules 的“agent 默认、默认规划、任何不确定都阻塞提问、每次错误写固定绝对路径记忆”与快路径和主动学习冲突；本地 `planner`、`code-reviewer`、`security-reviewer` 与规范插件角色同名但边界更宽。
+- 已完整备份至 `/Users/leon/.claude/backups/catalog-governance-20260803/`，随后把 99 个旧 rules、`ecc`、`zq` 与 8 个冲突/无效/说明 agent 可恢复地移动到 `/Users/leon/.claude/legacy/catalog-governance-20260803/`；没有删除文件。剩余 52 个已验证共用源的 skill 和 227 个 Claude 专用候选 agent 保持原位，但只有共享目录已映射的能力可成为跨宿主默认。
+- 新增 `docs/shared-capability-catalog.md` 记录逐项裁决：8 个 `leon-engineering` 核心工作流、52 个同源可发现 skill 和 7 个规范职责代理可跨宿主路由；`ecc`、`zq`、来源或权限不明的行业 persona 不自动推广。
+- 源码验证 `node --test tests/*.test.mjs` 为 41/41 通过，两个安装器语法检查、插件清单校验和 `git diff --check` 均通过。主分支提交 `0c0ac73 feat: govern shared Claude capability catalog` 已安装；Codex 和 Claude 受管策略均为 `valid: true`、零漂移。Claude 用户插件已从 `0.6.2` 更新为 `0.6.3` 并确认启用，详情为 8 个 skills、7 个 agents 和 2 个 hooks；现有 Claude Code 会话需要重启。
