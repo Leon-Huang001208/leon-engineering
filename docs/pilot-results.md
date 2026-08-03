@@ -93,3 +93,13 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - 隔离实现夹具位于 `/tmp/leon-high-throughput-implementer-20260803`：`implementer` 只改动独立 worktree 中的 `src/greet.js` 与 `test/greet.test.js`，先复现空格输入返回 `Hello,  Leon ` 的失败，再以 `name.trim()` 完成最小修复。独立复核 `node --test test/greet.test.js` 为 3/3 通过、`git diff --check` 通过；父检出仍无未提交改动，执行者没有提交。
 - 实施分支已快进合并至主分支。随后 `claude plugin update leon-engineering@leon-local --scope user` 已将用户级插件从 `0.3.0` 更新到 `0.6.0`；启用命令确认该插件原本已在用户范围启用。`claude plugin details leon-engineering@leon-local` 确认当前目录包含八个共享工作流、七个 Claude 命名代理和两个 hooks。已打开的 Claude Code 会话必须重启后才会载入新版本。
 - 非交互式 `codex exec` 与 `claude -p` 未返回的既有响应性限制，继续只作为限制记录，不作为加载或试运行成功的证据。
+
+## 已安装能力路由修正
+
+**日期：**2026-08-03
+
+- 用户指出“直接回答框架缺口、没有先查现有能力、后续新会话会丢失约定”的问题后，已将修正写入两端受管策略、Codex 快速开始与技能指南，以及共享 `agent-routing` 工作流；不再仅保留在对话中。
+- 新规则要求：选择执行路径前先匹配已安装的 skill、agent 和工具；命中即按触发条件使用，不命中才用通用能力直做。检查本机已有能力属于快路径，不创建计划、代理或 worktree；发现外部候选不等于安装，外部安装仍需要来源/权限审查和用户明确同意。
+- 规则同时要求：用户授权的可复用框架修正必须同步更新受管源、回归测试和安装副本，并在交付中提供验证证据；未获授权时只记录建议，不能擅自改变全局行为。
+- 回归测试新增两项，完整源码测试 `node --test tests/*.test.mjs` 为 39/39 通过；两个安装器语法检查、插件清单校验与 `git diff --check` 均通过。
+- 主分支提交 `104d075 feat: route work through installed capabilities` 已安装。Codex 全局策略、八个共享 skills 和 Claude 受管策略均验证为 `valid: true`、零漂移；Claude 用户插件已从 `0.6.0` 更新为 `0.6.1`，详情确认 8 个 skills、7 个 agents 和 2 个 hooks。已打开的 Claude Code 会话必须重启后才会载入新版本。
