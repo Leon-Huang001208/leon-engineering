@@ -297,7 +297,7 @@ git commit -m "feat: add managed Claude fast path policy"
 - 修改：`docs/README.md`
 - 测试：`tests/catalog.test.mjs`、`tests/codex-adapter.test.mjs`、`tests/claude-adapter.test.mjs`
 
-- [ ] **步骤 1：写试点文档的失败断言**
+- [x] **步骤 1：写试点文档的失败断言**
 
 在 `tests/catalog.test.mjs` 添加：
 
@@ -311,7 +311,7 @@ test("documents fast path, investigation, and worktree pilots", () => {
 });
 ```
 
-- [ ] **步骤 2：确认 RED**
+- [x] **步骤 2：确认 RED**
 
 运行：
 
@@ -321,7 +321,9 @@ node --test tests/catalog.test.mjs
 
 预期：因 `docs/high-throughput-pilot.md` 不存在而失败。
 
-- [ ] **步骤 3：添加试点与升级版本**
+实际证据：`node --test tests/catalog.test.mjs` 共 9 项，8 通过、1 失败；新增断言因该文件不存在而报 `ENOENT`。
+
+- [x] **步骤 3：添加试点与升级版本**
 
 创建 `docs/high-throughput-pilot.md`，包含：
 
@@ -343,7 +345,7 @@ node --test tests/catalog.test.mjs
 
 将两个插件清单版本从 `0.5.0` 改为 `0.6.0`，并在 `docs/README.md` 添加本计划和试点文档链接。
 
-- [ ] **步骤 4：运行完整源码验证**
+- [x] **步骤 4：运行完整源码验证**
 
 运行：
 
@@ -357,12 +359,16 @@ git diff --check
 
 预期：全部测试通过，两个 Node 脚本语法正确，插件清单有效且无空白错误。
 
-- [ ] **步骤 5：提交发布准备**
+实际证据：`node --test tests/*.test.mjs` 35/35 通过；两个 `node --check` 均通过；`claude plugin validate .claude-plugin/plugin.json` 通过；`git diff --check` 通过。未返回的 CLI 不作为成功记录。
+
+- [x] **步骤 5：提交发布准备**
 
 ```bash
 git add .claude-plugin/plugin.json .claude-plugin/marketplace.json docs/high-throughput-pilot.md docs/README.md tests/catalog.test.mjs
 git commit -m "docs: add high-throughput delivery pilots"
 ```
+
+实际证据：失败测试已提交为 `2bee8ac`（`test: define high-throughput pilot contract`）；本任务的文档、清单与完整验证将作为上述提交交付。
 
 ### 任务 5：在真实全局目录安装并记录证据
 
