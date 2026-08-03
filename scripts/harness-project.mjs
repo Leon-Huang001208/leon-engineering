@@ -7,6 +7,7 @@ import {buildProfile} from "./profile-project.mjs";
 export const HARNESS_DIRECTORY = ".ai/harness";
 export const AGENT_MAP_FILENAME = "agent-map.md";
 export const METRICS_FILENAME = "metrics.jsonl";
+const BLOCKER_CATEGORIES = new Set(["environment", "dependency", "permission", "requirements", "test", "external", "unknown"]);
 
 function assertTask(task) {
   if (!task || typeof task !== "object" || Array.isArray(task)) throw new Error("task is required");
@@ -165,11 +166,23 @@ export function recordOutcome({projectRoot, taskId, outcome}) {
   if (!new Set(["passed", "failed", "not_run"]).has(outcome.verificationStatus)) {
     throw new Error("invalid verification status");
   }
+  const verificationDurationSeconds = nonNegativeInteger(outcome.verificationDurationSeconds, "verification duration seconds");
+  let blockerCategory;
+  if (outcome.status === "blocked") {
+    if (typeof outcome.blockerCategory !== "string" || !BLOCKER_CATEGORIES.has(outcome.blockerCategory)) {
+      throw new Error("blocker category is required");
+    }
+    blockerCategory = outcome.blockerCategory;
+  } else if (outcome.blockerCategory !== undefined) {
+    throw new Error("invalid blocker category");
+  }
   const record = {
     status: outcome.status,
     clarificationRounds: nonNegativeInteger(outcome.clarificationRounds, "clarification rounds"),
     reworkCount: nonNegativeInteger(outcome.reworkCount, "rework count"),
-    verification: {command: outcome.verificationCommand.trim(), status: outcome.verificationStatus}
+    verification: {command: outcome.verificationCommand.trim(), status: outcome.verificationStatus},
+    verificationDurationSeconds,
+    ...(blockerCategory ? {blockerCategory} : {})
   };
   const directory = existingSafeDirectory(root, HARNESS_DIRECTORY);
   if (!directory) throw new Error("missing task harness");
@@ -194,7 +207,7 @@ function parseArgs(args) {
   const options = {acceptanceCriteria: []};
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
-    if (["--project", "--task-id", "--goal", "--acceptance", "--status", "--clarification-rounds", "--rework-count", "--verification-command", "--verification-status"].includes(argument)) {
+    if (["--project", "--task-id", "--goal", "--acceptance", "--status", "--clarification-rounds", "--rework-count", "--verification-command", "--verification-status", "--verification-duration-seconds", "--blocker-category"].includes(argument)) {
       const value = args[index + 1];
       if (!value || value.startsWith("--")) throw new Error(`${argument} requires a value`);
       if (argument === "--acceptance") options.acceptanceCriteria.push(value);
@@ -229,7 +242,9 @@ function main(args) {
         clarificationRounds: Number(options.clarification_rounds),
         reworkCount: Number(options.rework_count),
         verificationCommand: options.verification_command,
-        verificationStatus: options.verification_status
+        verificationStatus: options.verification_status,
+        verificationDurationSeconds: Number(options.verification_duration_seconds),
+        blockerCategory: options.blocker_category
       }
     });
     process.stdout.write(`${JSON.stringify({recorded: true, result})}\n`);

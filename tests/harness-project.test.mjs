@@ -74,20 +74,62 @@ test("persists an explicit harness once and appends only declared outcome eviden
       clarificationRounds: 1,
       reworkCount: 0,
       verificationCommand: "npm test -- greeting",
-      verificationStatus: "passed"
+      verificationStatus: "passed",
+      verificationDurationSeconds: 12
     }
   });
   assert.deepEqual(outcome, {
     status: "completed",
     clarificationRounds: 1,
     reworkCount: 0,
-    verification: {command: "npm test -- greeting", status: "passed"}
+    verification: {command: "npm test -- greeting", status: "passed"},
+    verificationDurationSeconds: 12
   });
   const task = JSON.parse(fs.readFileSync(files.task, "utf8"));
   assert.equal(task.status, "completed");
   assert.equal(task.outcomes.length, 1);
   const events = fs.readFileSync(files.metrics, "utf8").trim().split("\n").map(JSON.parse);
   assert.deepEqual(events.map(event => event.event), ["task_created", "task_outcome"]);
+
+  const blocked = recordOutcome({
+    projectRoot: project,
+    taskId: "default-greeting",
+    outcome: {
+      status: "blocked",
+      clarificationRounds: 0,
+      reworkCount: 1,
+      verificationCommand: "npm test -- greeting",
+      verificationStatus: "not_run",
+      verificationDurationSeconds: 0,
+      blockerCategory: "environment"
+    }
+  });
+  assert.equal(blocked.blockerCategory, "environment");
+  assert.throws(() => recordOutcome({
+    projectRoot: project,
+    taskId: "default-greeting",
+    outcome: {
+      status: "blocked",
+      clarificationRounds: 0,
+      reworkCount: 0,
+      verificationCommand: "npm test",
+      verificationStatus: "not_run",
+      verificationDurationSeconds: 0
+    }
+  }), /blocker category is required/);
+  assert.throws(() => recordOutcome({
+    projectRoot: project,
+    taskId: "default-greeting",
+    outcome: {
+      status: "completed",
+      clarificationRounds: 0,
+      reworkCount: 0,
+      verificationCommand: "npm test",
+      verificationStatus: "passed",
+      verificationDurationSeconds: -1,
+      blockerCategory: "environment"
+    }
+  }), /invalid verification duration seconds/);
 });
 
 test("CLI stays read-only until explicit persistence and never runs declared verification commands", t => {
@@ -107,7 +149,8 @@ test("CLI stays read-only until explicit persistence and never runs declared ver
   const outcome = spawnSync(process.execPath, [
     script, "--project", project, "--task-id", "default-greeting", "--record-outcome",
     "--status", "completed", "--clarification-rounds", "1", "--rework-count", "0",
-    "--verification-command", "this-command-must-not-run", "--verification-status", "passed"
+    "--verification-command", "this-command-must-not-run", "--verification-status", "passed",
+    "--verification-duration-seconds", "7"
   ], {encoding: "utf8"});
   assert.equal(outcome.status, 0, outcome.stderr);
   assert.equal(JSON.parse(outcome.stdout).recorded, true);
@@ -131,7 +174,8 @@ test("refuses outcome writes through a symbolic-link harness directory", t => {
       clarificationRounds: 0,
       reworkCount: 0,
       verificationCommand: "npm test",
-      verificationStatus: "passed"
+      verificationStatus: "passed",
+      verificationDurationSeconds: 1
     }
   }), /invalid harness directory/);
 });

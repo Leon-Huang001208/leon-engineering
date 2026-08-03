@@ -28,4 +28,13 @@ node scripts/profile-project.mjs --project /absolute/project --format markdown
 node scripts/harness-project.mjs --project /absolute/project --task-id task-id --goal "目标" --acceptance "验收标准"
 ```
 
-只有明确授权后才加 `--write-harness`。完成任务后，执行者先独立运行验证，再用 `--record-outcome` 写入已经观察到的状态、澄清轮次、返工次数和验证命令；记录命令本身不会运行该验证命令。
+只有明确授权后才加 `--write-harness`。完成任务后，执行者先独立运行验证，再用 `--record-outcome` 写入已经观察到的状态、澄清轮次、返工次数、实测验证秒数和验证命令；记录命令本身不会运行该验证命令。`blocked` 结果还必须写入标准化阻塞分类，不能从推测补填。
+
+要查看该项目已记录的交付指标，运行只读评估；它不会创建文件、执行账本内命令或扫描其他项目：
+
+```bash
+node scripts/harness-evaluate.mjs --project /absolute/project --format json
+node scripts/harness-evaluate.mjs --project /absolute/project --format markdown
+```
+
+报告中的一次通过率、平均值只针对已有结果；验证耗时覆盖率不足时，不得把它解释为项目实际速度。
