@@ -102,6 +102,10 @@ test("redacts user CLAUDE.md text from successful CLI installation output", t =>
   assert.equal(installed.status, 0, installed.stderr);
   assert.doesNotMatch(installed.stdout, new RegExp(sentinel));
   assert.doesNotMatch(installed.stderr, new RegExp(sentinel));
+  assert.equal(
+    installed.stderr,
+    '{"component":"claude-adapter","event":"installed"}\n'
+  );
   assert.deepEqual(JSON.parse(installed.stdout), {
     installed: true,
     frameworkVersion: JSON.parse(

@@ -115,6 +115,10 @@ test("redacts user AGENTS.md text from successful global CLI installation output
   assert.equal(installed.status, 0, installed.stderr);
   assert.doesNotMatch(installed.stdout, new RegExp(sentinel));
   assert.doesNotMatch(installed.stderr, new RegExp(sentinel));
+  assert.equal(
+    installed.stderr,
+    '{"component":"codex-adapter","event":"global_installed","documentCount":6}\n'
+  );
   assert.deepEqual(JSON.parse(installed.stdout), {
     installed: true,
     documents: GLOBAL_DOCUMENT_NAMES,
