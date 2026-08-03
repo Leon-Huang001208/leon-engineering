@@ -1,5 +1,7 @@
 # Codex role templates
 
+先复用主任务已经确认的结果、范围和验收；除真实阻塞外不得要求用户重复说明或增加流程性问题。
+
 Use one template per Codex subagent. Replace each angle-bracket value before delegation. Never create a nested agent. Escalate secret, destructive, dependency, remote mutation, release, migration, CI, and global-configuration actions.
 
 ## repo-explorer
