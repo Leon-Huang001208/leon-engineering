@@ -1,67 +1,67 @@
-# High-Throughput Global Delivery Protocol Design
+# 高吞吐全局交付协议设计
 
-## Goal
+## 目标
 
-Make routine work in every project move from a user request to a verified result with the fewest necessary turns. The protocol applies equally to Codex and Claude Code while preserving project rules and escalation for material risk.
+让每个项目中的常规工作都以最少必要轮次，从用户请求推进到经过验证的结果。该协议同时适用于 Codex 与 Claude Code，并保留项目规则和实质性风险的升级处理。
 
-## Decision
+## 决策
 
-Adopt **fast path by default, escalation by evidence**. A narrow local task with a clear expected outcome proceeds directly to focused inspection, implementation, and the smallest relevant verification. It does not require a written plan, an agent, a worktree, a full test suite, or a confirmation merely because those mechanisms exist.
+采用**默认走快路径、由证据决定升级**的方式。范围明确、可逆且预期结果清晰的本地任务，直接进行针对性检查、实现和最小相关验证；不会仅因计划、代理、worktree、完整测试套件或确认机制存在，就强制使用它们。
 
-The existing shared workflows remain the canonical source. Claude Code receives them through the plugin; Codex receives installed copies. Claude Code's seven named agents remain Claude-native. Codex uses the same role contract through `agent-routing` templates and short-lived subagents; it does not import Claude agent markdown as an unsupported static registry.
+现有共享工作流仍是唯一维护源。Claude Code 通过插件加载，Codex 加载安装副本。Claude Code 的七个命名代理仍是 Claude 原生能力；Codex 通过 `agent-routing` 模板和短生命周期子代理执行相同职责，不会把 Claude 的代理 Markdown 当作不受支持的静态注册表导入。
 
-## Task protocol
+## 任务协议
 
-For each task, the primary agent maintains a compact task contract in the active conversation:
+每项任务中，主代理在当前对话维护一份紧凑的任务契约：
 
-| Field | Rule |
+| 字段 | 规则 |
 |---|---|
-| Outcome | Infer it from the request when unambiguous; do not ask the user to repeat it. |
-| Scope | Start with named files, components, or project; expand only when evidence requires it. |
-| Acceptance | Reuse explicit criteria; otherwise derive the smallest observable behavior or check. |
-| Next action | State and perform one concrete next action in progress updates. |
-| Handoff | Report changed files, commands actually run, open risks, and the next smallest action. |
+| 结果 | 请求没有歧义时直接推断，不要求用户重复说明。 |
+| 范围 | 从已点名的文件、组件或项目开始；仅在证据要求时扩大。 |
+| 验收 | 复用明确标准；没有时推导最小可观察行为或检查。 |
+| 下一步 | 在进度更新中说明并实际执行一项具体下一步。 |
+| 交接 | 报告修改文件、实际运行的命令、未解决风险和最小下一步。 |
 
-This is task-local state, not a hidden cross-project database. Durable project facts are written only to the project's established documentation location and only with authorization.
+这些是任务内状态，不是隐式跨项目数据库。持久项目事实只在用户授权后写入项目已有的文档位置。
 
-## Routing rules
+## 路由规则
 
-### Fast path — default
+### 快路径：默认
 
-Use when the task is local, reversible, and has a bounded outcome. Read only the relevant instructions and files, edit directly, run targeted validation, and hand off. Do not create a plan, use a subagent, create a worktree, ask a procedural question, or run unrelated checks by default.
+适用于本地、可逆、结果有边界的任务。只读取相关指令和文件，直接编辑，运行针对性验证并交付。默认不创建计划、不调用子代理、不创建 worktree、不提出流程性问题，也不运行无关检查。
 
-### Investigate or parallelize — evidence-based
+### 调研或并行：由证据决定
 
-Use one read-only agent only when exploration would materially delay the primary task or crowd its context. Use an isolated worktree only for concurrent edits, a risky change, or competing implementation paths. Use multiple agents only for independently owned files with a clear expected speedup. The primary agent remains responsible for synthesis and verification.
+只有当探索会实质性延迟主任务或挤占其上下文时，才使用一个只读代理。只有并行编辑、风险较高改动或竞争性实现路径才使用隔离 worktree。只有文件所有权相互独立、且能明确带来速度收益时才使用多个代理。主代理始终负责汇总和验证。
 
-### Escalate — explicit risk boundary
+### 升级：明确风险边界
 
-Ask before secret handling, dependency installation, remote mutation, publishing, deployment, migration, CI/CD change, system-wide configuration, destructive action, or external coordination. Project-specific rules can require stricter handling.
+处理秘密、安装依赖、远程变更、发布、部署、迁移、CI/CD 改动、系统级配置、破坏性操作或外部协调前必须询问。项目规则可以要求更严格的处理方式。
 
-## Cross-tool installation
+## 跨工具安装
 
-The Codex global policy and documentation gain a managed fast-path section. The Claude global policy gains an equivalent managed section that explicitly takes precedence over legacy catalog advice to plan or delegate by default. Both installations preserve user text outside their marker blocks, have independent manifests, reject conflicts before writes, and verify checksums.
+Codex 的全局策略和文档增加受管的快路径区块。Claude 的全局策略增加等价受管区块，并明确其优先于旧目录中“默认先规划或先委派”的建议。两端安装均保留标记区块外的用户文本，使用独立清单，写入前拒绝冲突，并校验校验和。
 
-The source plugin version advances only after both targets are updated and tested. Installed version and source version must agree; a mismatch is a failed activation, not a cosmetic warning.
+只有两端均已更新并测试后才升级源码插件版本。已安装版本必须与源码版本一致；不一致是激活失败，而不是外观问题。
 
-## Measurement and feedback
+## 衡量与反馈
 
-Every handoff records only lightweight delivery evidence: whether fast path or escalation was used, the concrete validation command, and any real blocker. The protocol treats repeated clarification, unneeded planning, unneeded delegation, and unrelated validation as defects to remove from the workflow.
+每次交接只记录轻量交付证据：采用快路径还是升级路径、实际验证命令和真实阻塞因素。重复澄清、不必要的规划、不必要的委派和无关验证，都视为需要从工作流中移除的缺陷。
 
-No timer, telemetry service, background worker, or project-wide scanning is introduced. Initial success is verified with three representative fixtures: a narrow edit (fast path), unfamiliar-code question (read-only investigation), and an isolated concurrent edit (worktree). Both tools must show the intended route and preserve the required boundaries.
+不引入计时器、遥测服务、后台工作器或全项目扫描。首轮验证使用三类代表性夹具：窄范围编辑（快路径）、陌生代码问题（只读调研）和隔离并行编辑（worktree）。两种工具都必须呈现预期路由并保持所需边界。
 
-## Acceptance criteria
+## 验收标准
 
-- The canonical policy explicitly says that routine bounded work proceeds without a plan, agent, worktree, or procedural confirmation.
-- Claude Code and Codex receive equivalent fast-path and escalation semantics from managed source files.
-- Existing user policy outside managed marker blocks is preserved byte-for-byte.
-- Tests reject a foreign or drifted managed block and verify both tool manifests and installed versions.
-- The agent-routing workflow defines a positive dispatch threshold rather than recommending delegation by default.
-- Fixture tests demonstrate all three routes and document actual evidence rather than elapsed-time claims.
+- 规范策略明确：常规有边界工作无需计划、代理、worktree 或流程性确认即可推进。
+- Claude Code 与 Codex 从受管源码获得等价的快路径和升级语义。
+- 受管标记区块以外的既有用户策略逐字节保持不变。
+- 测试会拒绝外来或已漂移的受管区块，并验证两端清单和已安装版本。
+- `agent-routing` 工作流定义正向的委派门槛，而非默认推荐委派。
+- 夹具测试演示三条路由，并记录实际证据而不是时长宣称。
 
-## Non-goals
+## 非目标
 
-- Replacing project instructions, platform gates, or explicit user approval requirements.
-- Removing the legacy Claude agent catalog or automatically migrating third-party configuration.
-- Persistent automatic memory across unrelated projects or sessions.
-- Background agents, automatic network installs, automatic commits, pushes, releases, or destructive cleanup.
+- 替换项目指令、平台门槛或用户明确授权要求。
+- 删除旧 Claude 代理目录，或自动迁移第三方配置。
+- 在无关项目或会话间建立自动持久记忆。
+- 后台代理、自动联网安装、自动提交、推送、发布或破坏性清理。
