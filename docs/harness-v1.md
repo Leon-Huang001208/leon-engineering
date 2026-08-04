@@ -30,7 +30,7 @@ Harness v1 解决“新会话忘记上下文、完成标准不稳定、无法衡
 
 ## P2：受控恢复与依赖状态
 
-当任务之间存在明确依赖、需要中断后恢复或需要记录一次显式重试时，使用 [Harness P2 控制平面](harness-control-plane.md)。它在同一项目的 `.ai/harness/control-plane.json` 里保存 DAG、任务状态、尝试次数、事件和已存在 worktree 的定位信息。
+当任务之间存在明确依赖、需要中断后恢复或需要记录一次显式重试时，使用 [Harness P2 控制平面](harness-control-plane.md)。它在同一项目的 `.ai/harness/control-plane.json` 里保存 DAG、任务状态、尝试次数、事件和已存在 worktree 的定位信息。每个控制任务以 `harnessTaskId` 显式绑定账本任务：写入控制平面前记录必须已经存在，转换为 `completed` 前其最新账本结果必须为 `completed/passed`。因此编排状态不会被误当成验证事实。
 
 P2 不是任务看板服务、DAG 自动执行器、常驻工作队列或自动合并系统。它不创建、切换或删除 worktree；不运行 Git、测试、构建或任务命令；不因失败自动重试。只有先在多个项目收集到真实的沟通轮次、返工、验证耗时和阻塞数据后，才评估是否需要更重的编排层。
 

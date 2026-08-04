@@ -21,6 +21,12 @@ node "$HOME/.agents/leon-engineering/runtime/harness-project.mjs" --project /abs
 
 只有用户授权向该确切项目写入任务状态后，才可使用 `--write-harness`。它创建 `.ai/harness/agent-map.md`、一个任务记录和 `metrics.jsonl`；拒绝覆盖既有状态。
 
+一个已有 Harness 需要新增后续任务时，必须显式创建对应账本记录；这不会改写 Map 或已有任务。P2 控制计划中的每项都必须以 `harnessTaskId` 明确引用一个这样的记录：
+
+```bash
+node "$HOME/.agents/leon-engineering/runtime/harness-project.mjs" --project /absolute/project --task-id implement --goal "实施变更" --acceptance "聚焦测试通过" --add-task
+```
+
 任务完成时只记录已经观察到的证据。`--record-outcome` 绝不运行其声明的验证命令；执行代理必须在记录 `passed` 前自行实际完成验证。记录实测验证秒数。受阻任务还必须选择一个标准阻塞类别：`environment`、`dependency`、`permission`、`requirements`、`test`、`external` 或 `unknown`。
 
 ```bash
@@ -35,7 +41,7 @@ node "$HOME/.agents/leon-engineering/runtime/harness-evaluate.mjs" --project /ab
 
 报告指标时要包含样本量和验证耗时覆盖率。不得凭猜测回填历史时长或阻塞类别。陌生仓库先使用 `project-adapter`。不得把秘密、未执行结果、私密对话或项目事实写入全局策略。
 
-当一个已初始化 Harness 的项目有三个或更多相互依赖的任务、需要在中断后恢复，或需要对失败任务作一次明确重试时，使用 P2 控制平面。先将任务计划放在该项目内部，再只读预览：
+当一个已初始化 Harness 的项目有三个或更多相互依赖的任务、需要在中断后恢复，或需要对失败任务作一次明确重试时，使用 P2 控制平面。先为每项控制任务创建账本记录，并在项目内计划中声明不可省略的 `harnessTaskId`；再只读预览：
 
 ```bash
 node "$HOME/.agents/leon-engineering/runtime/harness-control.mjs" --project /absolute/project --task-plan /absolute/project/control-plan.json
@@ -48,6 +54,8 @@ node "$HOME/.agents/leon-engineering/runtime/harness-control.mjs" --project /abs
 node "$HOME/.agents/leon-engineering/runtime/harness-control.mjs" --project /absolute/project --retry --task-id implement --reason "已修正失败原因，明确重试"
 node "$HOME/.agents/leon-engineering/runtime/harness-control.mjs" --project /absolute/project --register-worktree --task-id implement --worktree /absolute/existing-worktree --branch codex/example --base-commit 03c0ca0
 ```
+
+控制任务转为 `completed` 前，运行时会读取其 `harnessTaskId` 的最新账本结果，且只接受 `completed` 与 `passed`；控制状态本身不是验证证据。可用 `--show` 恢复查看状态，评估器只读汇总，不替代逐任务证据检查。
 
 控制平面不创建、删除或切换 worktree，不启动常驻 Agent，不自动重试，不运行测试、构建、Git 或任务命令。登记的路径、分支和基准提交是执行者声明的恢复定位信息，不是脚本对工作区健康度的验证。
 

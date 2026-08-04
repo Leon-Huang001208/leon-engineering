@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {buildProfile} from "./profile-project.mjs";
+import {readHarnessTask} from "./harness-project.mjs";
 
 export const CONTROL_FILENAME = "control-plane.json";
 const HARNESS_DIRECTORY = ".ai/harness";
@@ -108,11 +109,15 @@ function refreshReadyTasks(control, {recordEvents = true} = {}) {
   }
 }
 
-function normalizedTask(task) {
+function normalizedTask(task, {allowImplicitHarnessTaskId = false} = {}) {
   if (!task || typeof task !== "object" || Array.isArray(task)) throw new Error("task is required");
   const id = assertTaskId(task.id);
+  const harnessTaskId = task.harnessTaskId === undefined && allowImplicitHarnessTaskId
+    ? id
+    : assertTaskId(task.harnessTaskId);
   return {
     id,
+    harnessTaskId,
     goal: assertText(task.goal, "task goal"),
     acceptanceCriteria: assertAcceptanceCriteria(task.acceptanceCriteria),
     dependsOn: assertDependencies(task.dependsOn ?? [], id),
@@ -123,7 +128,7 @@ function normalizedTask(task) {
 }
 
 function assertStoredTask(task) {
-  const normalized = normalizedTask(task);
+  const normalized = normalizedTask(task, {allowImplicitHarnessTaskId: true});
   if (!Object.hasOwn(TRANSITIONS, task.status)) throw new Error("invalid task status");
   if (!Number.isInteger(task.attempts) || task.attempts < 0) throw new Error("invalid task attempts");
   if (task.worktree !== null) normalizeWorktree(task.worktree);
@@ -213,6 +218,7 @@ export function writeControlPlane({projectRoot, control}) {
     throw new Error("missing task harness");
   }
   if (fs.existsSync(destination) || fs.lstatSync(directory).isSymbolicLink()) throw new Error("existing control plane");
+  for (const task of normalized.tasks) readHarnessTask({projectRoot: root, taskId: task.harnessTaskId});
   addEvent(normalized, "control_plane_created");
   writeAtomically(destination, `${JSON.stringify(normalized, null, 2)}\n`);
   return {directory, control: destination};
@@ -248,12 +254,21 @@ function getTask(control, taskId) {
   return task;
 }
 
+function assertCompletedPassedHarnessEvidence(projectRoot, taskId) {
+  const record = readHarnessTask({projectRoot, taskId});
+  const latest = Array.isArray(record.outcomes) ? record.outcomes.at(-1) : null;
+  if (latest?.status !== "completed" || latest.verification?.status !== "passed") {
+    throw new Error("missing completed passed harness evidence");
+  }
+}
+
 export function transitionTask({projectRoot, taskId, status, reason}) {
   const nextStatus = assertText(status, "task status");
   const transitionReason = assertText(reason, "transition reason");
   return updateControl(projectRoot, control => {
     const task = getTask(control, taskId);
     if (!TRANSITIONS[task.status].has(nextStatus)) throw new Error("invalid task transition");
+    if (nextStatus === "completed") assertCompletedPassedHarnessEvidence(control.projectRoot, task.harnessTaskId);
     task.status = nextStatus;
     addEvent(control, "task_transition", {taskId: task.id, status: nextStatus, reason: transitionReason});
     if (nextStatus === "completed") refreshReadyTasks(control);

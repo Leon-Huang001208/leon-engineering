@@ -4,7 +4,7 @@ import path from "node:path";
 import {spawnSync} from "node:child_process";
 import test from "node:test";
 import assert from "node:assert/strict";
-import {buildHarness, writeHarness} from "../scripts/harness-project.mjs";
+import {addHarnessTask, buildHarness, recordOutcome, writeHarness} from "../scripts/harness-project.mjs";
 import {
   buildControlPlane,
   previewControlPlane,
@@ -38,11 +38,17 @@ function initializeHarness(project) {
   });
 }
 
+function addPlanTasks(project) {
+  for (const task of taskPlan()) {
+    addHarnessTask({projectRoot: project, task});
+  }
+}
+
 function taskPlan() {
   return [
-    {id: "collect", goal: "Collect bounded evidence.", acceptanceCriteria: ["Evidence is recorded."], dependsOn: []},
-    {id: "implement", goal: "Implement the change.", acceptanceCriteria: ["Focused tests pass."], dependsOn: ["collect"]},
-    {id: "verify", goal: "Verify delivery.", acceptanceCriteria: ["Acceptance evidence exists."], dependsOn: ["implement"]}
+    {id: "collect", harnessTaskId: "collect", goal: "Collect bounded evidence.", acceptanceCriteria: ["Evidence is recorded."], dependsOn: []},
+    {id: "implement", harnessTaskId: "implement", goal: "Implement the change.", acceptanceCriteria: ["Focused tests pass."], dependsOn: ["collect"]},
+    {id: "verify", harnessTaskId: "verify", goal: "Verify delivery.", acceptanceCriteria: ["Acceptance evidence exists."], dependsOn: ["implement"]}
   ];
 }
 
@@ -76,11 +82,28 @@ test("builds a read-only dependency plan and rejects invalid DAGs", t => {
 test("persists explicit state transitions, retries, and declared worktree recovery data", t => {
   const project = makeFixture(t);
   initializeHarness(project);
+  addPlanTasks(project);
   const control = buildControlPlane({projectRoot: project, tasks: taskPlan()});
   const files = writeControlPlane({projectRoot: project, control});
   assert.equal(files.control, path.join(fs.realpathSync(project), ".ai", "harness", "control-plane.json"));
 
   transitionTask({projectRoot: project, taskId: "collect", status: "in_progress", reason: "开始收集本次任务证据"});
+  assert.throws(
+    () => transitionTask({projectRoot: project, taskId: "collect", status: "completed", reason: "不能把控制状态当作验证证据"}),
+    /missing completed passed harness evidence/
+  );
+  recordOutcome({
+    projectRoot: project,
+    taskId: "collect",
+    outcome: {
+      status: "completed",
+      clarificationRounds: 0,
+      reworkCount: 0,
+      verificationCommand: "node --test tests/collect.test.mjs",
+      verificationStatus: "passed",
+      verificationDurationSeconds: 1
+    }
+  });
   transitionTask({projectRoot: project, taskId: "collect", status: "completed", reason: "证据已保存"});
   let stored = readControlPlane({projectRoot: project});
   assert.equal(stored.tasks.find(task => task.id === "implement").status, "ready");
@@ -90,6 +113,7 @@ test("persists explicit state transitions, retries, and declared worktree recove
   stored = retryTask({projectRoot: project, taskId: "implement", reason: "修正后由执行者显式重试"});
   assert.deepEqual(stored.tasks.find(task => task.id === "implement"), {
     id: "implement",
+    harnessTaskId: "implement",
     goal: "Implement the change.",
     acceptanceCriteria: ["Focused tests pass."],
     dependsOn: ["collect"],
@@ -117,6 +141,7 @@ test("persists explicit state transitions, retries, and declared worktree recove
 test("CLI previews without writing and writes only with explicit commands", t => {
   const project = makeFixture(t);
   initializeHarness(project);
+  addPlanTasks(project);
   const sourceRoot = path.resolve(import.meta.dirname, "..");
   const script = path.join(sourceRoot, "scripts", "harness-control.mjs");
   const plan = path.join(project, "control-plan.json");
@@ -139,6 +164,13 @@ test("CLI previews without writing and writes only with explicit commands", t =>
   assert.equal(JSON.parse(shown.stdout).controlPlane.tasks.find(task => task.id === "collect").status, "in_progress");
   assert.equal(fs.existsSync(path.join(project, "this-command-must-not-run")), false);
   assert.doesNotMatch(fs.readFileSync(script, "utf8"), /node:child_process|execFile|spawnSync/);
+});
+
+test("refuses to persist a control plan unless every task has a matching Harness task record", t => {
+  const project = makeFixture(t);
+  initializeHarness(project);
+  const control = buildControlPlane({projectRoot: project, tasks: taskPlan()});
+  assert.throws(() => writeControlPlane({projectRoot: project, control}), /missing harness task record: collect/);
 });
 
 test("refuses control-plane writes through a symbolic-link harness directory", t => {

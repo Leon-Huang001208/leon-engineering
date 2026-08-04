@@ -150,6 +150,49 @@ export function writeHarness({projectRoot, harness}) {
   return {directory, map, task, metrics};
 }
 
+function existingHarnessFiles(root) {
+  const directory = existingSafeDirectory(root, HARNESS_DIRECTORY);
+  if (!directory) throw new Error("missing task harness");
+  const tasks = existingSafeDirectory(root, path.posix.join(HARNESS_DIRECTORY, "tasks"));
+  const map = path.join(directory, AGENT_MAP_FILENAME);
+  const metrics = path.join(directory, METRICS_FILENAME);
+  if (!tasks || !fs.existsSync(map) || !fs.existsSync(metrics)) throw new Error("missing task harness");
+  for (const file of [map, metrics]) {
+    if (fs.lstatSync(file).isSymbolicLink() || !fs.statSync(file).isFile()) throw new Error("invalid harness file");
+  }
+  return {directory, tasks, metrics};
+}
+
+export function addHarnessTask({projectRoot, task}) {
+  const root = buildProfile({projectRoot}).projectRoot;
+  const normalizedTask = assertTask(task);
+  const {directory, tasks, metrics} = existingHarnessFiles(root);
+  const destination = taskFile(directory, normalizedTask.id);
+  if (!isWithin(tasks, destination)) throw new Error("unsafe task destination");
+  if (fs.existsSync(destination)) throw new Error("existing harness task");
+  const record = {...normalizedTask, status: "ready", verification: {status: "not_run"}};
+  writeAtomically(destination, `${JSON.stringify(record, null, 2)}\n`);
+  fs.appendFileSync(metrics, `${JSON.stringify(metricEvent("task_created", normalizedTask.id, {status: record.status}))}\n`, {mode: 0o600});
+  return {directory, task: destination, metrics};
+}
+
+export function readHarnessTask({projectRoot, taskId}) {
+  const root = buildProfile({projectRoot}).projectRoot;
+  if (typeof taskId !== "string" || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(taskId)) throw new Error("invalid task id");
+  const {directory, tasks} = existingHarnessFiles(root);
+  const destination = taskFile(directory, taskId);
+  if (!isWithin(tasks, destination) || !fs.existsSync(destination)) throw new Error(`missing harness task record: ${taskId}`);
+  if (fs.lstatSync(destination).isSymbolicLink() || !fs.statSync(destination).isFile()) throw new Error("invalid task record");
+  let record;
+  try {
+    record = JSON.parse(fs.readFileSync(destination, "utf8"));
+  } catch {
+    throw new Error("invalid task record");
+  }
+  if (!record || typeof record !== "object" || Array.isArray(record) || record.id !== taskId) throw new Error("invalid task record");
+  return record;
+}
+
 export function refreshAgentMap({projectRoot}) {
   const root = buildProfile({projectRoot}).projectRoot;
   const directory = existingSafeDirectory(root, HARNESS_DIRECTORY);
@@ -209,17 +252,9 @@ export function recordOutcome({projectRoot, taskId, outcome}) {
     ...(blockerCategory ? {blockerCategory} : {}),
     ...(invalidReason ? {invalidReason} : {})
   };
-  const directory = existingSafeDirectory(root, HARNESS_DIRECTORY);
-  if (!directory) throw new Error("missing task harness");
+  const {directory, metrics} = existingHarnessFiles(root);
   const task = taskFile(directory, taskId);
-  const metrics = path.join(directory, METRICS_FILENAME);
-  if (!fs.existsSync(task) || !fs.existsSync(metrics)) throw new Error("missing task harness");
-  let taskRecord;
-  try {
-    taskRecord = JSON.parse(fs.readFileSync(task, "utf8"));
-  } catch {
-    throw new Error("invalid task record");
-  }
+  const taskRecord = readHarnessTask({projectRoot: root, taskId});
   taskRecord.status = record.status;
   taskRecord.verification = record.verification;
   taskRecord.outcomes = [...(Array.isArray(taskRecord.outcomes) ? taskRecord.outcomes : []), record];
@@ -239,22 +274,24 @@ function parseArgs(args) {
       else options[argument.slice(2).replaceAll("-", "_")] = value;
       index += 1;
     } else if (argument === "--write-harness") options.writeHarness = true;
+    else if (argument === "--add-task") options.addTask = true;
     else if (argument === "--refresh-agent-map") options.refreshAgentMap = true;
     else if (argument === "--record-outcome") options.recordOutcome = true;
     else throw new Error(`unknown option: ${argument}`);
   }
   if (!options.project) throw new Error("--project requires a value");
   if (options.refreshAgentMap) {
-    if (options.writeHarness || options.recordOutcome || options.task_id || options.goal || options.acceptanceCriteria.length) throw new Error("refresh mode cannot set task options");
+    if (options.writeHarness || options.addTask || options.recordOutcome || options.task_id || options.goal || options.acceptanceCriteria.length) throw new Error("refresh mode cannot set task options");
     return options;
   }
   if (!options.task_id) throw new Error("--task-id requires a value");
   if (options.recordOutcome) {
-    if (options.writeHarness || options.goal || options.acceptanceCriteria.length) {
+    if (options.writeHarness || options.addTask || options.goal || options.acceptanceCriteria.length) {
       throw new Error("outcome mode cannot create a task");
     }
     return options;
   }
+  if (options.addTask && options.writeHarness) throw new Error("task mode cannot create a harness");
   if (!options.goal || options.acceptanceCriteria.length === 0) {
     throw new Error("--goal and at least one --acceptance are required");
   }
@@ -290,7 +327,11 @@ function main(args) {
     projectRoot: options.project,
     task: {id: options.task_id, goal: options.goal, acceptanceCriteria: options.acceptanceCriteria}
   });
-  const files = options.writeHarness ? writeHarness({projectRoot: options.project, harness}) : null;
+  const files = options.writeHarness
+    ? writeHarness({projectRoot: options.project, harness})
+    : options.addTask
+      ? addHarnessTask({projectRoot: options.project, task: harness.task})
+      : null;
   process.stdout.write(`${JSON.stringify({persisted: Boolean(files), harness, files}, null, 2)}\n`);
 }
 
