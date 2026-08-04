@@ -182,3 +182,15 @@ test("refuses control-plane writes through a symbolic-link harness directory", t
   const control = buildControlPlane({projectRoot: project, tasks: taskPlan()});
   assert.throws(() => writeControlPlane({projectRoot: project, control}), /invalid harness directory/);
 });
+
+test("control CLI displays usage without requiring project input", () => {
+  const sourceRoot = path.resolve(import.meta.dirname, "..");
+  const script = path.join(sourceRoot, "scripts", "harness-control.mjs");
+
+  const result = spawnSync(process.execPath, [script, "--help"], {encoding: "utf8"});
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /用法：/);
+  assert.match(result.stdout, /--write-control-plane/);
+  assert.match(result.stdout, /--transition/);
+});

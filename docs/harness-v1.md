@@ -38,4 +38,6 @@ P2 不是任务看板服务、DAG 自动执行器、常驻工作队列或自动�
 
 Harness 运行时由 Codex 全局框架和 Claude 受管策略的安装命令自动部署、校验到 `$HOME/.agents/leon-engineering/runtime`。项目根目录不应复制 `scripts/harness-*.mjs`。
 
+不确定某个受管 Harness 命令的参数时，先运行对应脚本的 `--help`（或 `-h`）。帮助文本不读取项目、不执行项目命令，也不写入任何文件；项目路径参数统一为 `--project <项目目录>`。
+
 项目已有 Harness 后，Agent Map 不会自动改写。用户明确授权后可执行 `--refresh-agent-map`；它只根据当前项目画像刷新 Map 并追加审计事件，保留任务和结果账本。

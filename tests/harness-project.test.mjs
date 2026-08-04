@@ -212,3 +212,14 @@ test("refuses outcome writes through a symbolic-link harness directory", t => {
     }
   }), /invalid harness directory/);
 });
+
+test("project CLI displays usage without requiring project input", () => {
+  const script = path.join(sourceRoot, "scripts", "harness-project.mjs");
+
+  const result = spawnSync(process.execPath, [script, "--help"], {encoding: "utf8"});
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /用法：/);
+  assert.match(result.stdout, /--write-harness/);
+  assert.match(result.stdout, /--refresh-agent-map/);
+});

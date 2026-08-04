@@ -297,6 +297,7 @@ export function registerWorktree({projectRoot, taskId, worktree}) {
 }
 
 function parseArgs(args) {
+  if (args.length === 1 && ["--help", "-h"].includes(args[0])) return {help: true};
   const options = {};
   const valueOptions = new Set(["--project", "--task-plan", "--task-id", "--status", "--reason", "--worktree", "--branch", "--base-commit"]);
   for (let index = 0; index < args.length; index += 1) {
@@ -327,8 +328,24 @@ function parseArgs(args) {
   return options;
 }
 
+function formatUsage() {
+  return [
+    "用法：harness-control.mjs --project <项目目录> --task-plan <计划文件> [--write-control-plane]",
+    "      harness-control.mjs --project <项目目录> --show",
+    "      harness-control.mjs --project <项目目录> --transition --task-id <任务 ID> --status <状态> --reason <原因>",
+    "      harness-control.mjs --project <项目目录> --retry --task-id <任务 ID> --reason <原因>",
+    "      harness-control.mjs --project <项目目录> --register-worktree --task-id <任务 ID> --worktree <路径> --branch <分支> --base-commit <提交>",
+    "",
+    "计划默认只读预览；--write-control-plane 和状态操作会写入指定项目，且不会执行任务命令。"
+  ].join("\n");
+}
+
 function main(args) {
   const options = parseArgs(args);
+  if (options.help) {
+    process.stdout.write(`${formatUsage()}\n`);
+    return;
+  }
   if (options.task_plan) {
     const root = rootFor(options.project);
     const controlPlane = buildControlPlane({projectRoot: root, tasks: readTaskPlan(root, options.task_plan)});

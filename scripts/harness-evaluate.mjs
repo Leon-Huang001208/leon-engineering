@@ -156,6 +156,7 @@ export function formatEvaluation(result, format = "json") {
 }
 
 function parseArgs(args) {
+  if (args.length === 1 && ["--help", "-h"].includes(args[0])) return {help: true};
   const options = {format: "json"};
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
@@ -173,8 +174,20 @@ function parseArgs(args) {
   return options;
 }
 
+function formatUsage() {
+  return [
+    "用法：harness-evaluate.mjs --project <项目目录> [--format json|markdown]",
+    "",
+    "只读汇总已记录的 Harness 任务证据；不会执行账本中的验证命令或写入项目。"
+  ].join("\n");
+}
+
 function main(args) {
   const options = parseArgs(args);
+  if (options.help) {
+    process.stdout.write(`${formatUsage()}\n`);
+    return;
+  }
   process.stdout.write(formatEvaluation(evaluateHarness({projectRoot: options.project}), options.format));
 }
 

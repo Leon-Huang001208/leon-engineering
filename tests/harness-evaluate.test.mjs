@@ -95,3 +95,14 @@ test("CLI renders a read-only markdown evaluation without running task commands"
   assert.match(result.stdout, /验证耗时覆盖率：50%/);
   assert.equal(fs.existsSync(path.join(project, "this-command-must-not-run")), false);
 });
+
+test("CLI displays Chinese usage for help without reading a project", () => {
+  const script = path.join(sourceRoot, "scripts", "harness-evaluate.mjs");
+
+  const result = spawnSync(process.execPath, [script, "--help"], {encoding: "utf8"});
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /用法：/);
+  assert.match(result.stdout, /--project <项目目录>/);
+  assert.match(result.stdout, /--format json\|markdown/);
+});

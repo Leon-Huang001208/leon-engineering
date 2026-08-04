@@ -264,6 +264,7 @@ export function recordOutcome({projectRoot, taskId, outcome}) {
 }
 
 function parseArgs(args) {
+  if (args.length === 1 && ["--help", "-h"].includes(args[0])) return {help: true};
   const options = {acceptanceCriteria: []};
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
@@ -298,8 +299,22 @@ function parseArgs(args) {
   return options;
 }
 
+function formatUsage() {
+  return [
+    "用法：harness-project.mjs --project <项目目录> --task-id <任务 ID> --goal <目标> --acceptance <验收标准> [--acceptance <验收标准>] [--write-harness|--add-task]",
+    "      harness-project.mjs --project <项目目录> --task-id <任务 ID> --record-outcome --status <状态> --clarification-rounds <次数> --rework-count <次数> --verification-command <命令> --verification-status <状态> --verification-duration-seconds <秒数>",
+    "      harness-project.mjs --project <项目目录> --refresh-agent-map",
+    "",
+    "默认仅预览；--write-harness、--add-task、--record-outcome 和 --refresh-agent-map 会写入指定项目。"
+  ].join("\n");
+}
+
 function main(args) {
   const options = parseArgs(args);
+  if (options.help) {
+    process.stdout.write(`${formatUsage()}\n`);
+    return;
+  }
   if (options.refreshAgentMap) {
     const result = refreshAgentMap({projectRoot: options.project});
     process.stdout.write(`${JSON.stringify({refreshed: true, result})}\n`);
