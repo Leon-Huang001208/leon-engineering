@@ -4,7 +4,7 @@ import {fileURLToPath} from "node:url";
 import {buildProfile} from "./profile-project.mjs";
 import {HARNESS_DIRECTORY} from "./harness-project.mjs";
 
-const OUTCOME_STATUSES = new Set(["completed", "blocked", "rework"]);
+const OUTCOME_STATUSES = new Set(["completed", "blocked", "rework", "invalidated"]);
 const VERIFICATION_STATUSES = new Set(["passed", "failed", "not_run"]);
 const BLOCKER_CATEGORIES = new Set(["environment", "dependency", "permission", "requirements", "test", "external", "unknown"]);
 
@@ -51,6 +51,12 @@ function assertOutcome(outcome) {
     if (outcome.status !== "blocked" || !BLOCKER_CATEGORIES.has(outcome.blockerCategory)) {
       throw new Error("invalid blocker category");
     }
+  }
+  if (outcome.invalidReason !== undefined && (outcome.status !== "invalidated" || typeof outcome.invalidReason !== "string" || outcome.invalidReason.trim().length === 0)) {
+    throw new Error("invalid invalid reason");
+  }
+  if (outcome.status === "invalidated" && (typeof outcome.invalidReason !== "string" || outcome.invalidReason.trim().length === 0)) {
+    throw new Error("invalid invalid reason");
   }
   return outcome;
 }
@@ -172,7 +178,7 @@ function main(args) {
   process.stdout.write(formatEvaluation(evaluateHarness({projectRoot: options.project}), options.format));
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))) {
   try {
     main(process.argv.slice(2));
   } catch (error) {

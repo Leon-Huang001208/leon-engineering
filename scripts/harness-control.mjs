@@ -333,7 +333,7 @@ function main(args) {
   process.stdout.write(`${JSON.stringify({persisted: true, controlPlane}, null, 2)}\n`);
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))) {
   try {
     main(process.argv.slice(2));
   } catch (error) {

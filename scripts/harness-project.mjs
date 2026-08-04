@@ -159,7 +159,7 @@ export function recordOutcome({projectRoot, taskId, outcome}) {
   const root = buildProfile({projectRoot}).projectRoot;
   if (typeof taskId !== "string" || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(taskId)) throw new Error("invalid task id");
   if (!outcome || typeof outcome !== "object" || Array.isArray(outcome)) throw new Error("outcome is required");
-  if (!new Set(["completed", "blocked", "rework"]).has(outcome.status)) throw new Error("invalid outcome status");
+  if (!new Set(["completed", "blocked", "rework", "invalidated"]).has(outcome.status)) throw new Error("invalid outcome status");
   if (typeof outcome.verificationCommand !== "string" || outcome.verificationCommand.trim().length === 0) {
     throw new Error("verification command is required");
   }
@@ -168,6 +168,7 @@ export function recordOutcome({projectRoot, taskId, outcome}) {
   }
   const verificationDurationSeconds = nonNegativeInteger(outcome.verificationDurationSeconds, "verification duration seconds");
   let blockerCategory;
+  let invalidReason;
   if (outcome.status === "blocked") {
     if (typeof outcome.blockerCategory !== "string" || !BLOCKER_CATEGORIES.has(outcome.blockerCategory)) {
       throw new Error("blocker category is required");
@@ -176,13 +177,22 @@ export function recordOutcome({projectRoot, taskId, outcome}) {
   } else if (outcome.blockerCategory !== undefined) {
     throw new Error("invalid blocker category");
   }
+  if (outcome.status === "invalidated") {
+    if (typeof outcome.invalidReason !== "string" || outcome.invalidReason.trim().length === 0) {
+      throw new Error("invalid reason is required");
+    }
+    invalidReason = outcome.invalidReason.trim();
+  } else if (outcome.invalidReason !== undefined) {
+    throw new Error("invalid invalid reason");
+  }
   const record = {
     status: outcome.status,
     clarificationRounds: nonNegativeInteger(outcome.clarificationRounds, "clarification rounds"),
     reworkCount: nonNegativeInteger(outcome.reworkCount, "rework count"),
     verification: {command: outcome.verificationCommand.trim(), status: outcome.verificationStatus},
     verificationDurationSeconds,
-    ...(blockerCategory ? {blockerCategory} : {})
+    ...(blockerCategory ? {blockerCategory} : {}),
+    ...(invalidReason ? {invalidReason} : {})
   };
   const directory = existingSafeDirectory(root, HARNESS_DIRECTORY);
   if (!directory) throw new Error("missing task harness");
@@ -207,7 +217,7 @@ function parseArgs(args) {
   const options = {acceptanceCriteria: []};
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
-    if (["--project", "--task-id", "--goal", "--acceptance", "--status", "--clarification-rounds", "--rework-count", "--verification-command", "--verification-status", "--verification-duration-seconds", "--blocker-category"].includes(argument)) {
+    if (["--project", "--task-id", "--goal", "--acceptance", "--status", "--clarification-rounds", "--rework-count", "--verification-command", "--verification-status", "--verification-duration-seconds", "--blocker-category", "--invalid-reason"].includes(argument)) {
       const value = args[index + 1];
       if (!value || value.startsWith("--")) throw new Error(`${argument} requires a value`);
       if (argument === "--acceptance") options.acceptanceCriteria.push(value);
@@ -244,7 +254,8 @@ function main(args) {
         verificationCommand: options.verification_command,
         verificationStatus: options.verification_status,
         verificationDurationSeconds: Number(options.verification_duration_seconds),
-        blockerCategory: options.blocker_category
+        blockerCategory: options.blocker_category,
+        invalidReason: options.invalid_reason
       }
     });
     process.stdout.write(`${JSON.stringify({recorded: true, result})}\n`);
@@ -258,7 +269,7 @@ function main(args) {
   process.stdout.write(`${JSON.stringify({persisted: Boolean(files), harness, files}, null, 2)}\n`);
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))) {
   try {
     main(process.argv.slice(2));
   } catch (error) {

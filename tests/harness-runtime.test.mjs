@@ -1,0 +1,52 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import {spawnSync} from "node:child_process";
+import test from "node:test";
+import assert from "node:assert/strict";
+import {installHarnessRuntime, verifyHarnessRuntime, HARNESS_RUNTIME_FILES} from "../scripts/harness-runtime.mjs";
+
+const sourceRoot = path.resolve(import.meta.dirname, "..");
+
+function makeRoot(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "leon-harness-runtime-"));
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  return root;
+}
+
+test("installs a verified Harness runtime that can preview a real project", t => {
+  const root = makeRoot(t);
+  const runtimeRoot = path.join(root, "runtime");
+  const project = path.join(root, "project");
+  fs.mkdirSync(project, {recursive: true});
+  fs.writeFileSync(path.join(project, "AGENTS.md"), "# rules\n");
+  fs.writeFileSync(path.join(project, "package.json"), JSON.stringify({scripts: {test: "node --test"}}));
+
+  const installed = installHarnessRuntime({sourceRoot, runtimeRoot});
+  assert.equal(installed.files.length, HARNESS_RUNTIME_FILES.length);
+  assert.deepEqual(verifyHarnessRuntime({sourceRoot, runtimeRoot}), {valid: true, drift: []});
+  for (const name of HARNESS_RUNTIME_FILES) assert.equal(fs.existsSync(path.join(runtimeRoot, name)), true);
+
+  const preview = spawnSync(process.execPath, [
+    path.join(runtimeRoot, "harness-project.mjs"), "--project", project,
+    "--task-id", "runtime-preview", "--goal", "验证运行时", "--acceptance", "不写入项目"
+  ], {encoding: "utf8"});
+  assert.equal(preview.status, 0, preview.stderr);
+  assert.notEqual(preview.stdout, "", preview.stderr);
+  assert.equal(JSON.parse(preview.stdout).persisted, false);
+  assert.equal(fs.existsSync(path.join(project, ".ai", "harness")), false);
+});
+
+test("detects runtime drift and refuses symbolic-link runtime roots", t => {
+  const root = makeRoot(t);
+  const runtimeRoot = path.join(root, "runtime");
+  installHarnessRuntime({sourceRoot, runtimeRoot});
+  fs.appendFileSync(path.join(runtimeRoot, "harness-evaluate.mjs"), "\nchanged\n");
+  assert.deepEqual(verifyHarnessRuntime({sourceRoot, runtimeRoot}).drift, ["harness-evaluate.mjs"]);
+
+  const external = path.join(root, "external");
+  fs.mkdirSync(external);
+  const linked = path.join(root, "linked");
+  fs.symlinkSync(external, linked);
+  assert.throws(() => installHarnessRuntime({sourceRoot, runtimeRoot: linked}), /symbolic link/);
+});

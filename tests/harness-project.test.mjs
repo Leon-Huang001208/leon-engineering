@@ -130,6 +130,22 @@ test("persists an explicit harness once and appends only declared outcome eviden
       blockerCategory: "environment"
     }
   }), /invalid verification duration seconds/);
+
+  const invalidated = recordOutcome({
+    projectRoot: project,
+    taskId: "default-greeting",
+    outcome: {
+      status: "invalidated",
+      clarificationRounds: 0,
+      reworkCount: 0,
+      verificationCommand: "node missing-script.mjs",
+      verificationStatus: "not_run",
+      verificationDurationSeconds: 0,
+      invalidReason: "运行时路径不存在，历史通过结果无效"
+    }
+  });
+  assert.equal(invalidated.invalidReason, "运行时路径不存在，历史通过结果无效");
+  assert.equal(JSON.parse(fs.readFileSync(files.task, "utf8")).status, "invalidated");
 });
 
 test("CLI stays read-only until explicit persistence and never runs declared verification commands", t => {
