@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import {execFileSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
+import {installHarnessRuntime, verifyHarnessRuntime} from "./harness-runtime.mjs";
 
 const SOURCE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const START = "<!-- leon-engineering:claude-policy:start -->";
@@ -554,10 +555,12 @@ function main(args) {
   const {action, claudeHome} = parseCli(args);
   if (action === "--install") {
     const {manifest} = installClaudePolicy({claudeHome});
+    installHarnessRuntime({});
     console.log(JSON.stringify({installed: true, frameworkVersion: manifest.frameworkVersion}));
   } else if (action === "--verify") {
     const verification = verifyClaudePolicy({claudeHome, logResult: false});
-    if (!verification.valid) {
+    const runtime = verifyHarnessRuntime({});
+    if (!verification.valid || !runtime.valid) {
       throw fail("Claude policy drift detected", "drifted_policy");
     }
     console.log(JSON.stringify(verification, null, 2));

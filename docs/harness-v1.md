@@ -33,3 +33,9 @@ Harness v1 解决“新会话忘记上下文、完成标准不稳定、无法衡
 当任务之间存在明确依赖、需要中断后恢复或需要记录一次显式重试时，使用 [Harness P2 控制平面](harness-control-plane.md)。它在同一项目的 `.ai/harness/control-plane.json` 里保存 DAG、任务状态、尝试次数、事件和已存在 worktree 的定位信息。
 
 P2 不是任务看板服务、DAG 自动执行器、常驻工作队列或自动合并系统。它不创建、切换或删除 worktree；不运行 Git、测试、构建或任务命令；不因失败自动重试。只有先在多个项目收集到真实的沟通轮次、返工、验证耗时和阻塞数据后，才评估是否需要更重的编排层。
+
+## Map 新鲜度与运行时生命周期
+
+Harness 运行时由 Codex 全局框架和 Claude 受管策略的安装命令自动部署、校验到 `$HOME/.agents/leon-engineering/runtime`。项目根目录不应复制 `scripts/harness-*.mjs`。
+
+项目已有 Harness 后，Agent Map 不会自动改写。用户明确授权后可执行 `--refresh-agent-map`；它只根据当前项目画像刷新 Map 并追加审计事件，保留任务和结果账本。

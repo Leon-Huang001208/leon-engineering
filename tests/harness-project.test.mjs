@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
-import {buildHarness, formatAgentMap, writeHarness, recordOutcome} from "../scripts/harness-project.mjs";
+import {buildHarness, formatAgentMap, writeHarness, refreshAgentMap, recordOutcome} from "../scripts/harness-project.mjs";
 
 function writeFile(file, content) {
   fs.mkdirSync(path.dirname(file), {recursive: true});
@@ -146,6 +146,23 @@ test("persists an explicit harness once and appends only declared outcome eviden
   });
   assert.equal(invalidated.invalidReason, "运行时路径不存在，历史通过结果无效");
   assert.equal(JSON.parse(fs.readFileSync(files.task, "utf8")).status, "invalidated");
+});
+
+test("refreshes only the existing Agent Map and records an auditable event", t => {
+  const project = makeFixture(t);
+  const harness = buildHarness({
+    projectRoot: project,
+    task: {id: "default-greeting", goal: "Provide a safe default greeting.", acceptanceCriteria: ["The focused test passes."]}
+  });
+  const files = writeHarness({projectRoot: project, harness});
+  writeFile(path.join(project, ".github", "workflows", "new-check.yml"), "name: new check\n");
+
+  const refreshed = refreshAgentMap({projectRoot: project});
+  assert.equal(refreshed.map, files.map);
+  assert.match(fs.readFileSync(files.map, "utf8"), /new-check\.yml/);
+  assert.equal(JSON.parse(fs.readFileSync(files.task, "utf8")).id, "default-greeting");
+  const events = fs.readFileSync(files.metrics, "utf8").trim().split("\n").map(JSON.parse);
+  assert.equal(events.at(-1).event, "agent_map_refreshed");
 });
 
 test("CLI stays read-only until explicit persistence and never runs declared verification commands", t => {

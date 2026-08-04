@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import {execFileSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
+import {installHarnessRuntime, verifyHarnessRuntime} from "./harness-runtime.mjs";
 
 const MANIFEST_NAME = ".leon-engineering.json";
 const GLOBAL_MANIFEST_NAME = ".leon-engineering-global.json";
@@ -552,6 +553,7 @@ function main(args) {
 
   if (args.includes("--install-global")) {
     const {documents, manifest} = installGlobalFramework({codexHome});
+    installHarnessRuntime({});
     console.log(JSON.stringify({
       installed: true,
       documents,
@@ -560,7 +562,11 @@ function main(args) {
     return;
   }
   if (args.includes("--verify-global")) {
-    console.log(JSON.stringify(verifyGlobalFramework({codexHome}), null, 2));
+    const verification = verifyGlobalFramework({codexHome});
+    const runtime = verifyHarnessRuntime({});
+    const result = {valid: verification.valid && runtime.valid, drift: [...verification.drift, ...runtime.drift.map(item => `runtime:${item}`)]};
+    console.log(JSON.stringify(result, null, 2));
+    if (!result.valid) process.exitCode = 1;
     return;
   }
   if (args.includes("--rollback-global")) {

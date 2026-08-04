@@ -50,3 +50,11 @@ node "$HOME/.agents/leon-engineering/runtime/harness-control.mjs" --project /abs
 ```
 
 控制平面不创建、删除或切换 worktree，不启动常驻 Agent，不自动重试，不运行测试、构建、Git 或任务命令。登记的路径、分支和基准提交是执行者声明的恢复定位信息，不是脚本对工作区健康度的验证。
+
+项目的 CI、指令或候选命令变化后，只有用户明确授权写入该项目时才可刷新既有 Agent Map：
+
+```bash
+node "$HOME/.agents/leon-engineering/runtime/harness-project.mjs" --project /absolute/project --refresh-agent-map
+```
+
+该操作仅重写 `.ai/harness/agent-map.md` 并追加 `agent_map_refreshed` 事件；不得删除、替换或伪造任务结果和指标账本。

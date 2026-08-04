@@ -150,6 +150,21 @@ export function writeHarness({projectRoot, harness}) {
   return {directory, map, task, metrics};
 }
 
+export function refreshAgentMap({projectRoot}) {
+  const root = buildProfile({projectRoot}).projectRoot;
+  const directory = existingSafeDirectory(root, HARNESS_DIRECTORY);
+  if (!directory) throw new Error("missing task harness");
+  const map = path.join(directory, AGENT_MAP_FILENAME);
+  const metrics = path.join(directory, METRICS_FILENAME);
+  if (!fs.existsSync(map) || !fs.existsSync(metrics)) throw new Error("missing task harness");
+  if (fs.lstatSync(map).isSymbolicLink() || fs.lstatSync(metrics).isSymbolicLink()) throw new Error("invalid harness file");
+  const profile = buildProfile({projectRoot: root});
+  const refreshed = {schemaVersion: 1, projectRoot: root, profile, task: {id: "agent-map-refresh", goal: "refresh", acceptanceCriteria: ["refresh"]}};
+  writeAtomically(map, `${formatAgentMap(refreshed)}\n`);
+  fs.appendFileSync(metrics, `${JSON.stringify(metricEvent("agent_map_refreshed", "agent-map", {}))}\n`, {mode: 0o600});
+  return {directory, map, metrics};
+}
+
 function nonNegativeInteger(value, field) {
   if (!Number.isInteger(value) || value < 0) throw new Error(`invalid ${field}`);
   return value;
@@ -224,10 +239,15 @@ function parseArgs(args) {
       else options[argument.slice(2).replaceAll("-", "_")] = value;
       index += 1;
     } else if (argument === "--write-harness") options.writeHarness = true;
+    else if (argument === "--refresh-agent-map") options.refreshAgentMap = true;
     else if (argument === "--record-outcome") options.recordOutcome = true;
     else throw new Error(`unknown option: ${argument}`);
   }
   if (!options.project) throw new Error("--project requires a value");
+  if (options.refreshAgentMap) {
+    if (options.writeHarness || options.recordOutcome || options.task_id || options.goal || options.acceptanceCriteria.length) throw new Error("refresh mode cannot set task options");
+    return options;
+  }
   if (!options.task_id) throw new Error("--task-id requires a value");
   if (options.recordOutcome) {
     if (options.writeHarness || options.goal || options.acceptanceCriteria.length) {
@@ -243,6 +263,11 @@ function parseArgs(args) {
 
 function main(args) {
   const options = parseArgs(args);
+  if (options.refreshAgentMap) {
+    const result = refreshAgentMap({projectRoot: options.project});
+    process.stdout.write(`${JSON.stringify({refreshed: true, result})}\n`);
+    return;
+  }
   if (options.recordOutcome) {
     const result = recordOutcome({
       projectRoot: options.project,
