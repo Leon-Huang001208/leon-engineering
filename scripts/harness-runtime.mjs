@@ -101,16 +101,18 @@ export function installHarnessRuntime({sourceRoot = SOURCE_ROOT, runtimeRoot = d
   return {runtimeRoot: root, files: HARNESS_RUNTIME_FILES, manifest};
 }
 
-export function verifyHarnessRuntime({sourceRoot = SOURCE_ROOT, runtimeRoot = defaultHarnessRuntimeRoot()}) {
+export function verifyHarnessRuntime({sourceRoot, runtimeRoot = defaultHarnessRuntimeRoot()}) {
   const root = ensureSafeDirectory(runtimeRoot);
   const manifest = readManifest(root);
   if (!manifest) return {valid: false, drift: ["missing runtime manifest"]};
-  const files = sourceFiles(sourceRoot);
+  const files = sourceRoot ? sourceFiles(sourceRoot) : null;
   const drift = HARNESS_RUNTIME_FILES.filter(name => {
     const destination = path.join(root, name);
     if (!fs.existsSync(destination)) return true;
     const stat = fs.lstatSync(destination);
-    return stat.isSymbolicLink() || !stat.isFile() || checksum(fs.readFileSync(destination)) !== files[name].checksum || manifest.files[name] !== files[name].checksum;
+    if (stat.isSymbolicLink() || !stat.isFile()) return true;
+    const installedChecksum = checksum(fs.readFileSync(destination));
+    return installedChecksum !== manifest.files[name] || (files && installedChecksum !== files[name].checksum);
   });
   return {valid: drift.length === 0, drift};
 }
