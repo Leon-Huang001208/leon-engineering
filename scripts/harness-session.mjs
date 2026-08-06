@@ -20,6 +20,7 @@ function parseArgs(args) {
       else options[argument.slice(2).replaceAll("-", "_")] = value;
       index += 1;
     } else if (argument === "--start") options.start = true;
+    else if (argument === "--new-task") options.newTask = true;
     else throw new Error(`unknown option: ${argument}`);
   }
   if (!options.start) throw new Error("--start is required");
@@ -30,7 +31,7 @@ function parseArgs(args) {
 
 function usage() {
   return [
-    "用法：harness-session.mjs --start --project <项目目录> --host claude|codex --session-id <不透明会话 ID> [--task-id <任务 ID>] [--goal <目标>] [--acceptance <验收标准>]",
+    "用法：harness-session.mjs --start --project <项目目录> --host claude|codex --session-id <不透明会话 ID> [--new-task] [--task-id <任务 ID>] [--goal <目标>] [--acceptance <验收标准>]",
     "",
     "自动创建或恢复指定宿主的项目 Harness 会话。任务目标只保存在任务记录，不会写入事件流。"
   ].join("\n");
@@ -47,6 +48,7 @@ function main(args) {
     projectRoot: options.project,
     host: options.host,
     sessionId: options.session_id,
+    newTask: Boolean(options.newTask),
     task: {
       id: taskId,
       goal: options.goal ?? "受管项目任务",

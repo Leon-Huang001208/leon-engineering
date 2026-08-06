@@ -290,22 +290,16 @@ function sessionKey(sessionId) {
   return crypto.createHash("sha256").update(sessionId).digest("hex");
 }
 
-export function startHarnessSession({projectRoot, host, sessionId, task}) {
+export function startHarnessSession({projectRoot, host, sessionId, task, newTask = false}) {
   const root = buildProfile({projectRoot}).projectRoot;
   const normalizedTask = assertTask(task);
   const normalizedHost = assertHost(host);
   if (normalizedHost === "unknown") throw new Error("invalid harness session host");
+  if (typeof newTask !== "boolean") throw new Error("invalid harness new task flag");
   const key = sessionKey(sessionId);
   const directory = existingSafeDirectory(root, HARNESS_DIRECTORY);
   if (!directory) {
     writeHarness({projectRoot: root, harness: buildHarness({projectRoot: root, task: normalizedTask})});
-  } else {
-    try {
-      readHarnessTask({projectRoot: root, taskId: normalizedTask.id});
-    } catch (error) {
-      if (!String(error.message).startsWith("missing harness task record:")) throw error;
-      addHarnessTask({projectRoot: root, task: normalizedTask});
-    }
   }
   const {directory: harnessDirectory} = existingHarnessFiles(root);
   const sessions = safeDirectory(root, path.posix.join(HARNESS_DIRECTORY, SESSION_DIRECTORY));
@@ -322,8 +316,18 @@ export function startHarnessSession({projectRoot, host, sessionId, task}) {
     if (!context || context.schemaVersion !== 1 || context.sessionKey !== key || context.host !== normalizedHost) {
       throw new Error("invalid harness session");
     }
-    readHarnessTask({projectRoot: root, taskId: context.taskId});
-    return {directory: harnessDirectory, taskId: context.taskId, sessionKey: key, resumed: true};
+    if (!newTask || context.taskId === normalizedTask.id) {
+      readHarnessTask({projectRoot: root, taskId: context.taskId});
+      return {directory: harnessDirectory, taskId: context.taskId, sessionKey: key, resumed: true};
+    }
+  }
+  if (directory) {
+    try {
+      readHarnessTask({projectRoot: root, taskId: normalizedTask.id});
+    } catch (error) {
+      if (!String(error.message).startsWith("missing harness task record:")) throw error;
+      addHarnessTask({projectRoot: root, task: normalizedTask});
+    }
   }
   const context = {schemaVersion: 1, sessionKey: key, taskId: normalizedTask.id, host: normalizedHost, startedAt: new Date().toISOString()};
   writeAtomically(destination, `${JSON.stringify(context, null, 2)}\n`);

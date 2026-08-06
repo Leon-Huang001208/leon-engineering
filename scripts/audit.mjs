@@ -1,7 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {handleHarnessHook} from "./harness-hook.mjs";
 
 export function toAuditEvent(input) {
   return {
@@ -11,13 +10,14 @@ export function toAuditEvent(input) {
   };
 }
 
+export function forwardAuditToHarness(input) {
+  return handleHarnessHook({phase: "post", input});
+}
+
 async function main() {
   const chunks = [];
   for await (const chunk of process.stdin) chunks.push(chunk);
-  const event = toAuditEvent(JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"));
-  const directory = path.join(os.homedir(), ".claude", "audit");
-  fs.mkdirSync(directory, {recursive: true, mode: 0o700});
-  fs.appendFileSync(path.join(directory, "events.jsonl"), `${JSON.stringify(event)}\n`, {mode: 0o600});
+  forwardAuditToHarness(JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -214,8 +214,17 @@ test("starts or resumes a session without duplicating its task-start event", t =
   assert.equal(started.resumed, false);
   assert.equal(resumed.taskId, "automatic-task");
   assert.equal(resumed.resumed, true);
+  const next = startHarnessSession({
+    projectRoot: project,
+    host: "codex",
+    sessionId: "thread-123",
+    newTask: true,
+    task: {id: "next-task", goal: "下一项任务", acceptanceCriteria: ["建立新记录"]}
+  });
+  assert.equal(next.taskId, "next-task");
+  assert.equal(next.resumed, false);
   const events = fs.readFileSync(path.join(project, ".ai", "harness", "events.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
-  assert.deepEqual(events.map(event => event.event), ["task_started"]);
+  assert.deepEqual(events.map(event => event.event), ["task_started", "task_started"]);
   assert.doesNotMatch(JSON.stringify(events), /自动任务|记录任务|不应替换/);
 });
 
