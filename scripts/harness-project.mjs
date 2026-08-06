@@ -7,7 +7,14 @@ import {buildProfile} from "./profile-project.mjs";
 export const HARNESS_DIRECTORY = ".ai/harness";
 export const AGENT_MAP_FILENAME = "agent-map.md";
 export const METRICS_FILENAME = "metrics.jsonl";
+export const EVENTS_FILENAME = "events.jsonl";
+export const SESSION_DIRECTORY = "sessions";
 const BLOCKER_CATEGORIES = new Set(["environment", "dependency", "permission", "requirements", "test", "external", "unknown"]);
+const EVENT_NAMES = new Set(["task_started", "tool_completed", "policy_decision", "skill_selected", "agent_selected", "verification_completed", "task_finished"]);
+const EVENT_HOSTS = new Set(["claude", "codex", "unknown"]);
+const EVENT_TOOLS = new Set(["shell", "read", "write", "other"]);
+const EVENT_DECISIONS = new Set(["allow", "ask", "deny"]);
+const VERIFICATION_STATUSES = new Set(["passed", "failed", "not_run"]);
 
 function assertTask(task) {
   if (!task || typeof task !== "object" || Array.isArray(task)) throw new Error("task is required");
@@ -131,6 +138,37 @@ function metricEvent(event, taskId, details = {}) {
   return {timestamp: new Date().toISOString(), event, taskId, ...details};
 }
 
+function assertTaskId(taskId) {
+  if (typeof taskId !== "string" || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(taskId)) throw new Error("invalid task id");
+  return taskId;
+}
+
+function assertHost(host) {
+  if (!EVENT_HOSTS.has(host)) throw new Error("invalid harness event host");
+  return host;
+}
+
+function normalizeHarnessEvent(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("harness event is required");
+  const allowed = new Set(["event", "host", "tool", "decision", "verificationStatus"]);
+  for (const key of Object.keys(input)) if (!allowed.has(key)) throw new Error("invalid harness event field");
+  if (!EVENT_NAMES.has(input.event)) throw new Error("invalid harness event name");
+  const event = {event: input.event, host: assertHost(input.host)};
+  if (input.tool !== undefined) {
+    if (!EVENT_TOOLS.has(input.tool)) throw new Error("invalid harness event tool");
+    event.tool = input.tool;
+  }
+  if (input.decision !== undefined) {
+    if (!EVENT_DECISIONS.has(input.decision)) throw new Error("invalid harness event decision");
+    event.decision = input.decision;
+  }
+  if (input.verificationStatus !== undefined) {
+    if (!VERIFICATION_STATUSES.has(input.verificationStatus)) throw new Error("invalid harness verification status");
+    event.verificationStatus = input.verificationStatus;
+  }
+  return event;
+}
+
 export function writeHarness({projectRoot, harness}) {
   if (!harness || harness.projectRoot !== buildProfile({projectRoot}).projectRoot) {
     throw new Error("harness project root mismatch");
@@ -140,14 +178,16 @@ export function writeHarness({projectRoot, harness}) {
   const map = path.join(directory, AGENT_MAP_FILENAME);
   const task = taskFile(directory, harness.task.id);
   const metrics = path.join(directory, METRICS_FILENAME);
-  if (fs.existsSync(map) || fs.existsSync(metrics) || fs.existsSync(task)) {
+  const events = path.join(directory, EVENTS_FILENAME);
+  if (fs.existsSync(map) || fs.existsSync(metrics) || fs.existsSync(events) || fs.existsSync(task)) {
     throw new Error("existing harness or task");
   }
   if (!isWithin(tasks, task)) throw new Error("unsafe task destination");
   writeAtomically(map, `${formatAgentMap(harness)}\n`);
   writeAtomically(task, `${JSON.stringify(harness.task, null, 2)}\n`);
   writeAtomically(metrics, `${JSON.stringify(metricEvent("task_created", harness.task.id, {status: harness.task.status}))}\n`);
-  return {directory, map, task, metrics};
+  writeAtomically(events, "");
+  return {directory, map, task, metrics, events};
 }
 
 function existingHarnessFiles(root) {
@@ -156,11 +196,12 @@ function existingHarnessFiles(root) {
   const tasks = existingSafeDirectory(root, path.posix.join(HARNESS_DIRECTORY, "tasks"));
   const map = path.join(directory, AGENT_MAP_FILENAME);
   const metrics = path.join(directory, METRICS_FILENAME);
+  const events = path.join(directory, EVENTS_FILENAME);
   if (!tasks || !fs.existsSync(map) || !fs.existsSync(metrics)) throw new Error("missing task harness");
-  for (const file of [map, metrics]) {
+  for (const file of [map, metrics, ...(fs.existsSync(events) ? [events] : [])]) {
     if (fs.lstatSync(file).isSymbolicLink() || !fs.statSync(file).isFile()) throw new Error("invalid harness file");
   }
-  return {directory, tasks, metrics};
+  return {directory, tasks, metrics, events};
 }
 
 export function addHarnessTask({projectRoot, task}) {
@@ -178,7 +219,7 @@ export function addHarnessTask({projectRoot, task}) {
 
 export function readHarnessTask({projectRoot, taskId}) {
   const root = buildProfile({projectRoot}).projectRoot;
-  if (typeof taskId !== "string" || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(taskId)) throw new Error("invalid task id");
+  assertTaskId(taskId);
   const {directory, tasks} = existingHarnessFiles(root);
   const destination = taskFile(directory, taskId);
   if (!isWithin(tasks, destination) || !fs.existsSync(destination)) throw new Error(`missing harness task record: ${taskId}`);
@@ -191,6 +232,103 @@ export function readHarnessTask({projectRoot, taskId}) {
   }
   if (!record || typeof record !== "object" || Array.isArray(record) || record.id !== taskId) throw new Error("invalid task record");
   return record;
+}
+
+export function appendHarnessEvent({projectRoot, taskId, event}) {
+  const root = buildProfile({projectRoot}).projectRoot;
+  assertTaskId(taskId);
+  readHarnessTask({projectRoot: root, taskId});
+  const normalized = normalizeHarnessEvent(event);
+  const {events} = existingHarnessFiles(root);
+  if (fs.existsSync(events)) {
+    if (fs.lstatSync(events).isSymbolicLink() || !fs.statSync(events).isFile()) throw new Error("invalid harness file");
+  } else {
+    writeAtomically(events, "");
+  }
+  const recorded = {timestamp: new Date().toISOString(), taskId, ...normalized};
+  fs.appendFileSync(events, `${JSON.stringify(recorded)}\n`, {mode: 0o600});
+  return recorded;
+}
+
+export function readHarnessEvents({projectRoot, taskId}) {
+  const root = buildProfile({projectRoot}).projectRoot;
+  assertTaskId(taskId);
+  readHarnessTask({projectRoot: root, taskId});
+  const {events} = existingHarnessFiles(root);
+  let eventStat;
+  try {
+    eventStat = fs.lstatSync(events);
+  } catch (error) {
+    if (error.code === "ENOENT") throw new Error("missing harness event stream");
+    throw error;
+  }
+  if (eventStat.isSymbolicLink() || !eventStat.isFile()) throw new Error("invalid harness file");
+  const lines = fs.readFileSync(events, "utf8").split("\n").filter(Boolean);
+  return lines.map(line => {
+    let recorded;
+    try {
+      recorded = JSON.parse(line);
+    } catch {
+      throw new Error("invalid harness event stream");
+    }
+    if (!recorded || typeof recorded !== "object" || Array.isArray(recorded) || typeof recorded.timestamp !== "string" || recorded.taskId !== taskId) {
+      throw new Error("invalid harness event stream");
+    }
+    const event = {...recorded};
+    delete event.timestamp;
+    delete event.taskId;
+    const normalized = normalizeHarnessEvent(event);
+    if (JSON.stringify(Object.keys(event).sort()) !== JSON.stringify(Object.keys(normalized).sort())) {
+      throw new Error("invalid harness event stream");
+    }
+    return recorded;
+  });
+}
+
+function sessionKey(sessionId) {
+  if (typeof sessionId !== "string" || !/^[A-Za-z0-9._-]{1,160}$/.test(sessionId)) throw new Error("invalid harness session id");
+  return crypto.createHash("sha256").update(sessionId).digest("hex");
+}
+
+export function startHarnessSession({projectRoot, host, sessionId, task}) {
+  const root = buildProfile({projectRoot}).projectRoot;
+  const normalizedTask = assertTask(task);
+  const normalizedHost = assertHost(host);
+  if (normalizedHost === "unknown") throw new Error("invalid harness session host");
+  const key = sessionKey(sessionId);
+  const directory = existingSafeDirectory(root, HARNESS_DIRECTORY);
+  if (!directory) {
+    writeHarness({projectRoot: root, harness: buildHarness({projectRoot: root, task: normalizedTask})});
+  } else {
+    try {
+      readHarnessTask({projectRoot: root, taskId: normalizedTask.id});
+    } catch (error) {
+      if (!String(error.message).startsWith("missing harness task record:")) throw error;
+      addHarnessTask({projectRoot: root, task: normalizedTask});
+    }
+  }
+  const {directory: harnessDirectory} = existingHarnessFiles(root);
+  const sessions = safeDirectory(root, path.posix.join(HARNESS_DIRECTORY, SESSION_DIRECTORY));
+  const destination = path.join(sessions, `${key}.json`);
+  if (!isWithin(sessions, destination)) throw new Error("unsafe harness session destination");
+  if (fs.existsSync(destination)) {
+    if (fs.lstatSync(destination).isSymbolicLink() || !fs.statSync(destination).isFile()) throw new Error("invalid harness session");
+    let context;
+    try {
+      context = JSON.parse(fs.readFileSync(destination, "utf8"));
+    } catch {
+      throw new Error("invalid harness session");
+    }
+    if (!context || context.schemaVersion !== 1 || context.sessionKey !== key || context.host !== normalizedHost) {
+      throw new Error("invalid harness session");
+    }
+    readHarnessTask({projectRoot: root, taskId: context.taskId});
+    return {directory: harnessDirectory, taskId: context.taskId, sessionKey: key, resumed: true};
+  }
+  const context = {schemaVersion: 1, sessionKey: key, taskId: normalizedTask.id, host: normalizedHost, startedAt: new Date().toISOString()};
+  writeAtomically(destination, `${JSON.stringify(context, null, 2)}\n`);
+  appendHarnessEvent({projectRoot: root, taskId: normalizedTask.id, event: {event: "task_started", host: normalizedHost}});
+  return {directory: harnessDirectory, taskId: normalizedTask.id, sessionKey: key, resumed: false};
 }
 
 export function refreshAgentMap({projectRoot}) {
@@ -213,9 +351,9 @@ function nonNegativeInteger(value, field) {
   return value;
 }
 
-export function recordOutcome({projectRoot, taskId, outcome}) {
+export function recordOutcome({projectRoot, taskId, outcome, host = "unknown"}) {
   const root = buildProfile({projectRoot}).projectRoot;
-  if (typeof taskId !== "string" || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(taskId)) throw new Error("invalid task id");
+  assertTaskId(taskId);
   if (!outcome || typeof outcome !== "object" || Array.isArray(outcome)) throw new Error("outcome is required");
   if (!new Set(["completed", "blocked", "rework", "invalidated"]).has(outcome.status)) throw new Error("invalid outcome status");
   if (typeof outcome.verificationCommand !== "string" || outcome.verificationCommand.trim().length === 0) {
@@ -260,6 +398,10 @@ export function recordOutcome({projectRoot, taskId, outcome}) {
   taskRecord.outcomes = [...(Array.isArray(taskRecord.outcomes) ? taskRecord.outcomes : []), record];
   writeAtomically(task, `${JSON.stringify(taskRecord, null, 2)}\n`);
   fs.appendFileSync(metrics, `${JSON.stringify(metricEvent("task_outcome", taskId, record))}\n`, {mode: 0o600});
+  appendHarnessEvent({projectRoot: root, taskId, event: {event: "verification_completed", host: assertHost(host), verificationStatus: record.verification.status}});
+  if (record.status === "completed" || record.status === "blocked") {
+    appendHarnessEvent({projectRoot: root, taskId, event: {event: "task_finished", host: assertHost(host)}});
+  }
   return record;
 }
 

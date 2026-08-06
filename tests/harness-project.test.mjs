@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
-import {buildHarness, formatAgentMap, writeHarness, refreshAgentMap, recordOutcome} from "../scripts/harness-project.mjs";
+import {appendHarnessEvent, buildHarness, formatAgentMap, startHarnessSession, writeHarness, refreshAgentMap, recordOutcome} from "../scripts/harness-project.mjs";
 
 function writeFile(file, content) {
   fs.mkdirSync(path.dirname(file), {recursive: true});
@@ -163,6 +163,60 @@ test("refreshes only the existing Agent Map and records an auditable event", t =
   assert.equal(JSON.parse(fs.readFileSync(files.task, "utf8")).id, "default-greeting");
   const events = fs.readFileSync(files.metrics, "utf8").trim().split("\n").map(JSON.parse);
   assert.equal(events.at(-1).event, "agent_map_refreshed");
+});
+
+test("records only whitelisted Harness event metadata and never stores task text", t => {
+  const project = makeFixture(t);
+  const harness = buildHarness({
+    projectRoot: project,
+    task: {id: "private-goal", goal: "不要泄露的任务目标", acceptanceCriteria: ["完成私有验收"]}
+  });
+  writeHarness({projectRoot: project, harness});
+
+  const event = appendHarnessEvent({
+    projectRoot: project,
+    taskId: "private-goal",
+    event: {event: "task_started", host: "codex"}
+  });
+
+  assert.deepEqual(Object.keys(event).sort(), ["event", "host", "taskId", "timestamp"]);
+  assert.equal(event.event, "task_started");
+  assert.throws(() => appendHarnessEvent({
+    projectRoot: project,
+    taskId: "private-goal",
+    event: {event: "task_started", host: "codex", command: "cat .env"}
+  }), /invalid harness event field/);
+  assert.throws(() => appendHarnessEvent({
+    projectRoot: project,
+    taskId: "private-goal",
+    event: {event: "unknown", host: "codex"}
+  }), /invalid harness event name/);
+  const events = fs.readFileSync(path.join(project, ".ai", "harness", "events.jsonl"), "utf8");
+  assert.doesNotMatch(events, /不要泄露|私有验收|\.env/);
+});
+
+test("starts or resumes a session without duplicating its task-start event", t => {
+  const project = makeFixture(t);
+  const started = startHarnessSession({
+    projectRoot: project,
+    host: "codex",
+    sessionId: "thread-123",
+    task: {id: "automatic-task", goal: "自动任务", acceptanceCriteria: ["记录任务"]}
+  });
+  const resumed = startHarnessSession({
+    projectRoot: project,
+    host: "codex",
+    sessionId: "thread-123",
+    task: {id: "another-task", goal: "不应替换", acceptanceCriteria: ["保留原任务"]}
+  });
+
+  assert.equal(started.taskId, "automatic-task");
+  assert.equal(started.resumed, false);
+  assert.equal(resumed.taskId, "automatic-task");
+  assert.equal(resumed.resumed, true);
+  const events = fs.readFileSync(path.join(project, ".ai", "harness", "events.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  assert.deepEqual(events.map(event => event.event), ["task_started"]);
+  assert.doesNotMatch(JSON.stringify(events), /自动任务|记录任务|不应替换/);
 });
 
 test("CLI stays read-only until explicit persistence and never runs declared verification commands", t => {
