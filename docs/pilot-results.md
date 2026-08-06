@@ -171,3 +171,12 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - Skill 压力基线与复核均已执行。无 P2 指引时，agent 已拒绝擅自创建 worktree、重试或运行命令，但缺少固定恢复入口；更新后，agent 先给出只读 DAG 预览，明确每一项写入、重试和 worktree 登记的命令边界，并保留“不自动执行”的限制。
 - 完整框架验证为 `node --test tests/*.test.mjs` 61/61 通过；`harness-control`、Harness、评估器、两端适配器与 CC-Switch 脚本的语法检查通过；插件 JSON 已解析，`git diff --check` 通过。此证据来自临时夹具和本地框架测试，未创建真实项目控制文件，也未触发 GitHub 或 Windows runner。
 - 框架主分支已快进合并 P2。Codex 的受管 skill、全局策略和六份全局说明已安装并验证零漂移，版本为 `0.10.0`；Claude 受管策略也验证零漂移。Claude 用户插件已通过 `claude plugin update leon-engineering@leon-local --scope user` 从 `0.9.0` 更新至 `0.10.0` 并保持启用；已有 Claude Code 会话必须重启后才会加载该版本。
+
+## 强制 Harness 任务协议激活
+
+**日期：**2026-08-06
+
+- 新增 `harness-session.mjs`、`harness-enforce.mjs` 和项目内 `events.jsonl`。会话入口自动创建或恢复任务；事件流只写任务 ID、宿主、事件类别和白名单状态，测试证明其中不含目标、验收、会话 ID、命令、路径或秘密。
+- Claude 插件的写入型 Hook 已接入会话与事件账本：初始化失败时拒绝项目写入；原有 `guard.mjs` 仍先执行安全判定。Codex 没有等价用户级工具 Hook，受管策略要求自动开始，而跨宿主的 `harness-enforce` 和项目 CI 是实际的交付硬门。
+- 源码完整验证 `node --test tests/*.test.mjs` 为 81/81 通过；`git diff --check` 和插件 JSON 解析通过。主分支提交为 `3ca43be`，运行时、Codex 全局策略和 Claude 受管策略均校验为零漂移；Claude 用户插件已从 `0.14.0` 更新到 `0.15.0`，现有 Claude 会话须重启加载新 Hook。
+- 在用户明确选择的 AlphaFoundry 创建新任务 `harness-mandatory-smoke`：运行时校验实际返回 `valid: true`，随后记录 `completed/passed` 结果并由 `harness-enforce` 通过。该验证只证明强制 Harness 的运行时和交付硬门可运行，不代表 AlphaFoundry 业务测试、CI 或 Windows 平台验证已通过。
