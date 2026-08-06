@@ -5,7 +5,7 @@ description: Use when a user-selected project needs work to survive across Codex
 
 # 项目 Harness
 
-只对用户明确选择的项目和任务使用仓库内 Harness。它是项目地图、证据账本和可恢复任务状态，不是全局记忆，也不能成为扫描无关仓库的理由。
+只对用户明确选择的项目和任务使用仓库内 Harness。它是项目地图、证据账本和可恢复任务状态，不是全局记忆，也不能成为扫描无关仓库的理由。用户启用强制 Harness 后，所有会形成该项目交付、改动或调研结论的新任务必须自动开始或恢复 Harness；不得让用户手工建立账本。纯聊天和未指定项目的知识问答不写入项目。
 
 先确认受管运行时可用；它位于所有宿主共用的稳定用户目录，不得把脚本复制到项目 `scripts/`：
 
@@ -13,13 +13,15 @@ description: Use when a user-selected project needs work to survive across Codex
 node "$HOME/.agents/leon-engineering/runtime/harness-runtime.mjs" --verify
 ```
 
-若校验提示缺失或漂移，必须从受管框架源运行安装器完成安装并再次校验；不得用项目内相对脚本路径或手工复制绕过清单。运行时可用后，预览不得写文件：
+若校验提示缺失或漂移，必须从受管框架源运行安装器完成安装并再次校验；不得用项目内相对脚本路径或手工复制绕过清单。新任务由 Agent 自动通过会话入口创建；每个新的用户任务使用 `--new-task` 与新的不透明任务键，任务延续时使用同一任务键恢复：
 
 ```bash
-node "$HOME/.agents/leon-engineering/runtime/harness-project.mjs" --project /absolute/project --task-id task-id --goal "Outcome" --acceptance "Observable result"
+node "$HOME/.agents/leon-engineering/runtime/harness-session.mjs" --start --new-task --project /absolute/project --host codex --session-id opaque-task-key --task-id task-id --goal "Outcome" --acceptance "Observable result"
 ```
 
-只有用户授权向该确切项目写入任务状态后，才可使用 `--write-harness`。它创建 `.ai/harness/agent-map.md`、一个任务记录和 `metrics.jsonl`；拒绝覆盖既有状态。
+会话入口创建 `.ai/harness/agent-map.md`、任务记录、`metrics.jsonl`、隐私受限的 `events.jsonl` 和会话上下文。事件流只记录任务 ID、宿主、事件类别及白名单状态，不记录目标、验收、会话 ID、命令、路径、提示词、源代码或密钥。对未启用强制 Harness 的项目，仍保持原有的预览与明确写入边界。
+
+未启用强制 Harness 时，可在用户明确授权后继续使用 `harness-project.mjs --write-harness` 创建首个账本；该兼容入口不会覆盖既有 Harness。
 
 一个已有 Harness 需要新增后续任务时，必须显式创建对应账本记录；这不会改写 Map 或已有任务。P2 控制计划中的每项都必须以 `harnessTaskId` 明确引用一个这样的记录：
 
@@ -31,7 +33,10 @@ node "$HOME/.agents/leon-engineering/runtime/harness-project.mjs" --project /abs
 
 ```bash
 node "$HOME/.agents/leon-engineering/runtime/harness-project.mjs" --project /absolute/project --task-id task-id --record-outcome --status completed --clarification-rounds 0 --rework-count 0 --verification-command "npm test" --verification-status passed --verification-duration-seconds 18
+node "$HOME/.agents/leon-engineering/runtime/harness-enforce.mjs" --project /absolute/project --task-id task-id
 ```
+
+`harness-enforce` 是只读交付硬门：它要求同一任务具有 `task_started`、真实的 `completed/passed` 结果、实测验证耗时和 `verification_completed` 事件；不会运行记录中的验证命令。Codex 没有可由此框架安装的用户级工具 Hook，因此由全局策略自动开始、由该硬门和项目 CI 机械强制；Claude 的插件 Hook 会在写入型工具边界自动建立/恢复上下文，初始化失败时拒绝项目写入。
 
 要审阅指定项目已记录的交付证据，使用只读评估器。它不创建 Harness、不写报告文件，也不运行任务声明的命令：
 

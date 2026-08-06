@@ -238,6 +238,20 @@ test("proactively promotes low-risk reusable framework learning", () => {
   assert.match(learning, /不记录项目特定的事实/);
 });
 
+test("requires automatic Harness start and a cross-host delivery hard gate", () => {
+  const codexPolicy = fs.readFileSync(path.join(root, "adapters", "codex", "global-policy.md"), "utf8");
+  const claudePolicy = fs.readFileSync(path.join(root, "adapters", "claude", "global-policy.md"), "utf8");
+  const harness = readSkill("project-harness");
+  const commands = fs.readFileSync(path.join(root, "adapters", "codex", "global-docs", "COMMANDS_GUIDE.md"), "utf8");
+
+  assert.match(codexPolicy, /自动开始 Harness/);
+  assert.match(codexPolicy, /Codex.*没有.*工具 Hook/);
+  assert.match(claudePolicy, /自动开始 Harness/);
+  assert.match(harness, /harness-session\.mjs/);
+  assert.match(harness, /harness-enforce\.mjs/);
+  assert.match(commands, /交付硬门/);
+});
+
 test("governs the audited Claude catalog through explicit shared boundaries", () => {
   const codexPolicy = fs.readFileSync(
     path.join(root, "adapters", "codex", "global-policy.md"),

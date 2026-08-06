@@ -9,8 +9,17 @@ Harness v1 解决“新会话忘记上下文、完成标准不稳定、无法衡
 - `.ai/harness/agent-map.md`：从受限项目画像得出的指令、候选验证命令和 CI 入口；项目指令优先。
 - `.ai/harness/tasks/<task-id>.json`：目标、验收标准、当前状态和已记录的结果。
 - `.ai/harness/metrics.jsonl`：任务创建与结果事件，用于统计澄清轮次、返工次数、验证状态、实测验证耗时和阻塞分类。
+- `.ai/harness/events.jsonl`：只追加的跨宿主执行事件；只含任务 ID、宿主、事件类别和白名单状态，绝不含提示词、命令、路径、源代码、密钥或会话 ID。
 
 默认命令只输出预览。`--write-harness` 是项目内写入的明确边界；已有 Harness 或同名任务不会被覆盖。`--record-outcome` 只保存执行者已经获得的证据，绝不执行命令、读取环境变量或访问网络。每条新结果都必须附带执行者实际测得的 `verificationDurationSeconds`；`blocked` 结果还必须附带标准化 `blockerCategory`。这些字段不是脚本估算出来的，也不能从聊天内容回填。
+
+## 强制任务协议
+
+用户为目标项目启用强制 Harness 后，所有会形成项目交付、改动或调研结论的新任务必须由 Agent 自动使用 `harness-session.mjs --start --new-task` 创建；任务延续时恢复同一不透明任务键。用户不需要手动运行该命令。纯聊天和未指定项目的问答不创建项目记录。
+
+完成时必须先实际运行验证，再写入结果并运行 `harness-enforce.mjs --project <目录> --task-id <ID>`。该硬门只读检查开始事件、最新 `completed/passed` 结果、验证命令、实测耗时和验证完成事件；它不运行记录的命令。Codex 没有等价的用户级工具 Hook，因此由受管策略自动开始、由该硬门和项目 CI 强制；Claude 插件在写入型工具 Hook 中自动建立/恢复会话，初始化失败时拒绝写入。
+
+旧 `.ai/tasks`、`.ai/reports` 和历史 Harness 记录不会被回填或删除；事件流只从启用后开始产生。
 
 ## 评估闭环
 

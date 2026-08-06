@@ -29,13 +29,17 @@ node scripts/profile-project.mjs --project /absolute/project --format markdown
 
 它只检查固定的指令、清单、CI 和平台路径，输出的命令均标为 `candidate`，不会执行。只有用户针对该项目明确授权后，才可加入 `--write-profile` 创建 `.ai/project-profile.json`；已有档案还需要 `--replace-profile` 才会更新。安装全局框架本身不会调用该命令或扫描任何项目。
 
-需要跨会话交接一个已授权的项目任务时，先预览 Harness；它不会执行项目命令：
+对已启用强制 Harness 的目标项目，Agent 自动开始新任务；用户不需要先运行命令。新任务使用 `--new-task`，连续处理同一任务时省略它以恢复上下文：
 
 ```bash
-node scripts/harness-project.mjs --project /absolute/project --task-id task-id --goal "目标" --acceptance "验收标准"
+node "$HOME/.agents/leon-engineering/runtime/harness-session.mjs" --start --new-task --project /absolute/project --host codex --session-id opaque-task-key --task-id task-id --goal "目标" --acceptance "验收标准"
 ```
 
-只有明确授权后才加 `--write-harness`。完成任务后，执行者先独立运行验证，再用 `--record-outcome` 写入已经观察到的状态、澄清轮次、返工次数、实测验证秒数和验证命令；记录命令本身不会运行该验证命令。`blocked` 结果还必须写入标准化阻塞分类，不能从推测补填。
+完成任务后，执行者先独立运行验证，再用 `--record-outcome` 写入已经观察到的状态、澄清轮次、返工次数、实测验证秒数和验证命令；记录命令本身不会运行该验证命令。`blocked` 结果还必须写入标准化阻塞分类，不能从推测补填。随后运行只读交付硬门；它不会执行任务命令，但会拒绝缺少开始事件、通过验证结果或验证完成事件的交付：
+
+```bash
+node "$HOME/.agents/leon-engineering/runtime/harness-enforce.mjs" --project /absolute/project --task-id task-id
+```
 
 要查看该项目已记录的交付指标，运行只读评估；它不会创建文件、执行账本内命令或扫描其他项目：
 
