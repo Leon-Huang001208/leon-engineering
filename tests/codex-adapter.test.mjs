@@ -42,9 +42,52 @@ test("installs the global framework without replacing custom global rules", t =>
   assert.match(agents, /^# User rules/m);
   assert.match(agents, /Keep this text\./);
   assert.match(agents, /leon-engineering:global-framework:start/);
+  const hooks = JSON.parse(fs.readFileSync(path.join(codexHome, "hooks.json"), "utf8"));
+  assert.match(hooks.hooks.PreToolUse[0].hooks[0].command, /harness-hook\.mjs --phase pre --host codex/);
+  const manifest = JSON.parse(fs.readFileSync(path.join(codexHome, ".leon-engineering-global.json"), "utf8"));
+  assert.match(manifest.hooks.checksum, /^[0-9a-f]{64}$/);
   for (const name of GLOBAL_DOCUMENT_NAMES) {
     assert.equal(fs.existsSync(path.join(codexHome, "docs", name)), true);
   }
+});
+
+test("refuses to replace a foreign global hook file", t => {
+  const codexHome = makeCodexHome(t);
+  const foreign = JSON.stringify({hooks: {PreToolUse: []}}, null, 2);
+  fs.writeFileSync(path.join(codexHome, "hooks.json"), foreign);
+
+  assert.throws(
+    () => installGlobalFramework({sourceRoot, codexHome}),
+    /foreign global hooks/
+  );
+  assert.equal(fs.readFileSync(path.join(codexHome, "hooks.json"), "utf8"), foreign);
+  assert.equal(fs.existsSync(path.join(codexHome, ".leon-engineering-global.json")), false);
+});
+
+test("detects global hook drift and refuses to roll it back", t => {
+  const codexHome = makeCodexHome(t);
+  installGlobalFramework({sourceRoot, codexHome});
+  fs.appendFileSync(path.join(codexHome, "hooks.json"), "\nchanged");
+
+  assert.deepEqual(verifyGlobalFramework({sourceRoot, codexHome}).drift, ["hooks"]);
+  assert.throws(() => rollbackGlobalFramework({sourceRoot, codexHome}), /drifted global framework/);
+});
+
+test("adopts a matching legacy hook file and preserves it on rollback", t => {
+  const codexHome = makeCodexHome(t);
+  installGlobalFramework({sourceRoot, codexHome});
+  const hooksPath = path.join(codexHome, "hooks.json");
+  const matchingLegacyHooks = fs.readFileSync(hooksPath, "utf8");
+  const manifestPath = path.join(codexHome, ".leon-engineering-global.json");
+  const legacyManifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  delete legacyManifest.hooks;
+  fs.writeFileSync(manifestPath, `${JSON.stringify(legacyManifest, null, 2)}\n`);
+
+  installGlobalFramework({sourceRoot, codexHome});
+  assert.equal(verifyGlobalFramework({sourceRoot, codexHome}).valid, true);
+  rollbackGlobalFramework({sourceRoot, codexHome});
+
+  assert.equal(fs.readFileSync(hooksPath, "utf8"), matchingLegacyHooks);
 });
 
 test("rejects a foreign global document before installing the framework", t => {
@@ -78,6 +121,7 @@ test("reports global drift and rolls back only framework-owned content", t => {
   rollbackGlobalFramework({codexHome});
   assert.equal(fs.readFileSync(path.join(codexHome, "AGENTS.md"), "utf8"), original);
   assert.equal(fs.existsSync(path.join(codexHome, "docs", "SKILLS_GUIDE.md")), false);
+  assert.equal(fs.existsSync(path.join(codexHome, "hooks.json")), false);
 });
 
 test("installs and verifies the global framework through the command line", t => {

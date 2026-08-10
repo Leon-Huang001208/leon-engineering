@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "leon-engineering Codex adapter manifests",
-  "description": "The skill manifest records directory checksums. The global manifest records the bounded policy block and six named global-document checksums.",
+  "description": "The skill manifest records directory checksums. The global manifest records the bounded policy block, six named global-document checksums, and optional legacy-compatible managed Hook metadata.",
   "oneOf": [
     {
       "title": "Skill manifest",
@@ -42,6 +42,15 @@
         "documents": {
           "type": "object",
           "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        },
+        "hooks": {
+          "type": "object",
+          "required": ["checksum", "hadHooksFile"],
+          "properties": {
+            "checksum": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "hadHooksFile": {"type": "boolean"}
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

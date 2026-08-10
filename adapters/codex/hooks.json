@@ -5,7 +5,7 @@
       "matcher": "^(Bash|apply_patch|Edit|Write)$",
       "hooks": [{
         "type": "command",
-        "command": "node /Users/leon/.agents/leon-engineering/runtime/harness-hook.mjs --phase pre --host codex",
+        "command": "node __LEON_ENGINEERING_RUNTIME_ROOT__/harness-hook.mjs --phase pre --host codex",
         "timeout": 3,
         "statusMessage": "初始化 Harness"
       }]
@@ -14,7 +14,7 @@
       "matcher": "^(Bash|apply_patch|Edit|Write)$",
       "hooks": [{
         "type": "command",
-        "command": "node /Users/leon/.agents/leon-engineering/runtime/harness-hook.mjs --phase post --host codex",
+        "command": "node __LEON_ENGINEERING_RUNTIME_ROOT__/harness-hook.mjs --phase post --host codex",
         "timeout": 3
       }]
     }]

@@ -4,10 +4,12 @@ import os from "node:os";
 import path from "node:path";
 import {execFileSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
-import {installHarnessRuntime, verifyHarnessRuntime} from "./harness-runtime.mjs";
+import {defaultHarnessRuntimeRoot, installHarnessRuntime, verifyHarnessRuntime} from "./harness-runtime.mjs";
 
 const MANIFEST_NAME = ".leon-engineering.json";
 const GLOBAL_MANIFEST_NAME = ".leon-engineering-global.json";
+const GLOBAL_HOOKS_NAME = "hooks.json";
+const RUNTIME_ROOT_PLACEHOLDER = "__LEON_ENGINEERING_RUNTIME_ROOT__";
 const SOURCE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const GLOBAL_POLICY_START = "<!-- leon-engineering:global-framework:start -->";
 const GLOBAL_POLICY_END = "<!-- leon-engineering:global-framework:end -->";
@@ -103,6 +105,10 @@ function globalDocsPath(codexHome) {
   return path.join(codexHome, "docs");
 }
 
+function globalHooksPath(codexHome) {
+  return path.join(codexHome, GLOBAL_HOOKS_NAME);
+}
+
 function canonicalGlobalPolicy(sourceRoot) {
   const file = path.join(sourceRoot, "adapters", "codex", "global-policy.md");
   if (!fs.existsSync(file)) throw new Error("missing canonical global policy");
@@ -123,6 +129,24 @@ function canonicalGlobalDocuments(sourceRoot) {
     documents[name] = fs.readFileSync(file, "utf8");
   }
   return documents;
+}
+
+function canonicalGlobalHooks(sourceRoot) {
+  const file = path.join(sourceRoot, "adapters", "codex", GLOBAL_HOOKS_NAME);
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw new Error("missing canonical global hooks");
+  const template = fs.readFileSync(file, "utf8");
+  if (!template.includes(RUNTIME_ROOT_PLACEHOLDER)) throw new Error("invalid canonical global hooks");
+  const content = template.replaceAll(RUNTIME_ROOT_PLACEHOLDER, defaultHarnessRuntimeRoot());
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new Error("invalid canonical global hooks");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !parsed.hooks || typeof parsed.hooks !== "object") {
+    throw new Error("invalid canonical global hooks");
+  }
+  return content;
 }
 
 function markerRange(content) {
@@ -166,6 +190,18 @@ function assertGlobalPolicyManifest(policy) {
     || typeof policy.prefix !== "string"
     || typeof policy.suffix !== "string"
     || typeof policy.hadAgentsFile !== "boolean"
+  ) {
+    throw new Error("invalid global framework manifest");
+  }
+}
+
+function assertGlobalHooksManifest(hooks) {
+  if (hooks === undefined) return;
+  if (
+    !hooks
+    || typeof hooks !== "object"
+    || !/^[0-9a-f]{64}$/.test(hooks.checksum)
+    || typeof hooks.hadHooksFile !== "boolean"
   ) {
     throw new Error("invalid global framework manifest");
   }
@@ -216,6 +252,7 @@ function readGlobalManifest(codexHome) {
   }
   assertGlobalPolicyManifest(manifest.policy);
   assertGlobalDocumentChecksums(manifest.documents);
+  assertGlobalHooksManifest(manifest.hooks);
   return manifest;
 }
 
@@ -262,10 +299,20 @@ function readExistingAgents(codexHome) {
   return {content: fs.readFileSync(file, "utf8"), hadFile: true};
 }
 
+function readExistingHooks(codexHome) {
+  const file = globalHooksPath(codexHome);
+  if (!fs.existsSync(file)) return {content: "", hadFile: false};
+  const stat = fs.lstatSync(file);
+  if (stat.isSymbolicLink() || !stat.isFile()) throw new Error("global hooks.json is not a file");
+  return {content: fs.readFileSync(file, "utf8"), hadFile: true};
+}
+
 function preflightGlobalFramework(sourceRoot, codexHome, existingManifest) {
   const policy = canonicalGlobalPolicy(sourceRoot);
   const documents = canonicalGlobalDocuments(sourceRoot);
+  const hooks = canonicalGlobalHooks(sourceRoot);
   const agents = readExistingAgents(codexHome);
+  const existingHooks = readExistingHooks(codexHome);
   const range = markerRange(agents.content);
 
   if (range && !existingManifest) {
@@ -281,6 +328,19 @@ function preflightGlobalFramework(sourceRoot, codexHome, existingManifest) {
   ) {
     throw new Error("drifted global policy block");
   }
+  if (existingManifest?.hooks && !existingHooks.hadFile) {
+    throw new Error("missing managed global hooks");
+  }
+  if (
+    existingManifest?.hooks
+    && existingHooks.hadFile
+    && textChecksum(existingHooks.content) !== existingManifest.hooks.checksum
+  ) {
+    throw new Error("drifted global hooks");
+  }
+  if (!existingManifest?.hooks && existingHooks.hadFile && existingHooks.content !== hooks) {
+    throw new Error("foreign global hooks");
+  }
 
   const docsRoot = globalDocsPath(codexHome);
   for (const name of GLOBAL_DOCUMENT_NAMES) {
@@ -294,7 +354,7 @@ function preflightGlobalFramework(sourceRoot, codexHome, existingManifest) {
     }
   }
 
-  return {policy, documents, agents, range};
+  return {policy, documents, hooks, agents, existingHooks, range};
 }
 
 function installPolicyContent({agents, range, policy, existingManifest}) {
@@ -344,7 +404,13 @@ export function installGlobalFramework({sourceRoot = SOURCE_ROOT, codexHome}) {
       suffix: installedPolicy.suffix,
       hadAgentsFile: installedPolicy.hadAgentsFile
     },
-    documents
+    documents,
+    hooks: {
+      checksum: textChecksum(prepared.hooks),
+      hadHooksFile: existingManifest?.hooks
+        ? existingManifest.hooks.hadHooksFile
+        : prepared.existingHooks.hadFile
+    }
   };
 
   try {
@@ -353,6 +419,7 @@ export function installGlobalFramework({sourceRoot = SOURCE_ROOT, codexHome}) {
     for (const [name, content] of Object.entries(prepared.documents)) {
       writeAtomically(path.join(docsRoot, name), content);
     }
+    writeAtomically(globalHooksPath(codexHome), prepared.hooks);
     writeAtomically(globalAgentsPath(codexHome), installedPolicy.content);
     writeAtomically(globalManifestPath(codexHome), `${JSON.stringify(manifest, null, 2)}\n`);
     log("global_installed", {documentCount: GLOBAL_DOCUMENT_NAMES.length});
@@ -391,6 +458,20 @@ export function verifyGlobalFramework({sourceRoot = SOURCE_ROOT, codexHome}) {
     sourceDocuments = canonicalGlobalDocuments(sourceRoot);
   } catch {
     for (const name of GLOBAL_DOCUMENT_NAMES) drift.push(`document:${name}`);
+  }
+
+  try {
+    const sourceHooks = canonicalGlobalHooks(sourceRoot);
+    const installedHooks = fs.readFileSync(globalHooksPath(codexHome), "utf8");
+    if (
+      !manifest.hooks
+      || textChecksum(installedHooks) !== manifest.hooks.checksum
+      || installedHooks !== sourceHooks
+    ) {
+      drift.push("hooks");
+    }
+  } catch {
+    drift.push("hooks");
   }
   for (const name of GLOBAL_DOCUMENT_NAMES) {
     if (drift.includes(`document:${name}`)) continue;
@@ -440,6 +521,7 @@ export function rollbackGlobalFramework({sourceRoot = SOURCE_ROOT, codexHome}) {
     } catch (error) {
       if (error.code !== "ENOTEMPTY" && error.code !== "ENOENT") throw error;
     }
+    if (manifest.hooks && !manifest.hooks.hadHooksFile) fs.rmSync(globalHooksPath(codexHome));
     if (!manifest.policy.hadAgentsFile && restored.length === 0) {
       fs.rmSync(agentsFile);
     } else {
