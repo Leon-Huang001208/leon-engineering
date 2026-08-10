@@ -1,0 +1,22 @@
+{
+  "description": "leon-engineering 强制 Harness：Codex 本地工具调用自动进入项目账本。",
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "^(Bash|apply_patch|Edit|Write)$",
+      "hooks": [{
+        "type": "command",
+        "command": "node /Users/leon/.agents/leon-engineering/runtime/harness-hook.mjs --phase pre --host codex",
+        "timeout": 3,
+        "statusMessage": "初始化 Harness"
+      }]
+    }],
+    "PostToolUse": [{
+      "matcher": "^(Bash|apply_patch|Edit|Write)$",
+      "hooks": [{
+        "type": "command",
+        "command": "node /Users/leon/.agents/leon-engineering/runtime/harness-hook.mjs --phase post --host codex",
+        "timeout": 3
+      }]
+    }]
+  }
+}
