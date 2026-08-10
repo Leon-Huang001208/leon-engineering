@@ -17,7 +17,7 @@ Harness v1 解决“新会话忘记上下文、完成标准不稳定、无法衡
 
 用户为目标项目启用强制 Harness 后，所有会形成项目交付、改动或调研结论的新任务必须由 Agent 自动使用 `harness-session.mjs --start --new-task` 创建；任务延续时恢复同一不透明任务键。用户不需要手动运行该命令。纯聊天和未指定项目的问答不创建项目记录。
 
-完成时必须先实际运行验证，再写入结果并运行 `harness-enforce.mjs --project <目录> --task-id <ID>`。该硬门只读检查开始事件、最新 `completed/passed` 结果、验证命令、实测耗时和验证完成事件；它不运行记录的命令。Codex 没有等价的用户级工具 Hook，因此由受管策略自动开始、由该硬门和项目 CI 强制；Claude 插件在写入型工具 Hook 中自动建立/恢复会话，初始化失败时拒绝写入。
+完成时必须先实际运行验证，再写入结果并运行 `harness-enforce.mjs --project <目录> --task-id <ID>`。该硬门只读检查开始事件、最新 `completed/passed` 结果、验证命令、实测耗时和验证完成事件；它不运行记录的命令。Codex 与 Claude 都在本地工具边界通过 `PreToolUse`/`PostToolUse` Hook 自动建立或恢复会话并记录非敏感事件；初始化失败时拒绝受管项目的工具调用。交付仍由硬门和项目 CI 机械验收，Hook 不能替代真实验证证据。
 
 旧 `.ai/tasks`、`.ai/reports` 和历史 Harness 记录不会被回填或删除；事件流只从启用后开始产生。
 

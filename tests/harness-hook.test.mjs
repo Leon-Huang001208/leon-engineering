@@ -41,6 +41,23 @@ test("Claude pre hook fails closed when an eligible project has no opaque sessio
   assert.equal(fs.existsSync(path.join(project, ".ai")), false);
 });
 
+test("Codex apply_patch hooks record a write event", t => {
+  const project = makeProject(t);
+  const input = {cwd: project, session_id: "codex-session-01", tool_name: "apply_patch"};
+
+  const pre = handleHarnessHook({phase: "pre", input, host: "codex"});
+  const post = handleHarnessHook({phase: "post", input, host: "codex"});
+
+  assert.equal(pre.decision, "allow");
+  assert.equal(post.decision, "allow");
+  const events = fs.readFileSync(path.join(project, ".ai", "harness", "events.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  assert.deepEqual(events.map(event => [event.event, event.tool].filter(Boolean)), [
+    ["task_started"],
+    ["policy_decision", "write"],
+    ["tool_completed", "write"]
+  ]);
+});
+
 test("Claude post hook is non-blocking when it cannot identify a project", () => {
   assert.deepEqual(handleHarnessHook({
     phase: "post",

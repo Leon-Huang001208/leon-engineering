@@ -264,16 +264,17 @@ export function readHarnessEvents({projectRoot, taskId}) {
   }
   if (eventStat.isSymbolicLink() || !eventStat.isFile()) throw new Error("invalid harness file");
   const lines = fs.readFileSync(events, "utf8").split("\n").filter(Boolean);
-  return lines.map(line => {
+  return lines.flatMap(line => {
     let recorded;
     try {
       recorded = JSON.parse(line);
     } catch {
       throw new Error("invalid harness event stream");
     }
-    if (!recorded || typeof recorded !== "object" || Array.isArray(recorded) || typeof recorded.timestamp !== "string" || recorded.taskId !== taskId) {
+    if (!recorded || typeof recorded !== "object" || Array.isArray(recorded) || typeof recorded.timestamp !== "string" || typeof recorded.taskId !== "string") {
       throw new Error("invalid harness event stream");
     }
+    if (recorded.taskId !== taskId) return [];
     const event = {...recorded};
     delete event.timestamp;
     delete event.taskId;
@@ -281,7 +282,7 @@ export function readHarnessEvents({projectRoot, taskId}) {
     if (JSON.stringify(Object.keys(event).sort()) !== JSON.stringify(Object.keys(normalized).sort())) {
       throw new Error("invalid harness event stream");
     }
-    return recorded;
+    return [recorded];
   });
 }
 

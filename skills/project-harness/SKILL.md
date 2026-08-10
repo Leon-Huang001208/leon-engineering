@@ -36,7 +36,7 @@ node "$HOME/.agents/leon-engineering/runtime/harness-project.mjs" --project /abs
 node "$HOME/.agents/leon-engineering/runtime/harness-enforce.mjs" --project /absolute/project --task-id task-id
 ```
 
-`harness-enforce` 是只读交付硬门：它要求同一任务具有 `task_started`、真实的 `completed/passed` 结果、实测验证耗时和 `verification_completed` 事件；不会运行记录中的验证命令。Codex 没有可由此框架安装的用户级工具 Hook，因此由全局策略自动开始、由该硬门和项目 CI 机械强制；Claude 的插件 Hook 会在写入型工具边界自动建立/恢复上下文，初始化失败时拒绝项目写入。
+`harness-enforce` 是只读交付硬门：它要求同一任务具有 `task_started`、真实的 `completed/passed` 结果、实测验证耗时和 `verification_completed` 事件；不会运行记录中的验证命令。Codex 与 Claude 的 `PreToolUse`/`PostToolUse` Hook 都会在本地工具边界自动建立或恢复上下文并记录非敏感事件；初始化失败时拒绝受管项目调用。Hook 不能替代真实验证，仍由该硬门和项目 CI 机械验收。
 
 要审阅指定项目已记录的交付证据，使用只读评估器。它不创建 Harness、不写报告文件，也不运行任务声明的命令：
 

@@ -245,8 +245,9 @@ test("requires automatic Harness start and a cross-host delivery hard gate", () 
   const commands = fs.readFileSync(path.join(root, "adapters", "codex", "global-docs", "COMMANDS_GUIDE.md"), "utf8");
 
   assert.match(codexPolicy, /自动开始 Harness/);
-  assert.match(codexPolicy, /Codex.*没有.*工具 Hook/);
+  assert.match(codexPolicy, /Codex.*PreToolUse.*PostToolUse.*Hook/);
   assert.match(claudePolicy, /自动开始 Harness/);
+  assert.match(harness, /Codex.*PreToolUse.*PostToolUse.*Hook/);
   assert.match(harness, /harness-session\.mjs/);
   assert.match(harness, /harness-enforce\.mjs/);
   assert.match(commands, /交付硬门/);

@@ -21,7 +21,7 @@ function opaqueSessionId(input, host) {
 
 function toolCategory(name) {
   if (name === "Bash") return "shell";
-  if (["Edit", "Write", "MultiEdit"].includes(name)) return "write";
+  if (["apply_patch", "Edit", "Write", "MultiEdit"].includes(name)) return "write";
   if (name === "Read") return "read";
   return "other";
 }

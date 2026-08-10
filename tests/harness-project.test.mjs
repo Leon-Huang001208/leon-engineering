@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
-import {appendHarnessEvent, buildHarness, formatAgentMap, startHarnessSession, writeHarness, refreshAgentMap, recordOutcome} from "../scripts/harness-project.mjs";
+import {appendHarnessEvent, buildHarness, formatAgentMap, readHarnessEvents, startHarnessSession, writeHarness, refreshAgentMap, recordOutcome} from "../scripts/harness-project.mjs";
 
 function writeFile(file, content) {
   fs.mkdirSync(path.dirname(file), {recursive: true});
@@ -193,6 +193,37 @@ test("records only whitelisted Harness event metadata and never stores task text
   }), /invalid harness event name/);
   const events = fs.readFileSync(path.join(project, ".ai", "harness", "events.jsonl"), "utf8");
   assert.doesNotMatch(events, /不要泄露|私有验收|\.env/);
+});
+
+test("reads only the requested task events from a shared event stream", t => {
+  const project = makeFixture(t);
+  const primary = buildHarness({
+    projectRoot: project,
+    task: {id: "primary-task", goal: "主任务", acceptanceCriteria: ["保留主任务事件"]}
+  });
+  writeHarness({projectRoot: project, harness: primary});
+  startHarnessSession({
+    projectRoot: project,
+    host: "codex",
+    sessionId: "primary-session",
+    task: {id: "primary-task", goal: "主任务", acceptanceCriteria: ["保留主任务事件"]}
+  });
+  startHarnessSession({
+    projectRoot: project,
+    host: "codex",
+    sessionId: "secondary-session",
+    task: {id: "secondary-task", goal: "次任务", acceptanceCriteria: ["隔离次任务事件"]}
+  });
+  appendHarnessEvent({
+    projectRoot: project,
+    taskId: "secondary-task",
+    event: {event: "policy_decision", host: "codex", tool: "write", decision: "allow"}
+  });
+
+  const events = readHarnessEvents({projectRoot: project, taskId: "primary-task"});
+
+  assert.deepEqual(events.map(event => event.event), ["task_started"]);
+  assert.equal(events.every(event => event.taskId === "primary-task"), true);
 });
 
 test("starts or resumes a session without duplicating its task-start event", t => {
