@@ -2,9 +2,10 @@ import fs from "node:fs";
 import {spawnSync} from "node:child_process";
 import os from "node:os";
 import path from "node:path";
+import crypto from "node:crypto";
 import test from "node:test";
 import assert from "node:assert/strict";
-import {classifyHookCommand, handleHarnessHook} from "../scripts/harness-hook.mjs";
+import {classifyHookCommand, classifyHookOperation, handleHarnessHook} from "../scripts/harness-hook.mjs";
 
 function makeProject(t) {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "leon-harness-hook-"));
@@ -102,7 +103,7 @@ test("initialization errors return structured redacted diagnostics", t => {
   assert.equal(result.decision, "deny");
   assert.equal(result.classification, "mutation");
   assert.deepEqual(Object.keys(result.diagnostic).sort(), [
-    "code", "manifestPath", "message", "recoveryCommand", "runtimePath", "stage"
+    "code", "manifestPath", "recoveryCommand", "runtimePath", "stage"
   ]);
   assert.equal(result.diagnostic.stage, "runtime_verify");
   assert.equal(result.diagnostic.code, "permission_denied");
@@ -216,4 +217,79 @@ test("Claude post hook is non-blocking when it cannot identify a project", () =>
     phase: "post",
     input: {cwd: "/does/not/exist", session_id: "claude-session-01", tool_name: "Bash"}
   }), {decision: "allow", skipped: true});
+});
+
+test("classifies only explicit read-only recovery operations as diagnostic reads", () => {
+  const runtime = path.join(os.homedir(), ".agents", "leon-engineering", "runtime", "harness-runtime.mjs");
+  const cases = [
+    [{tool_name: "Bash", tool_input: {command: "pwd"}}, "diagnostic_read"],
+    [{tool_name: "exec_command", tool_input: {cmd: "sed -n '1,120p' AGENTS.md"}}, "diagnostic_read"],
+    [{tool_name: "Bash", tool_input: {command: "rg -n Harness AGENTS.md"}}, "diagnostic_read"],
+    [{tool_name: "Bash", tool_input: {command: "git status --short"}}, "diagnostic_read"],
+    [{tool_name: "Bash", tool_input: {command: `node ${runtime} --verify`}}, "diagnostic_read"],
+    [{tool_name: "apply_patch", tool_input: {}}, "mutation"],
+    [{tool_name: "Bash", tool_input: {command: "git checkout -- AGENTS.md"}}, "mutation"],
+    [{tool_name: "Bash", tool_input: {command: "git branch recovery-copy"}}, "mutation"],
+    [{tool_name: "Bash", tool_input: {command: "sed -i '' 's/a/b/' AGENTS.md"}}, "mutation"],
+    [{tool_name: "Bash", tool_input: {command: "python diagnose.py"}}, "unknown"],
+    [{tool_name: "unrecognized", tool_input: {}}, "unknown"]
+  ];
+
+  for (const [input, expected] of cases) assert.equal(classifyHookOperation(input), expected, JSON.stringify(input));
+});
+
+test("initialization failure allows diagnostics but denies mutation and unknown operations", t => {
+  const project = makeProject(t);
+  const sessionId = "broken-session";
+  const start = handleHarnessHook({
+    phase: "pre",
+    input: {cwd: project, session_id: sessionId, tool_name: "Read", tool_input: {file_path: "AGENTS.md"}},
+    host: "codex"
+  });
+  assert.equal(start.decision, "allow");
+  const sessionKey = crypto.createHash("sha256").update(`codex:${sessionId}`).digest("hex");
+  fs.writeFileSync(path.join(project, ".ai", "harness", "sessions", `${sessionKey}.json`), "{broken\n");
+
+  const diagnostic = handleHarnessHook({
+    phase: "pre",
+    input: {cwd: project, session_id: sessionId, tool_name: "exec_command", tool_input: {cmd: "pwd"}},
+    host: "codex"
+  });
+  const mutation = handleHarnessHook({
+    phase: "pre",
+    input: {cwd: project, session_id: sessionId, tool_name: "apply_patch", tool_input: {}},
+    host: "codex"
+  });
+  const unknown = handleHarnessHook({
+    phase: "pre",
+    input: {cwd: project, session_id: sessionId, tool_name: "Bash", tool_input: {command: "python diagnose.py"}},
+    host: "codex"
+  });
+
+  assert.equal(diagnostic.decision, "allow");
+  assert.equal(diagnostic.degraded, true);
+  assert.equal(diagnostic.classification, "diagnostic_read");
+  assert.equal(mutation.decision, "deny");
+  assert.equal(mutation.classification, "mutation");
+  assert.equal(unknown.decision, "deny");
+  assert.equal(unknown.classification, "unknown");
+  for (const result of [diagnostic, mutation, unknown]) {
+    assert.equal(result.diagnostic.stage, "session_start");
+    assert.equal(result.diagnostic.code, "invalid_session_state");
+    assert.match(result.diagnostic.runtimePath, /\/(?:scripts|runtime)$/);
+    assert.match(result.diagnostic.manifestPath, /\.leon-engineering-harness-runtime\.json$/);
+    assert.match(result.diagnostic.recoveryCommand, /--verify/);
+    assert.doesNotMatch(JSON.stringify(result), /broken-session|\{broken/);
+  }
+});
+
+test("missing session identity still permits pwd but keeps writes fail-closed", t => {
+  const project = makeProject(t);
+  const diagnostic = handleHarnessHook({phase: "pre", input: {cwd: project, tool_name: "Bash", tool_input: {command: "pwd"}}});
+  const mutation = handleHarnessHook({phase: "pre", input: {cwd: project, tool_name: "Write", tool_input: {file_path: "demo.txt"}}});
+
+  assert.equal(diagnostic.decision, "allow");
+  assert.equal(diagnostic.diagnostic.code, "missing_session_id");
+  assert.equal(mutation.decision, "deny");
+  assert.equal(fs.existsSync(path.join(project, ".ai")), false);
 });
