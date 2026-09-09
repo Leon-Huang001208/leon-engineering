@@ -35,6 +35,13 @@ function sourceCommit(sourceRoot) {
   return execFileSync("git", ["-C", sourceRoot, "rev-parse", "HEAD"], {encoding: "utf8"}).trim();
 }
 
+function localSourceRoot() {
+  return fs.existsSync(path.join(SOURCE_ROOT, ".claude-plugin", "plugin.json"))
+    && fs.existsSync(path.join(SOURCE_ROOT, "scripts", "harness-runtime.mjs"))
+    ? SOURCE_ROOT
+    : null;
+}
+
 function ensureSafeDirectory(directory) {
   const resolved = path.resolve(directory);
   if (fs.existsSync(resolved)) {
@@ -135,7 +142,9 @@ function parseArgs(args) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const options = parseArgs(process.argv.slice(2));
-    const result = options.action === "--install" ? installHarnessRuntime(options) : verifyHarnessRuntime(options);
+    const result = options.action === "--install"
+      ? installHarnessRuntime(options)
+      : verifyHarnessRuntime({runtimeRoot: options.runtimeRoot, sourceRoot: localSourceRoot()});
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     if (!result.valid && options.action === "--verify") process.exitCode = 1;
   } catch (error) {

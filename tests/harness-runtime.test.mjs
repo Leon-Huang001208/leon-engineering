@@ -29,6 +29,13 @@ test("installs a verified Harness runtime that can preview a real project", t =>
   assert.deepEqual(verifyHarnessRuntime({sourceRoot, runtimeRoot}), {valid: true, drift: []});
   for (const name of HARNESS_RUNTIME_FILES) assert.equal(fs.existsSync(path.join(runtimeRoot, name)), true);
 
+  const installedRuntimeRoot = fs.realpathSync(runtimeRoot);
+  const selfVerified = spawnSync(process.execPath, [
+    path.join(installedRuntimeRoot, "harness-runtime.mjs"), "--verify", "--runtime-root", installedRuntimeRoot
+  ], {encoding: "utf8"});
+  assert.equal(selfVerified.status, 0, selfVerified.stderr);
+  assert.deepEqual(JSON.parse(selfVerified.stdout), {valid: true, drift: []});
+
   const preview = spawnSync(process.execPath, [
     path.join(runtimeRoot, "harness-project.mjs"), "--project", project,
     "--task-id", "runtime-preview", "--goal", "验证运行时", "--acceptance", "不写入项目"
