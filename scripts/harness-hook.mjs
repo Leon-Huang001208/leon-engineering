@@ -1,7 +1,12 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {appendHarnessEvent, startHarnessSession} from "./harness-project.mjs";
+import {defaultHarnessRuntimeRoot} from "./harness-runtime.mjs";
+
+const RUNTIME_PATH = path.join(defaultHarnessRuntimeRoot(), "harness-runtime.mjs");
+const MANIFEST_PATH = path.join(defaultHarnessRuntimeRoot(), ".leon-engineering-harness-runtime.json");
 
 function projectRoot(cwd) {
   if (typeof cwd !== "string" || cwd.length === 0) return null;
@@ -26,6 +31,61 @@ function toolCategory(name) {
   return "other";
 }
 
+function diagnosticShellCommand(input) {
+  const data = input?.tool_input;
+  const command = typeof data?.command === "string"
+    ? data.command.trim()
+    : typeof data?.cmd === "string" ? data.cmd.trim() : "";
+  if (new Set(["pwd", "/bin/pwd"]).has(command)) return true;
+  return new Set([
+    `node ${RUNTIME_PATH} --verify`,
+    `node "${RUNTIME_PATH}" --verify`,
+    `node '${RUNTIME_PATH}' --verify`,
+    `${process.execPath} ${RUNTIME_PATH} --verify`,
+    `${process.execPath} "${RUNTIME_PATH}" --verify`,
+    `${process.execPath} '${RUNTIME_PATH}' --verify`
+  ]).has(command);
+}
+
+function operationCategory(input) {
+  const name = input?.tool_name;
+  if (name === "Read") return "diagnostic_read";
+  if (name === "Bash") return diagnosticShellCommand(input) ? "diagnostic_read" : "mutation";
+  if (["apply_patch", "Edit", "Write", "MultiEdit"].includes(name)) return "mutation";
+  return "unknown";
+}
+
+function failureCode(error) {
+  if (!error) return "missing_session_id";
+  if (error.message === "invalid harness session") return "invalid_harness_session";
+  return "harness_initialization_failed";
+}
+
+function failureDiagnostic(phase, error) {
+  return {
+    phase,
+    code: failureCode(error),
+    runtimePath: RUNTIME_PATH,
+    manifestPath: MANIFEST_PATH,
+    recovery: "Run the managed runtime with --verify; if verification fails, reinstall from the canonical leon-engineering source."
+  };
+}
+
+function initializationFailure({phase, input, error}) {
+  const operation = operationCategory(input);
+  const diagnostic = failureDiagnostic(phase, error);
+  if (phase === "post") return {decision: "allow", skipped: true, operation, diagnostic};
+  if (operation === "diagnostic_read") return {decision: "allow", degraded: true, operation, diagnostic};
+  return {
+    decision: "deny",
+    reason: diagnostic.code === "missing_session_id"
+      ? "Harness requires an opaque session id; only diagnostic reads are allowed."
+      : "Harness initialization failed; only diagnostic reads are allowed.",
+    operation,
+    diagnostic
+  };
+}
+
 function taskIdFor(host, sessionId) {
   return `task-${crypto.createHash("sha256").update(`${host}:${sessionId}`).digest("hex").slice(0, 20)}`;
 }
@@ -37,9 +97,7 @@ export function handleHarnessHook({phase, input, host = "claude"}) {
   if (!root) return {decision: "allow", skipped: true};
   const sessionId = opaqueSessionId(input ?? {}, host);
   if (!sessionId) {
-    return phase === "pre"
-      ? {decision: "deny", reason: "Harness requires an opaque Claude session id."}
-      : {decision: "allow", skipped: true};
+    return initializationFailure({phase, input});
   }
   try {
     const taskId = taskIdFor(host, sessionId);
@@ -61,11 +119,13 @@ export function handleHarnessHook({phase, input, host = "claude"}) {
         : {event: "tool_completed", host, tool: toolCategory(input?.tool_name)}
     });
     return {decision: "allow", taskId: session.taskId};
-  } catch {
-    return phase === "pre"
-      ? {decision: "deny", reason: "Harness initialization failed; project mutation is blocked."}
-      : {decision: "allow", skipped: true};
+  } catch (error) {
+    return initializationFailure({phase, input, error});
   }
+}
+
+function logDiagnostic(diagnostic) {
+  process.stderr.write(`${JSON.stringify({component: "harness-hook", ...diagnostic})}\n`);
 }
 
 function parseArgs(args) {
@@ -88,6 +148,7 @@ async function main(args) {
     input = {};
   }
   const result = handleHarnessHook({phase, input, host});
+  if (result.diagnostic) logDiagnostic(result.diagnostic);
   if (phase === "pre" && result.decision === "deny") {
     process.stdout.write(JSON.stringify({hookSpecificOutput: {
       hookEventName: "PreToolUse",
@@ -97,12 +158,13 @@ async function main(args) {
   }
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))) {
   main(process.argv.slice(2)).catch(() => {
+    logDiagnostic({...failureDiagnostic("unknown", new Error("hook execution failed")), code: "hook_execution_failed"});
     process.stdout.write(JSON.stringify({hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
-      permissionDecisionReason: "Harness hook failed; project mutation is blocked."
+      permissionDecisionReason: "Harness hook failed; only diagnostic reads are allowed."
     }}));
   });
 }

@@ -37,6 +37,14 @@ node scripts/profile-project.mjs --project /absolute/project --format markdown
 node "$HOME/.agents/leon-engineering/runtime/harness-session.mjs" --start --new-task --project /absolute/project --host codex --session-id opaque-task-key --task-id task-id --goal "目标" --acceptance "验收标准" --delivery-required
 ```
 
+会话键包含宿主，Claude 与 Codex 即使收到相同 opaque session ID 也不会争用文件。若初始化失败，Hook 只允许 `pwd`、下述 runtime verify 或原生 `Read` 继续诊断；其他 shell、写入和未知工具保持拒绝。stderr 的结构化诊断只含 `phase`、稳定 `code`、`runtimePath`、`manifestPath` 与 `recovery`，不回显项目路径、命令或 session ID：
+
+```bash
+node "$HOME/.agents/leon-engineering/runtime/harness-runtime.mjs" --verify
+```
+
+安装副本自检只读核对自身清单；从权威仓库运行 `--verify-global` 时还会比较源码，能够识别陈旧安装。
+
 完成任务后，执行者先独立运行验证，再用 `--record-outcome` 写入已经观察到的状态、澄清轮次、返工次数、实测验证秒数和验证命令；记录命令本身不会运行该验证命令。`blocked` 结果还必须写入标准化阻塞分类，不能从推测补填。随后运行只读交付硬门；它不会执行任务命令，但会拒绝缺少开始事件、通过验证结果或验证完成事件的交付：
 
 ```bash

@@ -298,9 +298,31 @@ export function readHarnessEvents({projectRoot, taskId}) {
   });
 }
 
-function sessionKey(sessionId) {
+function validatedSessionId(sessionId) {
   if (typeof sessionId !== "string" || !/^[A-Za-z0-9._-]{1,160}$/.test(sessionId)) throw new Error("invalid harness session id");
-  return crypto.createHash("sha256").update(sessionId).digest("hex");
+  return sessionId;
+}
+
+function sessionKey(host, sessionId) {
+  return crypto.createHash("sha256").update(`${host}:${validatedSessionId(sessionId)}`).digest("hex");
+}
+
+function legacySessionKey(sessionId) {
+  return crypto.createHash("sha256").update(validatedSessionId(sessionId)).digest("hex");
+}
+
+function readSessionContext(destination, key) {
+  if (fs.lstatSync(destination).isSymbolicLink() || !fs.statSync(destination).isFile()) throw new Error("invalid harness session");
+  let context;
+  try {
+    context = JSON.parse(fs.readFileSync(destination, "utf8"));
+  } catch {
+    throw new Error("invalid harness session");
+  }
+  if (!context || context.schemaVersion !== 1 || context.sessionKey !== key || !new Set(["claude", "codex"]).has(context.host)) {
+    throw new Error("invalid harness session");
+  }
+  return context;
 }
 
 export function startHarnessSession({projectRoot, host, sessionId, task, newTask = false}) {
@@ -309,7 +331,8 @@ export function startHarnessSession({projectRoot, host, sessionId, task, newTask
   const normalizedHost = assertHost(host);
   if (normalizedHost === "unknown") throw new Error("invalid harness session host");
   if (typeof newTask !== "boolean") throw new Error("invalid harness new task flag");
-  const key = sessionKey(sessionId);
+  const key = sessionKey(normalizedHost, sessionId);
+  const legacyKey = legacySessionKey(sessionId);
   const directory = existingSafeDirectory(root, HARNESS_DIRECTORY);
   if (!directory) {
     writeHarness({projectRoot: root, harness: buildHarness({projectRoot: root, task: normalizedTask})});
@@ -319,19 +342,23 @@ export function startHarnessSession({projectRoot, host, sessionId, task, newTask
   const destination = path.join(sessions, `${key}.json`);
   if (!isWithin(sessions, destination)) throw new Error("unsafe harness session destination");
   if (fs.existsSync(destination)) {
-    if (fs.lstatSync(destination).isSymbolicLink() || !fs.statSync(destination).isFile()) throw new Error("invalid harness session");
-    let context;
-    try {
-      context = JSON.parse(fs.readFileSync(destination, "utf8"));
-    } catch {
-      throw new Error("invalid harness session");
-    }
-    if (!context || context.schemaVersion !== 1 || context.sessionKey !== key || context.host !== normalizedHost) {
-      throw new Error("invalid harness session");
-    }
+    const context = readSessionContext(destination, key);
+    if (context.host !== normalizedHost) throw new Error("invalid harness session");
     if (!newTask || context.taskId === normalizedTask.id) {
       readHarnessTask({projectRoot: root, taskId: context.taskId});
       return {directory: harnessDirectory, taskId: context.taskId, sessionKey: key, resumed: true};
+    }
+  } else {
+    const legacyDestination = path.join(sessions, `${legacyKey}.json`);
+    if (!isWithin(sessions, legacyDestination)) throw new Error("unsafe harness session destination");
+    if (fs.existsSync(legacyDestination)) {
+      const legacy = readSessionContext(legacyDestination, legacyKey);
+      if (legacy.host === normalizedHost && (!newTask || legacy.taskId === normalizedTask.id)) {
+        readHarnessTask({projectRoot: root, taskId: legacy.taskId});
+        const migrated = {...legacy, sessionKey: key};
+        writeAtomically(destination, `${JSON.stringify(migrated, null, 2)}\n`);
+        return {directory: harnessDirectory, taskId: legacy.taskId, sessionKey: key, resumed: true};
+      }
     }
   }
   if (directory) {

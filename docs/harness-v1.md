@@ -19,7 +19,7 @@ Harness v1 解决“新会话忘记上下文、完成标准不稳定、无法衡
 
 用户为目标项目启用强制 Harness 后，所有会形成项目交付、改动或调研结论的新任务必须由 Agent 自动使用 `harness-session.mjs --start --new-task` 创建；任务延续时恢复同一不透明任务键。用户不需要手动运行该命令。纯聊天和未指定项目的问答不创建项目记录。
 
-完成时必须先实际运行验证，再写入结果并运行 `harness-enforce.mjs --project <目录> --task-id <ID>`。实现任务加 `--require-delivery`；该硬门除开始事件、最新 `completed/passed` 结果、验证命令、实测耗时和验证完成事件外，还实时检查 receipt 中的远端提交、CI、分支和 worktree 状态。它不运行记录的命令，也不执行 Git 写操作。Codex 与 Claude 都在本地工具边界通过 `PreToolUse`/`PostToolUse` Hook 自动建立或恢复会话并记录非敏感事件；初始化失败时拒绝受管项目的工具调用。交付仍由硬门和项目 CI 机械验收，Hook 不能替代真实验证证据。
+完成时必须先实际运行验证，再写入结果并运行 `harness-enforce.mjs --project <目录> --task-id <ID>`。实现任务加 `--require-delivery`；该硬门除开始事件、最新 `completed/passed` 结果、验证命令、实测耗时和验证完成事件外，还实时检查 receipt 中的远端提交、CI、分支和 worktree 状态。它不运行记录的命令，也不执行 Git 写操作。Codex 与 Claude 都在本地工具边界通过 `PreToolUse`/`PostToolUse` Hook 自动建立或恢复会话并记录非敏感事件。会话文件名使用 `host:session-id` 的摘要，避免两个宿主复用同一 opaque ID 时碰撞。旧版同宿主会话会迁移到新键但保留旧文件；异宿主旧文件不覆盖、不复用。初始化失败时，pre-hook 只降级放行严格的 `diagnostic_read`（`pwd`、受管 `harness-runtime.mjs --verify` 或原生 `Read`），写入、其他 shell 命令和未知工具全部 fail closed。结构化诊断只包含阶段、稳定代码、受管 runtime/manifest 路径和恢复建议，不回显项目路径、session ID、命令或工具输入。交付仍由硬门和项目 CI 机械验收，Hook 不能替代真实验证证据。
 
 旧 `.ai/tasks`、`.ai/reports` 和历史 Harness 记录不会被回填或删除；事件流只从启用后开始产生。
 
@@ -48,6 +48,8 @@ P2 不是任务看板服务、DAG 自动执行器或常驻工作队列。它自�
 ## Map 新鲜度与运行时生命周期
 
 Harness 运行时由 Codex 全局框架和 Claude 受管策略的安装命令自动部署、校验到 `$HOME/.agents/leon-engineering/runtime`。Codex 全局适配器同时受管 `$HOME/.codex/hooks.json` 中的 Harness Hook：只创建不存在的文件，或接管与模板完全一致的旧文件；发现其他已有 Hook 或漂移时拒绝覆盖。项目根目录不应复制 `scripts/harness-*.mjs`。
+
+运行安装副本的 `harness-runtime.mjs --verify` 会只读核对受管清单，不把安装目录误当成源码，也不会为缺失的 runtime 创建目录。从权威仓库运行 Codex 或 Claude 适配器的 verify 还会传入明确源码根并比较源码校验和，因此仍能拒绝“文件与安装清单一致、但相对权威源已经陈旧”的 runtime。
 
 不确定某个受管 Harness 命令的参数时，先运行对应脚本的 `--help`（或 `-h`）。帮助文本不读取项目、不执行项目命令，也不写入任何文件；项目路径参数统一为 `--project <项目目录>`。
 
