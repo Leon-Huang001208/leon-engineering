@@ -40,6 +40,7 @@ test("builds a read-only agent map and task handoff without creating project fil
     id: "default-greeting",
     goal: "Provide a safe default greeting.",
     acceptanceCriteria: ["The greeting has a default recipient.", "The focused test passes."],
+    delivery: {required: false},
     status: "ready",
     verification: {status: "not_run"}
   });

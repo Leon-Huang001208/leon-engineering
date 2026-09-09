@@ -6,11 +6,43 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {buildHarness, recordOutcome, startHarnessSession, writeHarness} from "../scripts/harness-project.mjs";
 import {enforceHarnessTask} from "../scripts/harness-enforce.mjs";
+import {
+  cleanupDelivery,
+  prepareDelivery,
+  publishDelivery,
+  refreshDeliveryStatus,
+  startDelivery
+} from "../scripts/iteration-delivery.mjs";
 
 function makeProject(t) {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "leon-harness-enforce-"));
   t.after(() => fs.rmSync(project, {recursive: true, force: true}));
   fs.writeFileSync(path.join(project, "AGENTS.md"), "# fixture\n");
+  return project;
+}
+
+function git(cwd, args) {
+  return spawnSync("git", ["-C", cwd, ...args], {encoding: "utf8"});
+}
+
+function makeGitProject(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "leon-harness-delivery-"));
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  const project = path.join(root, "project");
+  const remote = path.join(root, "origin.git");
+  fs.mkdirSync(project);
+  assert.equal(spawnSync("git", ["init", "--bare", remote]).status, 0);
+  assert.equal(spawnSync("git", ["init", project]).status, 0);
+  assert.equal(git(project, ["config", "user.name", "Test"]).status, 0);
+  assert.equal(git(project, ["config", "user.email", "test@example.com"]).status, 0);
+  fs.writeFileSync(path.join(project, "AGENTS.md"), "# fixture\n");
+  assert.equal(git(project, ["add", "."]).status, 0);
+  assert.equal(git(project, ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "seed"]).status, 0);
+  assert.equal(git(project, ["branch", "-M", "main"]).status, 0);
+  assert.equal(git(project, ["remote", "add", "origin", remote]).status, 0);
+  assert.equal(git(project, ["push", "-u", "origin", "main"]).status, 0);
+  assert.equal(spawnSync("git", ["--git-dir", remote, "symbolic-ref", "HEAD", "refs/heads/main"]).status, 0);
+  assert.equal(git(project, ["remote", "set-head", "origin", "-a"]).status, 0);
   return project;
 }
 
@@ -84,4 +116,47 @@ test("refuses an event stream symbolic link before reading outside the project",
   fs.symlinkSync(path.join(outside, "events.jsonl"), path.join(project, ".ai", "harness", "events.jsonl"));
 
   assert.throws(() => enforceHarnessTask({projectRoot: project, taskId: "delivery"}), /invalid harness file/);
+});
+
+test("requires a live cleaned delivery receipt when the delivery gate is enabled", t => {
+  const project = makeGitProject(t);
+  start(project, "delivery-gated");
+  recordOutcome({
+    projectRoot: project,
+    taskId: "delivery-gated",
+    host: "codex",
+    outcome: {
+      status: "completed",
+      clarificationRounds: 0,
+      reworkCount: 0,
+      verificationCommand: "node --test",
+      verificationStatus: "passed",
+      verificationDurationSeconds: 1
+    }
+  });
+  assert.throws(
+    () => enforceHarnessTask({projectRoot: project, taskId: "delivery-gated", requireDelivery: true}),
+    /missing delivery receipt/
+  );
+
+  const started = startDelivery({projectRoot: project, taskId: "delivery-gated", slug: "gate"});
+  fs.writeFileSync(path.join(started.featureWorktree, "feature.txt"), "ready\n");
+  assert.equal(git(started.featureWorktree, ["add", "."]).status, 0);
+  assert.equal(git(started.featureWorktree, ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "feature"]).status, 0);
+  prepareDelivery({projectRoot: project, taskId: "delivery-gated"});
+  publishDelivery({
+    projectRoot: project,
+    taskId: "delivery-gated",
+    verification: {command: "node --test", status: "passed", durationSeconds: 1}
+  });
+  refreshDeliveryStatus({
+    projectRoot: project,
+    taskId: "delivery-gated",
+    resolveCiStatus: () => ({status: "not_configured", runs: []})
+  });
+  cleanupDelivery({projectRoot: project, taskId: "delivery-gated"});
+
+  const result = enforceHarnessTask({projectRoot: project, taskId: "delivery-gated", requireDelivery: true});
+  assert.equal(result.deliveryStatus, "cleaned");
+  assert.equal(result.ciStatus, "not_configured");
 });

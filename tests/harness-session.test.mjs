@@ -19,7 +19,7 @@ test("session CLI starts a project task automatically and resumes it by opaque s
   const script = path.join(sourceRoot, "scripts", "harness-session.mjs");
   const options = [
     script, "--start", "--project", project, "--host", "codex", "--session-id", "thread-01",
-    "--task-id", "automatic-cli", "--goal", "隐私目标", "--acceptance", "只记录事实"
+    "--task-id", "automatic-cli", "--goal", "隐私目标", "--acceptance", "只记录事实", "--delivery-required"
   ];
 
   const started = spawnSync(process.execPath, options, {encoding: "utf8"});
@@ -33,6 +33,8 @@ test("session CLI starts a project task automatically and resumes it by opaque s
   const resumed = spawnSync(process.execPath, options, {encoding: "utf8"});
   assert.equal(resumed.status, 0, resumed.stderr);
   assert.equal(JSON.parse(resumed.stdout).session.resumed, true);
+  const task = JSON.parse(fs.readFileSync(path.join(project, ".ai", "harness", "tasks", "automatic-cli.json"), "utf8"));
+  assert.deepEqual(task.delivery, {required: true});
   const events = fs.readFileSync(path.join(project, ".ai", "harness", "events.jsonl"), "utf8");
   assert.doesNotMatch(events, /隐私目标|只记录事实|thread-01/);
 });

@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
-import YAML from "yaml";
 import {SKILL_NAMES} from "../scripts/install-codex-adapter.mjs";
 import {buildReconciliation, buildPluginAdditions} from "../scripts/sync-cc-switch-skills.mjs";
 
@@ -18,7 +17,8 @@ const skills = {
   "skill-health": ["overlap", "Never delete"],
   "project-adapter": ["read-only", "candidate"],
   "project-harness": ["handoff", "--write-harness"],
-  "project-constraints": ["read-only", "--changed-file"]
+  "project-constraints": ["read-only", "--changed-file"],
+  "iteration-delivery": ["default branch", "cleanup"]
 };
 
 const agents = {
@@ -42,7 +42,10 @@ function readAgent(name) {
 function frontmatter(source) {
   const match = source.match(/^---\n([\s\S]*?)\n---\n/);
   assert.ok(match, "expected YAML frontmatter");
-  return YAML.parse(match[1]);
+  return Object.fromEntries(match[1].split("\n").flatMap(line => {
+    const field = line.match(/^([A-Za-z][A-Za-z0-9]*):\s*(.+)$/);
+    return field ? [[field[1], field[2]]] : [];
+  }));
 }
 
 test("ships the focused workflow skills", () => {
@@ -133,15 +136,16 @@ test("defines a stable project profile schema", () => {
   assert.equal(schema.properties.commands.items.properties.status.const, "candidate");
 });
 
-test("defaults bounded work to the documented fast path", () => {
+test("defaults implementation work to managed delivery while preserving the read-only fast path", () => {
   const policy = fs.readFileSync(
     path.join(root, "adapters", "codex", "global-policy.md"),
     "utf8"
   );
   const routing = readSkill("agent-routing");
 
-  assert.match(policy, /默认走快路径/);
-  assert.match(policy, /不创建计划、不调用子代理、不创建 worktree/);
+  assert.match(policy, /只读或非实现工作，默认走快路径/);
+  assert.match(policy, /实现性改动，默认自动使用 `iteration-delivery`/);
+  assert.match(policy, /不得再次询问是否合并、推送或删除分支/);
   assert.match(routing, /只有在.*明确速度收益.*时才派发代理/);
   assert.match(routing, /不得为了流程而向用户提问/);
 });
@@ -277,7 +281,7 @@ test("governs the audited Claude catalog through explicit shared boundaries", ()
   }
   assert.match(agentGuide, /七个规范职责代理/);
   assert.match(routing, /不把 Claude 专用 agent 或 skill 隐式当成共享能力/);
-  for (const phrase of ["52 个", "51 个", "230 个", "10 个工作流", "project-constraints", "project-harness", "ecc", "zq", "data-connector-development", "## 共享工作流", "## Claude 专用排除项"]) {
+  for (const phrase of ["52 个", "51 个", "230 个", "11 个工作流", "iteration-delivery", "project-constraints", "project-harness", "ecc", "zq", "data-connector-development", "## 共享工作流", "## Claude 专用排除项"]) {
     assert.match(catalog, new RegExp(phrase));
   }
 });

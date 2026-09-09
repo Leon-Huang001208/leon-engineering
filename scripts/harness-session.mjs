@@ -21,6 +21,7 @@ function parseArgs(args) {
       index += 1;
     } else if (argument === "--start") options.start = true;
     else if (argument === "--new-task") options.newTask = true;
+    else if (argument === "--delivery-required") options.deliveryRequired = true;
     else throw new Error(`unknown option: ${argument}`);
   }
   if (!options.start) throw new Error("--start is required");
@@ -31,7 +32,7 @@ function parseArgs(args) {
 
 function usage() {
   return [
-    "用法：harness-session.mjs --start --project <项目目录> --host claude|codex --session-id <不透明会话 ID> [--new-task] [--task-id <任务 ID>] [--goal <目标>] [--acceptance <验收标准>]",
+    "用法：harness-session.mjs --start --project <项目目录> --host claude|codex --session-id <不透明会话 ID> [--new-task] [--task-id <任务 ID>] [--goal <目标>] [--acceptance <验收标准>] [--delivery-required]",
     "",
     "自动创建或恢复指定宿主的项目 Harness 会话。任务目标只保存在任务记录，不会写入事件流。"
   ].join("\n");
@@ -54,7 +55,8 @@ function main(args) {
       goal: options.goal ?? "受管项目任务",
       acceptanceCriteria: options.acceptanceCriteria.length > 0
         ? options.acceptanceCriteria
-        : ["Harness 记录完整且验证结果已写入"]
+        : ["Harness 记录完整且验证结果已写入"],
+      deliveryRequired: Boolean(options.deliveryRequired)
     }
   });
   process.stdout.write(`${JSON.stringify({session: {taskId: result.taskId, resumed: result.resumed, host: options.host}})}\n`);

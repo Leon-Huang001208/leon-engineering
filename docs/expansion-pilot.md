@@ -22,6 +22,10 @@ Run the Harness against a disposable fixture with one task ID, goal and acceptan
 
 Give a narrow feature with acceptance criteria and a fixture test. Confirm the response maps tests, worktree conditions, review, and handoff evidence without inventing validation.
 
+### iteration-delivery
+
+In a disposable repository with a bare remote, complete `start`, feature commit, `prepare`, merged-result verification, direct `publish`, injected no-CI status, and `cleanup`. Confirm the remote default branch contains the delivery while local/remote task branches and managed worktrees are absent. Separately simulate remote advancement, a merge conflict, three failed repair rounds, safe rollback, and dirty-worktree cleanup refusal.
+
 ### bugfix-evidence
 
 Provide a failing fixture test. Confirm the response requires reproduction, identifies the narrowest root cause, requests a regression test, and separates hypotheses from verified facts.
