@@ -105,7 +105,7 @@ export function installHarnessRuntime({sourceRoot = SOURCE_ROOT, runtimeRoot = d
   return {runtimeRoot: root, files: HARNESS_RUNTIME_FILES, manifest};
 }
 
-export function verifyHarnessRuntime({sourceRoot, runtimeRoot = defaultHarnessRuntimeRoot()}) {
+export function verifyHarnessRuntime({sourceRoot = SOURCE_ROOT, runtimeRoot = defaultHarnessRuntimeRoot()}) {
   const root = ensureSafeDirectory(runtimeRoot);
   const manifest = readManifest(root);
   if (!manifest) return {valid: false, drift: ["missing runtime manifest"]};

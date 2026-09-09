@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import {spawnSync} from "node:child_process";
@@ -49,4 +50,21 @@ test("detects runtime drift and refuses symbolic-link runtime roots", t => {
   const linked = path.join(root, "linked");
   fs.symlinkSync(external, linked);
   assert.throws(() => installHarnessRuntime({sourceRoot, runtimeRoot: linked}), /symbolic link/);
+});
+
+test("default verification rejects an internally consistent but stale runtime", t => {
+  const root = makeRoot(t);
+  const runtimeRoot = path.join(root, "runtime");
+  installHarnessRuntime({sourceRoot, runtimeRoot});
+
+  const runtimeFile = path.join(runtimeRoot, "harness-session.mjs");
+  const staleContent = `${fs.readFileSync(runtimeFile, "utf8")}\n// stale installed runtime\n`;
+  fs.writeFileSync(runtimeFile, staleContent);
+  const manifestFile = path.join(runtimeRoot, ".leon-engineering-harness-runtime.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
+  manifest.frameworkVersion = "0.15.1";
+  manifest.files["harness-session.mjs"] = crypto.createHash("sha256").update(staleContent).digest("hex");
+  fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  assert.deepEqual(verifyHarnessRuntime({runtimeRoot}).drift, ["harness-session.mjs"]);
 });
