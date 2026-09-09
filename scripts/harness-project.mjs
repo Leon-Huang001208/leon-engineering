@@ -15,6 +15,7 @@ const EVENT_HOSTS = new Set(["claude", "codex", "unknown"]);
 const EVENT_TOOLS = new Set(["shell", "read", "write", "other"]);
 const EVENT_DECISIONS = new Set(["allow", "ask", "deny"]);
 const VERIFICATION_STATUSES = new Set(["passed", "failed", "not_run"]);
+const SESSION_SCHEMA_VERSIONS = new Set([1, 2]);
 
 function assertTask(task) {
   if (!task || typeof task !== "object" || Array.isArray(task)) throw new Error("task is required");
@@ -319,7 +320,17 @@ function readSessionContext(destination, key) {
   } catch {
     throw new Error("invalid harness session");
   }
-  if (!context || ![1, 2].includes(context.schemaVersion) || context.sessionKey !== key || !["claude", "codex"].includes(context.host)) {
+  if (
+    !context || typeof context !== "object" || Array.isArray(context)
+    || !SESSION_SCHEMA_VERSIONS.has(context.schemaVersion)
+    || context.sessionKey !== key
+    || !["claude", "codex"].includes(context.host)
+  ) {
+    throw new Error("invalid harness session");
+  }
+  try {
+    assertTaskId(context.taskId);
+  } catch {
     throw new Error("invalid harness session");
   }
   return context;

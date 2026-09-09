@@ -153,6 +153,35 @@ test("corrupt task state is exposed as a stable diagnostic code", t => {
   assert.equal(result.diagnostic.code, "invalid_task_state");
 });
 
+test("version 2 sessions initialize normally without entering degraded mode", t => {
+  const project = makeProject(t);
+  const sessionId = "codex-version-2-session";
+  const initial = handleHarnessHook({
+    phase: "pre",
+    input: {cwd: project, session_id: sessionId, tool_name: "Bash", tool_input: {command: "pwd"}},
+    host: "codex"
+  });
+  const sessionKey = crypto.createHash("sha256").update(`codex:${sessionId}`).digest("hex");
+  const sessionFile = path.join(project, ".ai", "harness", "sessions", `${sessionKey}.json`);
+  const context = JSON.parse(fs.readFileSync(sessionFile, "utf8"));
+  fs.writeFileSync(sessionFile, `${JSON.stringify({...context, schemaVersion: 2}, null, 2)}\n`);
+
+  const read = handleHarnessHook({
+    phase: "pre",
+    input: {cwd: project, session_id: sessionId, tool_name: "Bash", tool_input: {command: "sed -n '1,80p' AGENTS.md"}},
+    host: "codex"
+  });
+  const write = handleHarnessHook({
+    phase: "pre",
+    input: {cwd: project, session_id: sessionId, tool_name: "Write", tool_input: {file_path: "example.txt"}},
+    host: "codex"
+  });
+
+  assert.deepEqual(read, {decision: "allow", taskId: initial.taskId});
+  assert.deepEqual(write, {decision: "allow", taskId: initial.taskId});
+  assert.equal(JSON.parse(fs.readFileSync(sessionFile, "utf8")).schemaVersion, 2);
+});
+
 test("resolves a nested project root and skips an unmarked directory", t => {
   const project = makeProject(t);
   const nested = path.join(project, "src", "feature");

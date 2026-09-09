@@ -289,7 +289,7 @@ export function prepareDelivery({projectRoot, taskId, integrationWorktreeRoot}) 
       appendLog(repository, taskId, "prepared_after_conflict", {integrationCommit: receipt.integrationCommit});
       return receipt;
     }
-    if (!new Set(["started", "remote_moved"]).has(receipt.status)) {
+    if (!new Set(["started", "remote_moved", "ci_passed"]).has(receipt.status)) {
       throw new Error(`delivery is not ready to prepare: ${receipt.status}`);
     }
     assertCleanWorktree(receipt.featureWorktree, "feature worktree");
@@ -299,7 +299,27 @@ export function prepareDelivery({projectRoot, taskId, integrationWorktreeRoot}) 
     const history = Array.isArray(receipt.integrationHistory) ? receipt.integrationHistory : [];
     let mergeSource = receipt.featureBranch;
     let revision = history.length;
-    if (receipt.status === "remote_moved") {
+    if (receipt.status === "ci_passed") {
+      if (featureCommit === receipt.featureCommit) {
+        throw new Error("completed delivery has no new feature commits");
+      }
+      const published = git(repository.repositoryRoot, [
+        "merge-base", "--is-ancestor", receipt.integrationCommit,
+        `refs/remotes/${receipt.remote}/${receipt.defaultBranch}`
+      ], {allowFailure: true});
+      if (published.status !== 0) {
+        throw new Error("completed integration commit is not contained in the remote default branch");
+      }
+      assertCleanWorktree(receipt.integrationWorktree, "completed integration worktree");
+      history.push({
+        branch: receipt.integrationBranch,
+        worktree: receipt.integrationWorktree,
+        commit: receipt.integrationCommit,
+        worktreeRemoved: true
+      });
+      git(repository.repositoryRoot, ["worktree", "remove", receipt.integrationWorktree]);
+      revision = history.length;
+    } else if (receipt.status === "remote_moved") {
       assertCleanWorktree(receipt.integrationWorktree, "stale integration worktree");
       history.push({
         branch: receipt.integrationBranch,
