@@ -182,6 +182,51 @@ test("refuses publish when the remote default branch moved after integration", t
   assert.equal(readDeliveryReceipt({projectRoot: project, taskId: "task-race"}).status, "cleaned");
 });
 
+test("rebuilds integration for new feature commits after a completed delivery", t => {
+  const {project} = makeRepository(t);
+  const started = startDelivery({projectRoot: project, taskId: "task-follow-up", slug: "follow-up"});
+  fs.writeFileSync(path.join(started.featureWorktree, "feature.txt"), "first\n");
+  commit(started.featureWorktree, "feat: first delivery");
+
+  const prepared = prepareDelivery({projectRoot: project, taskId: "task-follow-up"});
+  git(project, ["push", "origin", `${prepared.integrationCommit}:refs/heads/main`]);
+  refreshDeliveryStatus({
+    projectRoot: project,
+    taskId: "task-follow-up",
+    resolveCiStatus: () => ({status: "not_configured", runs: []})
+  });
+  fs.writeFileSync(path.join(started.featureWorktree, "follow-up.txt"), "second\n");
+  commit(started.featureWorktree, "fix: follow-up delivery");
+
+  const rebuilt = prepareDelivery({projectRoot: project, taskId: "task-follow-up"});
+  assert.equal(rebuilt.status, "prepared");
+  assert.equal(rebuilt.integrationHistory.length, 1);
+  assert.equal(rebuilt.integrationHistory[0].commit, prepared.integrationCommit);
+  assert.equal(fs.existsSync(prepared.integrationWorktree), false);
+  assert.equal(git(rebuilt.integrationWorktree, ["show", "HEAD:feature.txt"]), "first");
+  assert.equal(git(rebuilt.integrationWorktree, ["show", "HEAD:follow-up.txt"]), "second");
+});
+
+test("rejects a completed delivery without new feature commits", t => {
+  const {project} = makeRepository(t);
+  const started = startDelivery({projectRoot: project, taskId: "task-no-follow-up", slug: "no-follow-up"});
+  fs.writeFileSync(path.join(started.featureWorktree, "feature.txt"), "first\n");
+  commit(started.featureWorktree, "feat: only delivery");
+
+  const prepared = prepareDelivery({projectRoot: project, taskId: "task-no-follow-up"});
+  git(project, ["push", "origin", `${prepared.integrationCommit}:refs/heads/main`]);
+  refreshDeliveryStatus({
+    projectRoot: project,
+    taskId: "task-no-follow-up",
+    resolveCiStatus: () => ({status: "not_configured", runs: []})
+  });
+
+  assert.throws(
+    () => prepareDelivery({projectRoot: project, taskId: "task-no-follow-up"}),
+    /completed delivery has no new feature commits/
+  );
+});
+
 test("preserves a conflicted integration worktree and resumes after the merge is committed", t => {
   const {root, remote, project} = makeRepository(t);
   const started = startDelivery({projectRoot: project, taskId: "task-conflict", slug: "conflict"});
