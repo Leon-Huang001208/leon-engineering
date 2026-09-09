@@ -68,3 +68,18 @@ test("default verification rejects an internally consistent but stale runtime", 
 
   assert.deepEqual(verifyHarnessRuntime({runtimeRoot}).drift, ["harness-session.mjs"]);
 });
+
+test("an installed runtime verifies itself against its recorded canonical source", t => {
+  const root = makeRoot(t);
+  const runtimeRoot = path.join(root, "runtime");
+  installHarnessRuntime({sourceRoot, runtimeRoot});
+
+  const verified = spawnSync(process.execPath, [path.join(fs.realpathSync(runtimeRoot), "harness-runtime.mjs"), "--verify", "--runtime-root", runtimeRoot], {
+    encoding: "utf8"
+  });
+
+  assert.equal(verified.status, 0, verified.stderr);
+  assert.deepEqual(JSON.parse(verified.stdout), {valid: true, drift: []});
+  const manifest = JSON.parse(fs.readFileSync(path.join(runtimeRoot, ".leon-engineering-harness-runtime.json"), "utf8"));
+  assert.equal(manifest.sourceRoot, fs.realpathSync(sourceRoot));
+});

@@ -37,6 +37,14 @@ node scripts/profile-project.mjs --project /absolute/project --format markdown
 node "$HOME/.agents/leon-engineering/runtime/harness-session.mjs" --start --new-task --project /absolute/project --host codex --session-id opaque-task-key --task-id task-id --goal "目标" --acceptance "验收标准" --delivery-required
 ```
 
+若 Hook 报告 Harness 初始化失败，先执行受管 runtime 自检；该命令属于允许的只读恢复诊断：
+
+```bash
+node "$HOME/.agents/leon-engineering/runtime/harness-runtime.mjs" --verify
+```
+
+失败输出只提供阶段、错误码、runtime/manifest 路径和恢复建议。恢复期间只有 `pwd`、配置/指令读取、`rg`/只读 `sed`、Git 只读命令和上述自检可放行；修改类与无法证明只读的命令仍拒绝。若自检失败，从 `leon-engineering` 权威源重新运行全局安装器后再次校验，不要手工修改安装副本。
+
 完成任务后，执行者先独立运行验证，再用 `--record-outcome` 写入已经观察到的状态、澄清轮次、返工次数、实测验证秒数和验证命令；记录命令本身不会运行该验证命令。`blocked` 结果还必须写入标准化阻塞分类，不能从推测补填。随后运行只读交付硬门；它不会执行任务命令，但会拒绝缺少开始事件、通过验证结果或验证完成事件的交付：
 
 ```bash
