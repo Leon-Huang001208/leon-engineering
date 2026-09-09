@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import crypto from "node:crypto";
 import {spawnSync} from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -258,6 +259,60 @@ test("starts or resumes a session without duplicating its task-start event", t =
   const events = fs.readFileSync(path.join(project, ".ai", "harness", "events.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
   assert.deepEqual(events.map(event => event.event), ["task_started", "task_started"]);
   assert.doesNotMatch(JSON.stringify(events), /自动任务|记录任务|不应替换/);
+});
+
+test("scopes session records by host and preserves cross-host contexts", t => {
+  const project = makeFixture(t);
+  const claude = startHarnessSession({
+    projectRoot: project,
+    host: "claude",
+    sessionId: "shared-thread-01",
+    task: {id: "claude-task", goal: "Claude task", acceptanceCriteria: ["recorded"]}
+  });
+  const codex = startHarnessSession({
+    projectRoot: project,
+    host: "codex",
+    sessionId: "shared-thread-01",
+    task: {id: "codex-task", goal: "Codex task", acceptanceCriteria: ["recorded"]}
+  });
+
+  assert.notEqual(claude.sessionKey, codex.sessionKey);
+  assert.equal(claude.taskId, "claude-task");
+  assert.equal(codex.taskId, "codex-task");
+  const sessions = fs.readdirSync(path.join(project, ".ai", "harness", "sessions"));
+  assert.equal(sessions.length, 2);
+});
+
+test("copies a valid same-host legacy session into the host-scoped namespace", t => {
+  const project = makeFixture(t);
+  const sessionId = "legacy-thread-01";
+  const started = startHarnessSession({
+    projectRoot: project,
+    host: "codex",
+    sessionId,
+    task: {id: "legacy-task", goal: "Legacy task", acceptanceCriteria: ["recorded"]}
+  });
+  const sessions = path.join(project, ".ai", "harness", "sessions");
+  const scoped = path.join(sessions, `${started.sessionKey}.json`);
+  const legacyKey = crypto.createHash("sha256").update(sessionId).digest("hex");
+  const legacy = path.join(sessions, `${legacyKey}.json`);
+  const context = JSON.parse(fs.readFileSync(scoped, "utf8"));
+  context.sessionKey = legacyKey;
+  fs.writeFileSync(legacy, `${JSON.stringify(context, null, 2)}\n`);
+  fs.rmSync(scoped);
+
+  const resumed = startHarnessSession({
+    projectRoot: project,
+    host: "codex",
+    sessionId,
+    task: {id: "replacement-task", goal: "Replacement", acceptanceCriteria: ["not used"]}
+  });
+
+  assert.equal(resumed.resumed, true);
+  assert.equal(resumed.taskId, "legacy-task");
+  assert.equal(fs.existsSync(legacy), true);
+  assert.equal(fs.existsSync(scoped), true);
+  assert.equal(JSON.parse(fs.readFileSync(scoped, "utf8")).sessionKey, started.sessionKey);
 });
 
 test("CLI stays read-only until explicit persistence and never runs declared verification commands", t => {

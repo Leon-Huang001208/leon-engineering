@@ -2,6 +2,7 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
+import {pathToFileURL} from "node:url";
 import {spawnSync} from "node:child_process";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -67,4 +68,30 @@ test("default verification rejects an internally consistent but stale runtime", 
   fs.writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
 
   assert.deepEqual(verifyHarnessRuntime({runtimeRoot}).drift, ["harness-session.mjs"]);
+});
+
+test("installed hook reports missing and drifted runtime manifests without opening mutation", async t => {
+  const root = makeRoot(t);
+  const runtimeRoot = path.join(root, "runtime");
+  const project = path.join(root, "project");
+  fs.mkdirSync(project, {recursive: true});
+  fs.writeFileSync(path.join(project, "AGENTS.md"), "# rules\n");
+  installHarnessRuntime({sourceRoot, runtimeRoot});
+  const hook = await import(`${pathToFileURL(path.join(runtimeRoot, "harness-hook.mjs")).href}?test=${Date.now()}`);
+  const input = {cwd: project, session_id: "runtime-diagnostic", tool_name: "Bash", tool_input: {command: "pwd"}};
+  const manifestPath = path.join(runtimeRoot, ".leon-engineering-harness-runtime.json");
+  const manifest = fs.readFileSync(manifestPath, "utf8");
+
+  fs.rmSync(manifestPath);
+  const missing = hook.handleHarnessHook({phase: "pre", input, host: "codex"});
+  assert.equal(missing.decision, "allow");
+  assert.equal(missing.degraded, true);
+  assert.equal(missing.diagnostic.code, "runtime_missing");
+
+  fs.writeFileSync(manifestPath, manifest);
+  fs.appendFileSync(path.join(runtimeRoot, "harness-evaluate.mjs"), "\n// drift\n");
+  const drifted = hook.handleHarnessHook({phase: "pre", input: {...input, tool_name: "Write"}, host: "codex"});
+  assert.equal(drifted.decision, "deny");
+  assert.equal(drifted.diagnostic.code, "manifest_drift");
+  assert.match(drifted.diagnostic.manifestPath, /\.leon-engineering-harness-runtime\.json$/);
 });

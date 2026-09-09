@@ -19,7 +19,9 @@ Harness v1 解决“新会话忘记上下文、完成标准不稳定、无法衡
 
 用户为目标项目启用强制 Harness 后，所有会形成项目交付、改动或调研结论的新任务必须由 Agent 自动使用 `harness-session.mjs --start --new-task` 创建；任务延续时恢复同一不透明任务键。用户不需要手动运行该命令。纯聊天和未指定项目的问答不创建项目记录。
 
-完成时必须先实际运行验证，再写入结果并运行 `harness-enforce.mjs --project <目录> --task-id <ID>`。实现任务加 `--require-delivery`；该硬门除开始事件、最新 `completed/passed` 结果、验证命令、实测耗时和验证完成事件外，还实时检查 receipt 中的远端提交、CI、分支和 worktree 状态。它不运行记录的命令，也不执行 Git 写操作。Codex 与 Claude 都在本地工具边界通过 `PreToolUse`/`PostToolUse` Hook 自动建立或恢复会话并记录非敏感事件；初始化失败时拒绝受管项目的工具调用。交付仍由硬门和项目 CI 机械验收，Hook 不能替代真实验证证据。
+完成时必须先实际运行验证，再写入结果并运行 `harness-enforce.mjs --project <目录> --task-id <ID>`。实现任务加 `--require-delivery`；该硬门除开始事件、最新 `completed/passed` 结果、验证命令、实测耗时和验证完成事件外，还实时检查 receipt 中的远端提交、CI、分支和 worktree 状态。它不运行记录的命令，也不执行 Git 写操作。Codex 与 Claude 都在本地工具边界通过 `PreToolUse`/`PostToolUse` Hook 自动建立或恢复会话并记录非敏感事件。会话记录按宿主和不透明会话 ID 共同隔离；同宿主旧格式记录会复制到新命名空间，异宿主记录不会被覆盖。
+
+Codex 初始化失败时进入只读诊断降级模式：仅允许 `pwd`、受限的 `sed -n`/`rg` 读取、Git 只读查询、`Read` 工具和受管 runtime 的 `--verify`。重定向写入、编辑工具、Git 写命令、安装命令和无法明确分类的命令继续拒绝。Hook 输出包含脱敏的 `stage`、`code`、runtime/manifest 路径和恢复命令，且不输出会话 ID、工具输入、环境变量或秘密。交付仍由硬门和项目 CI 机械验收，Hook 不能替代真实验证证据。
 
 旧 `.ai/tasks`、`.ai/reports` 和历史 Harness 记录不会被回填或删除；事件流只从启用后开始产生。
 
@@ -48,6 +50,8 @@ P2 不是任务看板服务、DAG 自动执行器或常驻工作队列。它自�
 ## Map 新鲜度与运行时生命周期
 
 Harness 运行时由 Codex 全局框架和 Claude 受管策略的安装命令自动部署、校验到 `$HOME/.agents/leon-engineering/runtime`。Codex 全局适配器同时受管 `$HOME/.codex/hooks.json` 中的 Harness Hook：只创建不存在的文件，或接管与模板完全一致的旧文件；发现其他已有 Hook 或漂移时拒绝覆盖。项目根目录不应复制 `scripts/harness-*.mjs`。
+
+若 Hook 报告 runtime 缺失或清单漂移，先执行错误中的恢复命令；它只读校验当前受管目录。确认来源后，从 `/Users/leon/Developer/claude-engineering` 权威源重新运行 Codex 全局安装器，禁止把安装副本当作源码手工维护。
 
 不确定某个受管 Harness 命令的参数时，先运行对应脚本的 `--help`（或 `-h`）。帮助文本不读取项目、不执行项目命令，也不写入任何文件；项目路径参数统一为 `--project <项目目录>`。
 
