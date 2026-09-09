@@ -261,6 +261,49 @@ test("starts or resumes a session without duplicating its task-start event", t =
   assert.doesNotMatch(JSON.stringify(events), /自动任务|记录任务|不应替换/);
 });
 
+test("resumes a structurally compatible version 2 session", t => {
+  const project = makeFixture(t);
+  const started = startHarnessSession({
+    projectRoot: project,
+    host: "codex",
+    sessionId: "version-2-session",
+    task: {id: "version-2-task", goal: "Resume v2", acceptanceCriteria: ["Existing task resumes"]}
+  });
+  const sessionFile = path.join(project, ".ai", "harness", "sessions", `${started.sessionKey}.json`);
+  const context = JSON.parse(fs.readFileSync(sessionFile, "utf8"));
+  fs.writeFileSync(sessionFile, `${JSON.stringify({...context, schemaVersion: 2}, null, 2)}\n`);
+
+  const resumed = startHarnessSession({
+    projectRoot: project,
+    host: "codex",
+    sessionId: "version-2-session",
+    task: {id: "replacement-task", goal: "Do not replace", acceptanceCriteria: ["Original task remains"]}
+  });
+
+  assert.equal(resumed.resumed, true);
+  assert.equal(resumed.taskId, "version-2-task");
+});
+
+test("rejects a version 2 session whose host does not match its scoped key", t => {
+  const project = makeFixture(t);
+  const started = startHarnessSession({
+    projectRoot: project,
+    host: "codex",
+    sessionId: "version-2-host-mismatch",
+    task: {id: "version-2-host-task", goal: "Reject mismatch", acceptanceCriteria: ["Host stays isolated"]}
+  });
+  const sessionFile = path.join(project, ".ai", "harness", "sessions", `${started.sessionKey}.json`);
+  const context = JSON.parse(fs.readFileSync(sessionFile, "utf8"));
+  fs.writeFileSync(sessionFile, `${JSON.stringify({...context, schemaVersion: 2, host: "claude"}, null, 2)}\n`);
+
+  assert.throws(() => startHarnessSession({
+    projectRoot: project,
+    host: "codex",
+    sessionId: "version-2-host-mismatch",
+    task: {id: "replacement-task", goal: "Do not replace", acceptanceCriteria: ["Mismatch is rejected"]}
+  }), /invalid harness session/);
+});
+
 test("isolates identical opaque session ids by host", t => {
   const project = makeFixture(t);
   const claude = startHarnessSession({
