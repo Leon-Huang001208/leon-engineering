@@ -319,7 +319,7 @@ function readSessionContext(destination, key) {
   } catch {
     throw new Error("invalid harness session");
   }
-  if (!context || context.schemaVersion !== 1 || context.sessionKey !== key || !["claude", "codex"].includes(context.host)) {
+  if (!context || ![1, 2].includes(context.schemaVersion) || context.sessionKey !== key || !["claude", "codex"].includes(context.host)) {
     throw new Error("invalid harness session");
   }
   return context;

@@ -19,7 +19,7 @@ Harness v1 解决“新会话忘记上下文、完成标准不稳定、无法衡
 
 用户为目标项目启用强制 Harness 后，所有会形成项目交付、改动或调研结论的新任务必须由 Agent 自动使用 `harness-session.mjs --start --new-task` 创建；任务延续时恢复同一不透明任务键。用户不需要手动运行该命令。纯聊天和未指定项目的问答不创建项目记录。
 
-完成时必须先实际运行验证，再写入结果并运行 `harness-enforce.mjs --project <目录> --task-id <ID>`。实现任务加 `--require-delivery`；该硬门除开始事件、最新 `completed/passed` 结果、验证命令、实测耗时和验证完成事件外，还实时检查 receipt 中的远端提交、CI、分支和 worktree 状态。它不运行记录的命令，也不执行 Git 写操作。Codex 与 Claude 都在本地工具边界通过 `PreToolUse`/`PostToolUse` Hook 自动建立或恢复会话并记录非敏感事件。会话文件按宿主与不透明 session ID 联合摘要隔离；旧同宿主文件可迁移恢复，旧异宿主文件保持不变。
+完成时必须先实际运行验证，再写入结果并运行 `harness-enforce.mjs --project <目录> --task-id <ID>`。实现任务加 `--require-delivery`；该硬门除开始事件、最新 `completed/passed` 结果、验证命令、实测耗时和验证完成事件外，还实时检查 receipt 中的远端提交、CI、分支和 worktree 状态。它不运行记录的命令，也不执行 Git 写操作。Codex 与 Claude 都在本地工具边界通过 `PreToolUse`/`PostToolUse` Hook 自动建立或恢复会话并记录非敏感事件。会话文件按宿主与不透明 session ID 联合摘要隔离；旧同宿主文件可迁移恢复，旧异宿主文件保持不变。读取端接受结构兼容的 v1/v2 会话记录，并仍校验摘要键、宿主和对应任务；损坏或不匹配记录不会被静默信任。
 
 初始化失败时，Hook 进入受限恢复模式：只有 `pwd`、配置/指令读取、`rg`、只读 `sed`、Git 只读命令和受管 runtime `--verify` 等明确 `diagnostic_read` 操作可继续；已知 `mutation` 和无法证明只读的 `unknown` 都拒绝。诊断只输出阶段、稳定错误码、受管 runtime/manifest 路径与恢复建议，不回显 session ID、命令、路径参数、源代码或原始异常。交付仍由硬门和项目 CI 机械验收，Hook 不能替代真实验证证据。
 

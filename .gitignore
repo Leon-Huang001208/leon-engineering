@@ -2,6 +2,7 @@
 node_modules/
 coverage/
 audit/
+.ai/
 .env
 .env.*
 !.env.example
