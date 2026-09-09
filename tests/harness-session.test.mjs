@@ -30,9 +30,16 @@ test("session CLI starts a project task automatically and resumes it by opaque s
     host: "codex"
   });
 
+  const sessionDirectory = path.join(project, ".ai", "harness", "sessions");
+  const sessionFile = path.join(sessionDirectory, fs.readdirSync(sessionDirectory).find(name => name.endsWith(".json")));
+  const context = JSON.parse(fs.readFileSync(sessionFile, "utf8"));
+  assert.equal(context.schemaVersion, 1);
+  fs.writeFileSync(sessionFile, `${JSON.stringify({...context, schemaVersion: 2}, null, 2)}\n`);
+
   const resumed = spawnSync(process.execPath, options, {encoding: "utf8"});
   assert.equal(resumed.status, 0, resumed.stderr);
   assert.equal(JSON.parse(resumed.stdout).session.resumed, true);
+  assert.equal(JSON.parse(fs.readFileSync(sessionFile, "utf8")).schemaVersion, 2);
   const task = JSON.parse(fs.readFileSync(path.join(project, ".ai", "harness", "tasks", "automatic-cli.json"), "utf8"));
   assert.deepEqual(task.delivery, {required: true});
   const events = fs.readFileSync(path.join(project, ".ai", "harness", "events.jsonl"), "utf8");

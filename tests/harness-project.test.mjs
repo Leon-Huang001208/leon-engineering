@@ -282,6 +282,72 @@ test("resumes a structurally compatible version 2 session", t => {
 
   assert.equal(resumed.resumed, true);
   assert.equal(resumed.taskId, "version-2-task");
+  assert.equal(JSON.parse(fs.readFileSync(sessionFile, "utf8")).schemaVersion, 2);
+});
+
+test("rejects malformed and unsupported session contexts", t => {
+  const cases = [
+    ["schema zero", context => ({...context, schemaVersion: 0})],
+    ["future schema", context => ({...context, schemaVersion: 3})],
+    ["string schema", context => ({...context, schemaVersion: "2"})],
+    ["wrong key", context => ({...context, schemaVersion: 2, sessionKey: "0".repeat(64)})],
+    ["missing task", context => ({...context, schemaVersion: 2, taskId: undefined})],
+    ["unsafe task", context => ({...context, schemaVersion: 2, taskId: "../outside"})],
+    ["array", () => []],
+    ["broken json", () => "{broken\n"]
+  ];
+
+  for (const [label, mutate] of cases) {
+    const project = makeFixture(t);
+    const sessionId = `invalid-${label.replaceAll(" ", "-")}`;
+    const started = startHarnessSession({
+      projectRoot: project,
+      host: "codex",
+      sessionId,
+      task: {id: "valid-task", goal: "Reject invalid session", acceptanceCriteria: ["Session is rejected"]}
+    });
+    const sessionFile = path.join(project, ".ai", "harness", "sessions", `${started.sessionKey}.json`);
+    const context = JSON.parse(fs.readFileSync(sessionFile, "utf8"));
+    const mutated = mutate(context);
+    fs.writeFileSync(sessionFile, typeof mutated === "string" ? mutated : `${JSON.stringify(mutated, null, 2)}\n`);
+
+    assert.throws(() => startHarnessSession({
+      projectRoot: project,
+      host: "codex",
+      sessionId,
+      task: {id: "replacement-task", goal: "Do not replace", acceptanceCriteria: ["Invalid session remains rejected"]}
+    }), /invalid harness session/, label);
+  }
+});
+
+test("requires an intact matching task record when resuming version 2 sessions", t => {
+  const cases = [
+    ["missing", taskFile => fs.rmSync(taskFile)],
+    ["corrupt", taskFile => fs.writeFileSync(taskFile, "{broken\n")],
+    ["mismatched", taskFile => fs.writeFileSync(taskFile, `${JSON.stringify({id: "another-task"})}\n`)]
+  ];
+
+  for (const [label, damage] of cases) {
+    const project = makeFixture(t);
+    const sessionId = `version-2-${label}-task-record`;
+    const started = startHarnessSession({
+      projectRoot: project,
+      host: "codex",
+      sessionId,
+      task: {id: "version-2-task", goal: "Validate task record", acceptanceCriteria: ["Task record is required"]}
+    });
+    const sessionFile = path.join(project, ".ai", "harness", "sessions", `${started.sessionKey}.json`);
+    const context = JSON.parse(fs.readFileSync(sessionFile, "utf8"));
+    fs.writeFileSync(sessionFile, `${JSON.stringify({...context, schemaVersion: 2}, null, 2)}\n`);
+    damage(path.join(project, ".ai", "harness", "tasks", "version-2-task.json"));
+
+    assert.throws(() => startHarnessSession({
+      projectRoot: project,
+      host: "codex",
+      sessionId,
+      task: {id: "replacement-task", goal: "Do not replace", acceptanceCriteria: ["Damaged record is rejected"]}
+    }), /missing harness task record|invalid task record/, label);
+  }
 });
 
 test("rejects a version 2 session whose host does not match its scoped key", t => {
@@ -327,7 +393,7 @@ test("isolates identical opaque session ids by host", t => {
   assert.deepEqual(contexts.map(context => context.host).sort(), ["claude", "codex"]);
 });
 
-test("migrates a same-host legacy session without overwriting the legacy file", t => {
+test("migrates a same-host version 2 legacy session without overwriting the legacy file", t => {
   const project = makeFixture(t);
   const sessionId = "legacy-session";
   const legacyKey = crypto.createHash("sha256").update(sessionId).digest("hex");
@@ -340,7 +406,7 @@ test("migrates a same-host legacy session without overwriting the legacy file", 
   const sessions = path.join(project, ".ai", "harness", "sessions");
   const scopedFile = path.join(sessions, `${started.sessionKey}.json`);
   const legacyFile = path.join(sessions, `${legacyKey}.json`);
-  const legacyContext = {...JSON.parse(fs.readFileSync(scopedFile, "utf8")), sessionKey: legacyKey};
+  const legacyContext = {...JSON.parse(fs.readFileSync(scopedFile, "utf8")), schemaVersion: 2, sessionKey: legacyKey};
   fs.writeFileSync(legacyFile, `${JSON.stringify(legacyContext, null, 2)}\n`);
   if (scopedFile !== legacyFile) fs.rmSync(scopedFile);
   const legacyBefore = fs.readFileSync(legacyFile, "utf8");
@@ -356,7 +422,9 @@ test("migrates a same-host legacy session without overwriting the legacy file", 
   assert.equal(resumed.taskId, "legacy-task");
   assert.notEqual(resumed.sessionKey, legacyKey);
   assert.equal(fs.readFileSync(legacyFile, "utf8"), legacyBefore);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(sessions, `${resumed.sessionKey}.json`), "utf8")).taskId, "legacy-task");
+  const migrated = JSON.parse(fs.readFileSync(path.join(sessions, `${resumed.sessionKey}.json`), "utf8"));
+  assert.equal(migrated.taskId, "legacy-task");
+  assert.equal(migrated.schemaVersion, 2);
 });
 
 test("preserves a cross-host legacy session while creating a scoped session", t => {
@@ -391,7 +459,7 @@ test("preserves a cross-host legacy session while creating a scoped session", t 
   assert.equal(JSON.parse(fs.readFileSync(path.join(sessions, `${codex.sessionKey}.json`), "utf8")).host, "codex");
 });
 
-test("preserves an opposite-host legacy session while creating a scoped session", t => {
+test("preserves an opposite-host version 2 legacy session while creating a scoped session", t => {
   const project = makeFixture(t);
   const sessionId = "legacy-opposite-host";
   const legacyKey = crypto.createHash("sha256").update(sessionId).digest("hex");
@@ -403,7 +471,7 @@ test("preserves an opposite-host legacy session while creating a scoped session"
   const sessions = path.join(project, ".ai", "harness", "sessions");
   fs.mkdirSync(sessions);
   const legacyFile = path.join(sessions, `${legacyKey}.json`);
-  const legacy = {schemaVersion: 1, sessionKey: legacyKey, taskId: "legacy-claude-task", host: "claude", startedAt: "2026-09-09T00:00:00.000Z"};
+  const legacy = {schemaVersion: 2, sessionKey: legacyKey, taskId: "legacy-claude-task", host: "claude", startedAt: "2026-09-09T00:00:00.000Z"};
   fs.writeFileSync(legacyFile, `${JSON.stringify(legacy, null, 2)}\n`);
 
   const codex = startHarnessSession({
