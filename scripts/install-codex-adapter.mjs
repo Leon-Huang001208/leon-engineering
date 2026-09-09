@@ -308,6 +308,27 @@ function readExistingHooks(codexHome) {
   return {content: fs.readFileSync(file, "utf8"), hadFile: true};
 }
 
+function isCanonicalHooksSubset(existingContent, canonicalContent) {
+  let existing;
+  let canonical;
+  try {
+    existing = JSON.parse(existingContent);
+    canonical = JSON.parse(canonicalContent);
+  } catch {
+    return false;
+  }
+  if (
+    !existing || typeof existing !== "object" || Array.isArray(existing)
+    || existing.description !== canonical.description
+    || !existing.hooks || typeof existing.hooks !== "object" || Array.isArray(existing.hooks)
+  ) return false;
+  const entries = Object.entries(existing.hooks);
+  return entries.length > 0 && entries.every(([event, hooks]) => (
+    Object.hasOwn(canonical.hooks, event)
+    && JSON.stringify(hooks) === JSON.stringify(canonical.hooks[event])
+  ));
+}
+
 function preflightGlobalFramework(sourceRoot, codexHome, existingManifest) {
   const policy = canonicalGlobalPolicy(sourceRoot);
   const documents = canonicalGlobalDocuments(sourceRoot);
@@ -336,6 +357,7 @@ function preflightGlobalFramework(sourceRoot, codexHome, existingManifest) {
     existingManifest?.hooks
     && existingHooks.hadFile
     && textChecksum(existingHooks.content) !== existingManifest.hooks.checksum
+    && !isCanonicalHooksSubset(existingHooks.content, hooks)
   ) {
     throw new Error("drifted global hooks");
   }
