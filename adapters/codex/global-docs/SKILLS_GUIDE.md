@@ -8,6 +8,7 @@
 | `project-bootstrap` | 首次进入陌生项目、确认项目约束或建立经授权的项目档案。 |
 | `project-constraints` | 需要把用户已授权项目的架构、文档、日志/错误处理或平台规则作为本地/CI 门禁时。 |
 | `project-harness` | 需要让一个已授权项目的目标、验收、交接状态和交付指标跨会话延续时。 |
+| `iteration-delivery` | Git 实现任务需要从隔离分支完成验证、发布、CI 和安全清理闭环时。 |
 | `feature-loop` | 交付边界清晰的功能。 |
 | `bugfix-evidence` | 修复已有行为回归或缺陷。 |
 | `logging-observability` | 调整日志、错误可观测性或诊断信息。 |
@@ -32,5 +33,7 @@
 `project-adapter` 的输出是路径证据与候选命令，不是已执行的测试结果。它默认不写入项目；持久化档案需要针对该项目的明确授权。
 
 `project-harness` 对未启用强制协议的项目保持默认只读；对用户已经启用强制 Harness 的目标项目，Agent 必须自动开始或恢复任务，无需逐项要求用户运行命令。结果记录只接受已观察到的验证状态，不能把候选命令或未运行检查写成通过；`harness-enforce` 是跨宿主的只读交付硬门。对已初始化 Harness 的依赖任务、显式重试或中断恢复，P2 控制平面先预览任务 DAG；它只保存状态和已存在 worktree 的定位信息，不创建 worktree、不自动重试，也不运行 Git、测试、构建或任务命令。
+
+`iteration-delivery` 是实现性 Git 任务的默认收尾方式。它自动识别远端默认分支，优先直推并在分支保护拒绝时转 PR；只有交付提交已进入远端默认分支、CI 通过或明确未配置、所有 worktree 干净时才清理。显式 `no-push`、仅本地、草稿、调研、评审和只读任务不进入自动发布。
 
 `project-constraints` 默认也只读。它只读取受跟踪的 `.agents/project-constraints.json` 与调用方明确传入的相对变更路径；有违反时以 JSON 和退出码交给 CI，不能把静态检查当作运行时或 Windows 平台验证。

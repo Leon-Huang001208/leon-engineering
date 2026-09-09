@@ -15,6 +15,7 @@
 - [Claude 全量目录审查与共享能力裁决](shared-capability-catalog.md)
 - [CC-Switch 能力登记同步脚本](../scripts/sync-cc-switch-skills.mjs)
 - [Harness v1：项目级持续交付状态](harness-v1.md)
+- [实现性项目迭代闭环](iteration-delivery.md)
 - [强制 Harness 任务协议设计](superpowers/specs/2026-08-06-强制-harness-任务协议.md)
 - [强制 Harness 任务协议实施计划](superpowers/plans/2026-08-06-强制-harness-任务协议.md)
 - [Harness v1 交付评估闭环实施计划](superpowers/plans/2026-08-03-harness-evaluation-v1.md)
