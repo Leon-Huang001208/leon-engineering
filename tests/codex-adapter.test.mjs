@@ -226,7 +226,7 @@ test("refuses to overwrite a foreign skill directory", t => {
   assert.equal(fs.readFileSync(path.join(target, "feature-loop", "SKILL.md"), "utf8"), "foreign");
 });
 
-test("detects drift and preserves unrelated skills during rollback", t => {
+test("detects drift and refuses rollback without removing managed or unrelated skills", t => {
   const target = makeTarget(t);
   install({sourceRoot, targetRoot: target});
   fs.appendFileSync(path.join(target, "bugfix-evidence", "SKILL.md"), "\nchanged");
@@ -235,9 +235,13 @@ test("detects drift and preserves unrelated skills during rollback", t => {
 
   fs.mkdirSync(path.join(target, "pdf"));
   fs.writeFileSync(path.join(target, "pdf", "SKILL.md"), "existing");
-  rollback({targetRoot: target});
+  assert.throws(
+    () => rollback({targetRoot: target}),
+    /refusing to rollback drifted skills: bugfix-evidence/
+  );
 
-  assert.equal(fs.existsSync(path.join(target, "feature-loop")), false);
+  assert.equal(fs.existsSync(path.join(target, "feature-loop")), true);
+  assert.equal(fs.readFileSync(path.join(target, "bugfix-evidence", "SKILL.md"), "utf8").endsWith("\nchanged"), true);
   assert.equal(fs.readFileSync(path.join(target, "pdf", "SKILL.md"), "utf8"), "existing");
 });
 

@@ -51,7 +51,7 @@ The adapter supports these commands:
 2. `--target <directory>`: use a temporary test directory instead of `~/.codex/skills`.
 3. `--install`: reject an existing non-adapter-owned target, copy every regular workflow file and Codex metadata, write the manifest atomically, and verify directory checksums.
 4. `--verify`: compare every installed workflow directory and manifest checksum to the canonical source.
-5. `--rollback`: remove only directories listed in the adapter-owned manifest and preserve pre-existing skills.
+5. `--rollback`: first verify every managed skill against the adapter-owned manifest, refuse the entire rollback on any drift, otherwise remove only listed directories and preserve pre-existing skills.
 
 Before the real install, create a timestamped backup of `/Users/leon/.codex/AGENTS.md`. The installer never overwrites an unrelated skill directory, deletes Claude assets, or changes Codex model, approval, sandbox, plugin, MCP, or provider configuration.
 

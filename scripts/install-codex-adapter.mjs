@@ -629,6 +629,20 @@ export function rollback({targetRoot}) {
   const manifest = readManifest(targetRoot);
   if (!manifest) throw new Error("adapter manifest not found");
 
+  const drift = Object.entries(manifest.skills).flatMap(([name, expectedChecksum]) => {
+    try {
+      const installedChecksum = skillChecksum(
+        listSkillFiles(path.join(targetRoot, name), name, false)
+      );
+      return installedChecksum === expectedChecksum ? [] : [name];
+    } catch {
+      return [name];
+    }
+  });
+  if (drift.length > 0) {
+    throw new Error(`refusing to rollback drifted skills: ${drift.join(", ")}`);
+  }
+
   for (const name of Object.keys(manifest.skills)) {
     fs.rmSync(path.join(targetRoot, name), {recursive: true, force: true});
   }
