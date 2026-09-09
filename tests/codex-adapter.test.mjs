@@ -35,7 +35,9 @@ test("installs the global framework without replacing custom global rules", t =>
   fs.writeFileSync(path.join(codexHome, "AGENTS.md"), original);
 
   const result = installGlobalFramework({sourceRoot, codexHome});
+  const repeated = installGlobalFramework({sourceRoot, codexHome});
   assert.deepEqual(result.documents, GLOBAL_DOCUMENT_NAMES);
+  assert.deepEqual(repeated.documents, GLOBAL_DOCUMENT_NAMES);
   assert.equal(verifyGlobalFramework({sourceRoot, codexHome}).valid, true);
 
   const agents = fs.readFileSync(path.join(codexHome, "AGENTS.md"), "utf8");

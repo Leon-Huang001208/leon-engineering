@@ -52,6 +52,9 @@ P2 不是任务看板服务、DAG 自动执行器或常驻工作队列。它自�
 Harness 运行时由 Codex 全局框架和 Claude 受管策略的安装命令自动部署、校验到 `$HOME/.agents/leon-engineering/runtime`。Codex 全局适配器同时受管 `$HOME/.codex/hooks.json` 中的 Harness Hook：只创建不存在的文件，或接管与模板完全一致的旧文件；发现其他已有 Hook 或漂移时拒绝覆盖。项目根目录不应复制 `scripts/harness-*.mjs`。
 
 runtime 清单记录权威源根目录，使安装后的 `harness-runtime.mjs --verify` 能同时校验安装内容、安装清单与当前权威源。若权威源不可用，验证返回 `canonical source unavailable`，不得把仅内部校验和一致解释为当前版本有效。
+若 Hook 报告 runtime 缺失或清单漂移，先执行错误中的恢复命令。确认来源后，从 `/Users/leon/Developer/claude-engineering` 权威源重新运行 Codex 全局安装器，禁止把安装副本当作源码手工维护。
+
+runtime 清单记录安装时的权威源根目录，使安装后的 `harness-runtime.mjs --verify` 能同时校验安装内容、清单与当前权威源；权威源不可用时返回 `canonical source unavailable`，不得把仅内部校验和一致解释为当前版本有效。
 
 不确定某个受管 Harness 命令的参数时，先运行对应脚本的 `--help`（或 `-h`）。帮助文本不读取项目、不执行项目命令，也不写入任何文件；项目路径参数统一为 `--project <项目目录>`。
 

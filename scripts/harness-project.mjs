@@ -298,20 +298,20 @@ export function readHarnessEvents({projectRoot, taskId}) {
   });
 }
 
-function validatedSessionId(sessionId) {
+function assertSessionId(sessionId) {
   if (typeof sessionId !== "string" || !/^[A-Za-z0-9._-]{1,160}$/.test(sessionId)) throw new Error("invalid harness session id");
   return sessionId;
 }
 
-function sessionKey(host, sessionId) {
-  return crypto.createHash("sha256").update(`${host}:${validatedSessionId(sessionId)}`).digest("hex");
+function sessionKey(sessionId, host) {
+  return crypto.createHash("sha256").update(`${host}:${assertSessionId(sessionId)}`).digest("hex");
 }
 
 function legacySessionKey(sessionId) {
-  return crypto.createHash("sha256").update(validatedSessionId(sessionId)).digest("hex");
+  return crypto.createHash("sha256").update(assertSessionId(sessionId)).digest("hex");
 }
 
-function readSessionContext(destination, expectedKey) {
+function readSessionContext(destination, key) {
   if (fs.lstatSync(destination).isSymbolicLink() || !fs.statSync(destination).isFile()) throw new Error("invalid harness session");
   let context;
   try {
@@ -319,10 +319,7 @@ function readSessionContext(destination, expectedKey) {
   } catch {
     throw new Error("invalid harness session");
   }
-  if (
-    !context || context.schemaVersion !== 1 || context.sessionKey !== expectedKey
-    || !new Set(["claude", "codex"]).has(context.host)
-  ) {
+  if (!context || context.schemaVersion !== 1 || context.sessionKey !== key || !["claude", "codex"].includes(context.host)) {
     throw new Error("invalid harness session");
   }
   return context;
@@ -334,7 +331,7 @@ export function startHarnessSession({projectRoot, host, sessionId, task, newTask
   const normalizedHost = assertHost(host);
   if (normalizedHost === "unknown") throw new Error("invalid harness session host");
   if (typeof newTask !== "boolean") throw new Error("invalid harness new task flag");
-  const key = sessionKey(normalizedHost, sessionId);
+  const key = sessionKey(sessionId, normalizedHost);
   const legacyKey = legacySessionKey(sessionId);
   const directory = existingSafeDirectory(root, HARNESS_DIRECTORY);
   if (!directory) {
@@ -344,29 +341,23 @@ export function startHarnessSession({projectRoot, host, sessionId, task, newTask
   const sessions = safeDirectory(root, path.posix.join(HARNESS_DIRECTORY, SESSION_DIRECTORY));
   const destination = path.join(sessions, `${key}.json`);
   if (!isWithin(sessions, destination)) throw new Error("unsafe harness session destination");
-  let context;
-  let migratedLegacy = false;
   if (fs.existsSync(destination)) {
-    context = readSessionContext(destination, key);
+    const context = readSessionContext(destination, key);
     if (context.host !== normalizedHost) throw new Error("invalid harness session");
+    if (!newTask || context.taskId === normalizedTask.id) {
+      readHarnessTask({projectRoot: root, taskId: context.taskId});
+      return {directory: harnessDirectory, taskId: context.taskId, sessionKey: key, resumed: true};
+    }
   } else {
     const legacyDestination = path.join(sessions, `${legacyKey}.json`);
     if (!isWithin(sessions, legacyDestination)) throw new Error("unsafe harness session destination");
     if (fs.existsSync(legacyDestination)) {
       const legacyContext = readSessionContext(legacyDestination, legacyKey);
-      if (legacyContext.host === normalizedHost) {
-        context = legacyContext;
-        migratedLegacy = true;
+      if (legacyContext.host === normalizedHost && (!newTask || legacyContext.taskId === normalizedTask.id)) {
+        readHarnessTask({projectRoot: root, taskId: legacyContext.taskId});
+        writeAtomically(destination, `${JSON.stringify({...legacyContext, sessionKey: key}, null, 2)}\n`);
+        return {directory: harnessDirectory, taskId: legacyContext.taskId, sessionKey: key, resumed: true};
       }
-    }
-  }
-  if (context) {
-    if (!newTask || context.taskId === normalizedTask.id) {
-      readHarnessTask({projectRoot: root, taskId: context.taskId});
-      if (migratedLegacy) {
-        writeAtomically(destination, `${JSON.stringify({...context, sessionKey: key}, null, 2)}\n`);
-      }
-      return {directory: harnessDirectory, taskId: context.taskId, sessionKey: key, resumed: true};
     }
   }
   if (directory) {

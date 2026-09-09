@@ -14,6 +14,12 @@ node scripts/install-codex-adapter.mjs --rollback-global --codex-home "$HOME/.co
 
 受管 `hooks.json` 若只剩规范模板中完全一致的事件子集，安装器可补回缺失的受管事件；任何额外事件、matcher 或命令仍按外来漂移拒绝覆盖。
 
+Harness 初始化故障时，Hook 只允许受控的只读诊断命令，并在拒绝原因中返回 `stage`、`code`、runtime/manifest 路径和恢复命令。先执行其中的 runtime 校验；校验失败后只能从权威框架源重新安装，不得直接维护安装副本：
+
+```bash
+node "$HOME/.agents/leon-engineering/runtime/harness-runtime.mjs" --verify --runtime-root "$HOME/.agents/leon-engineering/runtime"
+```
+
 本地 Claude 插件已经安装时，`claude plugin install` 只会报告“已安装”，不会刷新缓存版本。框架源码的插件版本升级后，应使用下面命令，并在现有 Claude Code 会话中重启后才会生效：
 
 ```bash

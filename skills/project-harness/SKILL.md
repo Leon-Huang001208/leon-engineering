@@ -19,9 +19,7 @@ node "$HOME/.agents/leon-engineering/runtime/harness-runtime.mjs" --verify
 node "$HOME/.agents/leon-engineering/runtime/harness-session.mjs" --start --new-task --project /absolute/project --host codex --session-id opaque-task-key --task-id task-id --goal "Outcome" --acceptance "Observable result"
 ```
 
-会话入口创建 `.ai/harness/agent-map.md`、任务记录、`metrics.jsonl`、隐私受限的 `events.jsonl` 和会话上下文。事件流只记录任务 ID、宿主、事件类别及白名单状态，不记录目标、验收、会话 ID、命令、路径、提示词、源代码或密钥。对未启用强制 Harness 的项目，仍保持原有的预览与明确写入边界。
-
-会话文件使用 `host + session ID` 的不可逆摘要隔离 Claude 与 Codex。升级前仅按 session ID 命名的同宿主记录会迁移到新文件后恢复，旧文件保留；异宿主旧记录不会被覆盖，也不会阻止当前宿主建立独立上下文。
+会话入口创建 `.ai/harness/agent-map.md`、任务记录、`metrics.jsonl`、隐私受限的 `events.jsonl` 和会话上下文。会话文件使用 `host + session ID` 的不可逆摘要隔离 Claude 与 Codex；同宿主旧键会复制到新命名空间后恢复，旧文件保留，异宿主旧记录既不覆盖也不阻止当前宿主建立独立上下文。事件流只记录任务 ID、宿主、事件类别及白名单状态，不记录目标、验收、会话 ID、命令、路径、提示词、源代码或密钥。对未启用强制 Harness 的项目，仍保持原有的预览与明确写入边界。
 
 未启用强制 Harness 时，可在用户明确授权后继续使用 `harness-project.mjs --write-harness` 创建首个账本；该兼容入口不会覆盖既有 Harness。
 
