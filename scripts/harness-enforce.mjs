@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import {fileURLToPath} from "node:url";
 import {readHarnessEvents, readHarnessTask} from "./harness-project.mjs";
+import {validateCleanedDelivery} from "./iteration-delivery.mjs";
 
-export function enforceHarnessTask({projectRoot, taskId}) {
+export function enforceHarnessTask({projectRoot, taskId, requireDelivery = false}) {
   const task = readHarnessTask({projectRoot, taskId});
   const events = readHarnessEvents({projectRoot, taskId});
   if (!events.some(event => event.event === "task_started")) throw new Error("missing task_started event");
@@ -19,11 +20,22 @@ export function enforceHarnessTask({projectRoot, taskId}) {
   if (!events.some(event => event.event === "verification_completed" && event.verificationStatus === "passed")) {
     throw new Error("missing passing verification_completed event");
   }
-  return {
+  const result = {
     taskId,
     verificationStatus: outcome.verification.status,
     verificationDurationSeconds: outcome.verificationDurationSeconds
   };
+  if (requireDelivery || task.delivery?.required) {
+    const receipt = validateCleanedDelivery({projectRoot, taskId});
+    Object.assign(result, {
+      deliveryStatus: receipt.status,
+      ciStatus: receipt.ci.status,
+      remote: receipt.remote,
+      defaultBranch: receipt.defaultBranch,
+      remoteCommit: receipt.remoteCommit
+    });
+  }
+  return result;
 }
 
 function parseArgs(args) {
@@ -31,6 +43,10 @@ function parseArgs(args) {
   const options = {};
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
+    if (argument === "--require-delivery") {
+      options.requireDelivery = true;
+      continue;
+    }
     if (argument !== "--project" && argument !== "--task-id") throw new Error(`unknown option: ${argument}`);
     const value = args[index + 1];
     if (!value || value.startsWith("--")) throw new Error(`${argument} requires a value`);
@@ -43,9 +59,9 @@ function parseArgs(args) {
 
 function usage() {
   return [
-    "用法：harness-enforce.mjs --project <项目目录> --task-id <任务 ID>",
+    "用法：harness-enforce.mjs --project <项目目录> --task-id <任务 ID> [--require-delivery]",
     "",
-    "只读交付硬门：要求自动开始事件、真实 completed/passed 结果和已记录的验证完成事件。"
+    "只读交付硬门：要求自动开始事件、真实 completed/passed 结果和已记录的验证完成事件；可实时核验交付 receipt。"
   ].join("\n");
 }
 
@@ -55,7 +71,11 @@ function main(args) {
     process.stdout.write(`${usage()}\n`);
     return;
   }
-  process.stdout.write(`${JSON.stringify(enforceHarnessTask({projectRoot: options.project, taskId: options.taskId}))}\n`);
+  process.stdout.write(`${JSON.stringify(enforceHarnessTask({
+    projectRoot: options.project,
+    taskId: options.taskId,
+    requireDelivery: Boolean(options.requireDelivery)
+  }))}\n`);
 }
 
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))) {

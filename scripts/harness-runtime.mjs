@@ -12,6 +12,7 @@ export const HARNESS_RUNTIME_FILES = [
   "harness-project.mjs",
   "harness-session.mjs",
   "harness-enforce.mjs",
+  "iteration-delivery.mjs",
   "harness-hook.mjs",
   "harness-evaluate.mjs",
   "harness-control.mjs",

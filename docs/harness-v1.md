@@ -13,11 +13,13 @@ Harness v1 解决“新会话忘记上下文、完成标准不稳定、无法衡
 
 默认命令只输出预览。`--write-harness` 是项目内写入的明确边界；已有 Harness 或同名任务不会被覆盖。`--record-outcome` 只保存执行者已经获得的证据，绝不执行命令、读取环境变量或访问网络。每条新结果都必须附带执行者实际测得的 `verificationDurationSeconds`；`blocked` 结果还必须附带标准化 `blockerCategory`。这些字段不是脚本估算出来的，也不能从聊天内容回填。
 
+实现任务可在任务记录中声明 `delivery.required: true`。该字段由 `harness-session --delivery-required` 或项目命令的同名参数创建，用于要求最终硬门读取 Git common dir 中的交付 receipt。
+
 ## 强制任务协议
 
 用户为目标项目启用强制 Harness 后，所有会形成项目交付、改动或调研结论的新任务必须由 Agent 自动使用 `harness-session.mjs --start --new-task` 创建；任务延续时恢复同一不透明任务键。用户不需要手动运行该命令。纯聊天和未指定项目的问答不创建项目记录。
 
-完成时必须先实际运行验证，再写入结果并运行 `harness-enforce.mjs --project <目录> --task-id <ID>`。该硬门只读检查开始事件、最新 `completed/passed` 结果、验证命令、实测耗时和验证完成事件；它不运行记录的命令。Codex 与 Claude 都在本地工具边界通过 `PreToolUse`/`PostToolUse` Hook 自动建立或恢复会话并记录非敏感事件；初始化失败时拒绝受管项目的工具调用。交付仍由硬门和项目 CI 机械验收，Hook 不能替代真实验证证据。
+完成时必须先实际运行验证，再写入结果并运行 `harness-enforce.mjs --project <目录> --task-id <ID>`。实现任务加 `--require-delivery`；该硬门除开始事件、最新 `completed/passed` 结果、验证命令、实测耗时和验证完成事件外，还实时检查 receipt 中的远端提交、CI、分支和 worktree 状态。它不运行记录的命令，也不执行 Git 写操作。Codex 与 Claude 都在本地工具边界通过 `PreToolUse`/`PostToolUse` Hook 自动建立或恢复会话并记录非敏感事件；初始化失败时拒绝受管项目的工具调用。交付仍由硬门和项目 CI 机械验收，Hook 不能替代真实验证证据。
 
 旧 `.ai/tasks`、`.ai/reports` 和历史 Harness 记录不会被回填或删除；事件流只从启用后开始产生。
 
@@ -41,7 +43,7 @@ Harness v1 解决“新会话忘记上下文、完成标准不稳定、无法衡
 
 当任务之间存在明确依赖、需要中断后恢复或需要记录一次显式重试时，使用 [Harness P2 控制平面](harness-control-plane.md)。它在同一项目的 `.ai/harness/control-plane.json` 里保存 DAG、任务状态、尝试次数、事件和已存在 worktree 的定位信息。每个控制任务以 `harnessTaskId` 显式绑定账本任务：写入控制平面前记录必须已经存在，转换为 `completed` 前其最新账本结果必须为 `completed/passed`。因此编排状态不会被误当成验证事实。
 
-P2 不是任务看板服务、DAG 自动执行器、常驻工作队列或自动合并系统。它不创建、切换或删除 worktree；不运行 Git、测试、构建或任务命令；不因失败自动重试。只有先在多个项目收集到真实的沟通轮次、返工、验证耗时和阻塞数据后，才评估是否需要更重的编排层。
+P2 不是任务看板服务、DAG 自动执行器或常驻工作队列。它自身不创建、切换或删除 worktree，不运行 Git、测试、构建或任务命令，也不因失败自动重试；实现任务的 Git 闭环由独立的 `iteration-delivery` 控制器负责。
 
 ## Map 新鲜度与运行时生命周期
 

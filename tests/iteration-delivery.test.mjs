@@ -1,0 +1,260 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import {execFileSync} from "node:child_process";
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  cleanupDelivery,
+  prepareDelivery,
+  publishDelivery,
+  readDeliveryReceipt,
+  refreshDeliveryStatus,
+  rollbackDelivery,
+  startDelivery
+} from "../scripts/iteration-delivery.mjs";
+
+function git(cwd, args) {
+  return execFileSync("git", ["-C", cwd, ...args], {encoding: "utf8"}).trim();
+}
+
+function commit(cwd, message) {
+  git(cwd, ["add", "."]);
+  git(cwd, ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", message]);
+}
+
+function makeRepository(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "leon-iteration-delivery-"));
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  const remote = path.join(root, "origin.git");
+  const project = path.join(root, "project");
+  fs.mkdirSync(project);
+  execFileSync("git", ["init", "--bare", remote]);
+  execFileSync("git", ["init", project]);
+  git(project, ["config", "user.name", "Test"]);
+  git(project, ["config", "user.email", "test@example.com"]);
+  fs.writeFileSync(path.join(project, "README.md"), "# fixture\n");
+  commit(project, "chore: seed fixture");
+  git(project, ["branch", "-M", "main"]);
+  git(project, ["remote", "add", "origin", remote]);
+  git(project, ["push", "-u", "origin", "main"]);
+  execFileSync("git", ["--git-dir", remote, "symbolic-ref", "HEAD", "refs/heads/main"]);
+  git(project, ["remote", "set-head", "origin", "-a"]);
+  return {root, remote, project};
+}
+
+test("delivers a verified branch to the remote default branch and cleans every worktree", t => {
+  const {project} = makeRepository(t);
+  const started = startDelivery({projectRoot: project, taskId: "task-one", slug: "feature"});
+  fs.writeFileSync(path.join(started.featureWorktree, "feature.txt"), "delivered\n");
+  commit(started.featureWorktree, "feat: add delivered file");
+
+  const prepared = prepareDelivery({projectRoot: project, taskId: "task-one"});
+  const published = publishDelivery({
+    projectRoot: project,
+    taskId: "task-one",
+    verification: {command: "node --test", status: "passed", durationSeconds: 1}
+  });
+  assert.equal(published.mode, "direct");
+  refreshDeliveryStatus({
+    projectRoot: project,
+    taskId: "task-one",
+    resolveCiStatus: () => ({status: "not_configured", runs: []})
+  });
+  const cleaned = cleanupDelivery({projectRoot: project, taskId: "task-one"});
+
+  assert.equal(cleaned.status, "cleaned");
+  assert.equal(fs.existsSync(started.featureWorktree), false);
+  assert.equal(fs.existsSync(prepared.integrationWorktree), false);
+  assert.equal(git(project, ["show", "origin/main:feature.txt"]), "delivered");
+  assert.throws(() => git(project, ["show-ref", "--verify", `refs/heads/${started.featureBranch}`]));
+  assert.equal(readDeliveryReceipt({projectRoot: project, taskId: "task-one"}).cleanup.localBranchDeleted, true);
+});
+
+test("falls back to a pull request with a fake GitHub command runner when direct push is protected", t => {
+  const {project} = makeRepository(t);
+  const started = startDelivery({projectRoot: project, taskId: "task-pr", slug: "protected"});
+  fs.writeFileSync(path.join(started.featureWorktree, "feature.txt"), "via pr\n");
+  commit(started.featureWorktree, "feat: add protected delivery");
+  const prepared = prepareDelivery({projectRoot: project, taskId: "task-pr"});
+  const githubCalls = [];
+  const githubRunner = (command, args) => {
+    githubCalls.push([command, ...args]);
+    return {
+      status: 0,
+      stdout: args[1] === "create" ? "https://github.com/fixture/repo/pull/42\n" : "",
+      stderr: ""
+    };
+  };
+  const published = publishDelivery({
+    projectRoot: project,
+    taskId: "task-pr",
+    verification: {command: "node --test", status: "passed", durationSeconds: 1},
+    pushDefault: () => ({status: "protected"}),
+    githubRunner,
+    githubRepositoryName: "fixture/repo"
+  });
+  assert.equal(published.mode, "pr");
+  assert.equal(published.pullRequest.number, 42);
+  assert.deepEqual(githubCalls.map(call => call.slice(0, 3)), [
+    ["gh", "pr", "create"],
+    ["gh", "pr", "merge"]
+  ]);
+
+  git(project, ["push", "origin", `${prepared.integrationCommit}:refs/heads/main`]);
+  refreshDeliveryStatus({
+    projectRoot: project,
+    taskId: "task-pr",
+    resolveCiStatus: () => ({
+      status: "passed",
+      runs: [{conclusion: "SUCCESS"}],
+      mergeCommit: prepared.integrationCommit
+    })
+  });
+  const cleaned = cleanupDelivery({projectRoot: project, taskId: "task-pr"});
+  assert.equal(cleaned.status, "cleaned");
+  assert.equal(git(project, ["show", "origin/main:feature.txt"]), "via pr");
+});
+
+test("refuses cleanup while a managed worktree contains untracked files", t => {
+  const {project} = makeRepository(t);
+  const started = startDelivery({projectRoot: project, taskId: "task-dirty", slug: "dirty"});
+  fs.writeFileSync(path.join(started.featureWorktree, "feature.txt"), "delivered\n");
+  commit(started.featureWorktree, "feat: add delivered file");
+  prepareDelivery({projectRoot: project, taskId: "task-dirty"});
+  publishDelivery({
+    projectRoot: project,
+    taskId: "task-dirty",
+    verification: {command: "node --test", status: "passed", durationSeconds: 1}
+  });
+  refreshDeliveryStatus({
+    projectRoot: project,
+    taskId: "task-dirty",
+    resolveCiStatus: () => ({status: "passed", runs: [{conclusion: "success"}]})
+  });
+  fs.writeFileSync(path.join(started.featureWorktree, "untracked.txt"), "keep me\n");
+
+  assert.throws(
+    () => cleanupDelivery({projectRoot: project, taskId: "task-dirty"}),
+    /feature worktree is dirty/
+  );
+  assert.equal(fs.existsSync(started.featureWorktree), true);
+});
+
+test("refuses publish when the remote default branch moved after integration", t => {
+  const {root, remote, project} = makeRepository(t);
+  const started = startDelivery({projectRoot: project, taskId: "task-race", slug: "race"});
+  fs.writeFileSync(path.join(started.featureWorktree, "feature.txt"), "candidate\n");
+  commit(started.featureWorktree, "feat: add candidate");
+  prepareDelivery({projectRoot: project, taskId: "task-race"});
+
+  const concurrent = path.join(root, "concurrent");
+  execFileSync("git", ["clone", remote, concurrent]);
+  fs.writeFileSync(path.join(concurrent, "concurrent.txt"), "new base\n");
+  commit(concurrent, "feat: advance default branch");
+  git(concurrent, ["push", "origin", "main"]);
+
+  assert.throws(
+    () => publishDelivery({
+      projectRoot: project,
+      taskId: "task-race",
+      verification: {command: "node --test", status: "passed", durationSeconds: 1}
+    }),
+    /remote default branch moved/
+  );
+
+  const rebuilt = prepareDelivery({projectRoot: project, taskId: "task-race"});
+  assert.equal(rebuilt.integrationHistory.length, 1);
+  assert.equal(fs.existsSync(rebuilt.integrationHistory[0].worktree), false);
+  assert.equal(git(rebuilt.integrationWorktree, ["show", "HEAD:feature.txt"]), "candidate");
+  assert.equal(git(rebuilt.integrationWorktree, ["show", "HEAD:concurrent.txt"]), "new base");
+  publishDelivery({
+    projectRoot: project,
+    taskId: "task-race",
+    verification: {command: "node --test", status: "passed", durationSeconds: 1}
+  });
+  refreshDeliveryStatus({
+    projectRoot: project,
+    taskId: "task-race",
+    resolveCiStatus: () => ({status: "passed", runs: [{conclusion: "success"}]})
+  });
+  cleanupDelivery({projectRoot: project, taskId: "task-race"});
+  assert.equal(readDeliveryReceipt({projectRoot: project, taskId: "task-race"}).status, "cleaned");
+});
+
+test("preserves a conflicted integration worktree and resumes after the merge is committed", t => {
+  const {root, remote, project} = makeRepository(t);
+  const started = startDelivery({projectRoot: project, taskId: "task-conflict", slug: "conflict"});
+  fs.writeFileSync(path.join(started.featureWorktree, "README.md"), "feature\n");
+  commit(started.featureWorktree, "feat: change readme");
+
+  const concurrent = path.join(root, "conflict-concurrent");
+  execFileSync("git", ["clone", remote, concurrent]);
+  fs.writeFileSync(path.join(concurrent, "README.md"), "default\n");
+  commit(concurrent, "feat: change readme on default");
+  git(concurrent, ["push", "origin", "main"]);
+
+  assert.throws(
+    () => prepareDelivery({projectRoot: project, taskId: "task-conflict"}),
+    /integration merge has conflicts/
+  );
+  const conflicted = readDeliveryReceipt({projectRoot: project, taskId: "task-conflict"});
+  assert.equal(conflicted.status, "integration_conflict");
+  fs.writeFileSync(path.join(conflicted.integrationWorktree, "README.md"), "default and feature\n");
+  commit(conflicted.integrationWorktree, "merge: resolve readme conflict");
+
+  const resumed = prepareDelivery({projectRoot: project, taskId: "task-conflict"});
+  assert.equal(resumed.status, "prepared");
+  assert.equal(git(resumed.integrationWorktree, ["show", "HEAD:README.md"]), "default and feature");
+});
+
+test("limits CI repair pushes to three and permits a verified rollback only at the owned remote tip", t => {
+  const {project} = makeRepository(t);
+  const started = startDelivery({projectRoot: project, taskId: "task-rollback", slug: "rollback"});
+  fs.writeFileSync(path.join(started.featureWorktree, "feature.txt"), "candidate\n");
+  commit(started.featureWorktree, "feat: add candidate");
+  const prepared = prepareDelivery({projectRoot: project, taskId: "task-rollback"});
+  publishDelivery({
+    projectRoot: project,
+    taskId: "task-rollback",
+    verification: {command: "node --test", status: "passed", durationSeconds: 1}
+  });
+  refreshDeliveryStatus({
+    projectRoot: project,
+    taskId: "task-rollback",
+    resolveCiStatus: () => ({status: "failed", runs: [{conclusion: "failure"}]})
+  });
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    fs.writeFileSync(path.join(prepared.integrationWorktree, `repair-${attempt}.txt`), `${attempt}\n`);
+    commit(prepared.integrationWorktree, `fix: repair CI ${attempt}`);
+    publishDelivery({
+      projectRoot: project,
+      taskId: "task-rollback",
+      repair: true,
+      verification: {command: "node --test", status: "passed", durationSeconds: 1}
+    });
+    refreshDeliveryStatus({
+      projectRoot: project,
+      taskId: "task-rollback",
+      resolveCiStatus: () => ({status: "failed", runs: [{conclusion: "failure"}]})
+    });
+  }
+  assert.throws(
+    () => publishDelivery({
+      projectRoot: project,
+      taskId: "task-rollback",
+      repair: true,
+      verification: {command: "node --test", status: "passed", durationSeconds: 1}
+    }),
+    /maximum CI repair attempts reached/
+  );
+
+  const rolledBack = rollbackDelivery({
+    projectRoot: project,
+    taskId: "task-rollback",
+    verification: {command: "node --test", status: "passed", durationSeconds: 1}
+  });
+  assert.equal(rolledBack.status, "rolled_back");
+  assert.throws(() => git(project, ["show", "origin/main:feature.txt"]));
+});

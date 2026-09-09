@@ -9,6 +9,7 @@ export const LEON_ENGINEERING_SKILLS = [
   "agent-routing",
   "bugfix-evidence",
   "feature-loop",
+  "iteration-delivery",
   "logging-observability",
   "project-adapter",
   "project-bootstrap",

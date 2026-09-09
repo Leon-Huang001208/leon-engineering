@@ -32,14 +32,26 @@ node scripts/profile-project.mjs --project /absolute/project --format markdown
 对已启用强制 Harness 的目标项目，Agent 自动开始新任务；用户不需要先运行命令。新任务使用 `--new-task`，连续处理同一任务时省略它以恢复上下文：
 
 ```bash
-node "$HOME/.agents/leon-engineering/runtime/harness-session.mjs" --start --new-task --project /absolute/project --host codex --session-id opaque-task-key --task-id task-id --goal "目标" --acceptance "验收标准"
+node "$HOME/.agents/leon-engineering/runtime/harness-session.mjs" --start --new-task --project /absolute/project --host codex --session-id opaque-task-key --task-id task-id --goal "目标" --acceptance "验收标准" --delivery-required
 ```
 
 完成任务后，执行者先独立运行验证，再用 `--record-outcome` 写入已经观察到的状态、澄清轮次、返工次数、实测验证秒数和验证命令；记录命令本身不会运行该验证命令。`blocked` 结果还必须写入标准化阻塞分类，不能从推测补填。随后运行只读交付硬门；它不会执行任务命令，但会拒绝缺少开始事件、通过验证结果或验证完成事件的交付：
 
 ```bash
-node "$HOME/.agents/leon-engineering/runtime/harness-enforce.mjs" --project /absolute/project --task-id task-id
+node "$HOME/.agents/leon-engineering/runtime/harness-enforce.mjs" --project /absolute/project --task-id task-id --require-delivery
 ```
+
+实现性 Git 任务由交付控制器管理。`start` 返回功能 worktree；在那里实现、提交并运行分支验证。`prepare` 创建临时集成 worktree；在那里运行合并后验证，再 `publish`。随后重复只读 `status`，直到 CI 通过或明确未配置，最后 `cleanup`：
+
+```bash
+node "$HOME/.agents/leon-engineering/runtime/iteration-delivery.mjs" --start --project /absolute/project --task-id task-id --slug short-slug
+node "$HOME/.agents/leon-engineering/runtime/iteration-delivery.mjs" --prepare --project /absolute/project --task-id task-id
+node "$HOME/.agents/leon-engineering/runtime/iteration-delivery.mjs" --publish --project /absolute/project --task-id task-id --verification-command "实际命令" --verification-status passed --verification-duration-seconds 12
+node "$HOME/.agents/leon-engineering/runtime/iteration-delivery.mjs" --status --project /absolute/project --task-id task-id
+node "$HOME/.agents/leon-engineering/runtime/iteration-delivery.mjs" --cleanup --project /absolute/project --task-id task-id
+```
+
+远端在发布前推进时，再次运行 `--prepare`，并在新的集成 worktree 重新验证。CI 修复提交使用 `--publish --repair`，最多三轮；之后只有控制器的独占 tip 检查和回滚后验证均通过时才能 `--rollback`。控制器禁止 force-push、脏 worktree 强删和未归并提交删除。完整协议见 `docs/iteration-delivery.md`。
 
 要查看该项目已记录的交付指标，运行只读评估；它不会创建文件、执行账本内命令或扫描其他项目：
 

@@ -29,7 +29,19 @@ function assertTask(task) {
     if (typeof item !== "string" || item.trim().length === 0) throw new Error("invalid acceptance criterion");
     return item.trim();
   });
-  return {id: task.id, goal: task.goal.trim(), acceptanceCriteria};
+  if (task.deliveryRequired !== undefined && typeof task.deliveryRequired !== "boolean") {
+    throw new Error("invalid delivery required flag");
+  }
+  if (task.delivery !== undefined && (
+    !task.delivery || typeof task.delivery !== "object" || Array.isArray(task.delivery)
+    || typeof task.delivery.required !== "boolean"
+  )) throw new Error("invalid task delivery policy");
+  return {
+    id: task.id,
+    goal: task.goal.trim(),
+    acceptanceCriteria,
+    delivery: {required: Boolean(task.deliveryRequired ?? task.delivery?.required)}
+  };
 }
 
 export function buildHarness({projectRoot, task}) {
@@ -425,16 +437,17 @@ function parseArgs(args) {
     else if (argument === "--add-task") options.addTask = true;
     else if (argument === "--refresh-agent-map") options.refreshAgentMap = true;
     else if (argument === "--record-outcome") options.recordOutcome = true;
+    else if (argument === "--delivery-required") options.deliveryRequired = true;
     else throw new Error(`unknown option: ${argument}`);
   }
   if (!options.project) throw new Error("--project requires a value");
   if (options.refreshAgentMap) {
-    if (options.writeHarness || options.addTask || options.recordOutcome || options.task_id || options.goal || options.acceptanceCriteria.length) throw new Error("refresh mode cannot set task options");
+    if (options.writeHarness || options.addTask || options.recordOutcome || options.task_id || options.goal || options.acceptanceCriteria.length || options.deliveryRequired) throw new Error("refresh mode cannot set task options");
     return options;
   }
   if (!options.task_id) throw new Error("--task-id requires a value");
   if (options.recordOutcome) {
-    if (options.writeHarness || options.addTask || options.goal || options.acceptanceCriteria.length) {
+    if (options.writeHarness || options.addTask || options.goal || options.acceptanceCriteria.length || options.deliveryRequired) {
       throw new Error("outcome mode cannot create a task");
     }
     return options;
@@ -448,7 +461,7 @@ function parseArgs(args) {
 
 function formatUsage() {
   return [
-    "用法：harness-project.mjs --project <项目目录> --task-id <任务 ID> --goal <目标> --acceptance <验收标准> [--acceptance <验收标准>] [--write-harness|--add-task]",
+    "用法：harness-project.mjs --project <项目目录> --task-id <任务 ID> --goal <目标> --acceptance <验收标准> [--acceptance <验收标准>] [--delivery-required] [--write-harness|--add-task]",
     "      harness-project.mjs --project <项目目录> --task-id <任务 ID> --record-outcome --status <状态> --clarification-rounds <次数> --rework-count <次数> --verification-command <命令> --verification-status <状态> --verification-duration-seconds <秒数>",
     "      harness-project.mjs --project <项目目录> --refresh-agent-map",
     "",
@@ -487,7 +500,12 @@ function main(args) {
   }
   const harness = buildHarness({
     projectRoot: options.project,
-    task: {id: options.task_id, goal: options.goal, acceptanceCriteria: options.acceptanceCriteria}
+    task: {
+      id: options.task_id,
+      goal: options.goal,
+      acceptanceCriteria: options.acceptanceCriteria,
+      deliveryRequired: Boolean(options.deliveryRequired)
+    }
   });
   const files = options.writeHarness
     ? writeHarness({projectRoot: options.project, harness})

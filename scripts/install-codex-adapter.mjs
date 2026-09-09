@@ -18,6 +18,7 @@ export const SKILL_NAMES = [
   "agent-routing",
   "bugfix-evidence",
   "feature-loop",
+  "iteration-delivery",
   "logging-observability",
   "project-adapter",
   "project-bootstrap",
