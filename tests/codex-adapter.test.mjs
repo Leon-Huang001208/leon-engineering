@@ -240,3 +240,16 @@ test("detects drift and preserves unrelated skills during rollback", t => {
   assert.equal(fs.existsSync(path.join(target, "feature-loop")), false);
   assert.equal(fs.readFileSync(path.join(target, "pdf", "SKILL.md"), "utf8"), "existing");
 });
+
+test("skill verification CLI exits nonzero when managed content drifts", t => {
+  const target = makeTarget(t);
+  const script = path.join(sourceRoot, "scripts", "install-codex-adapter.mjs");
+  install({sourceRoot, targetRoot: target});
+  fs.appendFileSync(path.join(target, "project-harness", "SKILL.md"), "\ndrift\n");
+
+  const result = spawnSync(process.execPath, [script, "--verify", "--target", target], {encoding: "utf8"});
+
+  assert.equal(result.status, 1, result.stderr);
+  assert.equal(JSON.parse(result.stdout).valid, false);
+  assert.match(result.stdout, /project-harness/);
+});

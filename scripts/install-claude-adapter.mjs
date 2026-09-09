@@ -555,11 +555,11 @@ function main(args) {
   const {action, claudeHome} = parseCli(args);
   if (action === "--install") {
     const {manifest} = installClaudePolicy({claudeHome});
-    installHarnessRuntime({});
+    installHarnessRuntime({sourceRoot: SOURCE_ROOT});
     console.log(JSON.stringify({installed: true, frameworkVersion: manifest.frameworkVersion}));
   } else if (action === "--verify") {
     const verification = verifyClaudePolicy({claudeHome, logResult: false});
-    const runtime = verifyHarnessRuntime({});
+    const runtime = verifyHarnessRuntime({sourceRoot: SOURCE_ROOT});
     if (!verification.valid || !runtime.valid) {
       throw fail("Claude policy drift detected", "drifted_policy");
     }

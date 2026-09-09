@@ -315,6 +315,37 @@ test("copies a valid same-host legacy session into the host-scoped namespace", t
   assert.equal(JSON.parse(fs.readFileSync(scoped, "utf8")).sessionKey, started.sessionKey);
 });
 
+test("preserves an opposite-host legacy session while creating a scoped session", t => {
+  const project = makeFixture(t);
+  const sessionId = "legacy-opposite-host";
+  const legacyKey = crypto.createHash("sha256").update(sessionId).digest("hex");
+  const harness = buildHarness({
+    projectRoot: project,
+    task: {id: "legacy-claude-task", goal: "Legacy Claude task", acceptanceCriteria: ["preserved"]}
+  });
+  writeHarness({projectRoot: project, harness});
+  const sessions = path.join(project, ".ai", "harness", "sessions");
+  fs.mkdirSync(sessions);
+  const legacyFile = path.join(sessions, `${legacyKey}.json`);
+  const legacy = {schemaVersion: 1, sessionKey: legacyKey, taskId: "legacy-claude-task", host: "claude", startedAt: "2026-09-09T00:00:00.000Z"};
+  fs.writeFileSync(legacyFile, `${JSON.stringify(legacy, null, 2)}\n`);
+
+  const codex = startHarnessSession({
+    projectRoot: project,
+    host: "codex",
+    sessionId,
+    newTask: true,
+    task: {id: "new-codex-task", goal: "New Codex task", acceptanceCriteria: ["created"]}
+  });
+
+  assert.equal(codex.resumed, false);
+  assert.equal(codex.taskId, "new-codex-task");
+  assert.deepEqual(JSON.parse(fs.readFileSync(legacyFile, "utf8")), legacy);
+  const scoped = JSON.parse(fs.readFileSync(path.join(sessions, `${codex.sessionKey}.json`), "utf8"));
+  assert.equal(scoped.host, "codex");
+  assert.equal(scoped.taskId, "new-codex-task");
+});
+
 test("CLI stays read-only until explicit persistence and never runs declared verification commands", t => {
   const project = makeFixture(t);
   const script = path.join(sourceRoot, "scripts", "harness-project.mjs");

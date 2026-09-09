@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {classifyHookCommand, handleHarnessHook} from "../scripts/harness-hook.mjs";
+import {defaultHarnessRuntimeRoot, installHarnessRuntime} from "../scripts/harness-runtime.mjs";
 
 function makeProject(t) {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "leon-harness-hook-"));
@@ -64,7 +65,7 @@ test("missing session identity allows only diagnostic reads", t => {
 });
 
 test("classifies the degraded-mode command boundary conservatively", () => {
-  const runtime = path.resolve(import.meta.dirname, "..", "scripts", "harness-runtime.mjs");
+  const runtime = path.join(defaultHarnessRuntimeRoot(), "harness-runtime.mjs");
   const diagnosticReads = [
     {tool_name: "Read", tool_input: {file_path: "/tmp/AGENTS.md"}},
     {tool_name: "Bash", tool_input: {command: "pwd"}},
@@ -192,6 +193,31 @@ test("hook CLI emits an allow decision with structured degraded diagnostics", t 
   assert.match(output.permissionDecisionReason, /classification=diagnostic_read/);
   assert.match(output.permissionDecisionReason, /stage=session_identity/);
   assert.doesNotMatch(executed.stdout, /PRIVATE_TOOL_INPUT/);
+  const diagnostic = JSON.parse(executed.stderr.trim());
+  assert.equal(diagnostic.component, "harness-hook");
+  assert.equal(diagnostic.stage, "session_identity");
+  assert.equal(diagnostic.code, "missing_session_id");
+  assert.match(diagnostic.runtimePath, /leon-engineering\/runtime$/);
+  assert.match(diagnostic.manifestPath, /\.leon-engineering-harness-runtime\.json$/);
+  assert.match(diagnostic.recoveryCommand, /--verify/);
+  assert.doesNotMatch(executed.stderr, /PRIVATE_TOOL_INPUT/);
+});
+
+test("an installed hook executes from a realpath-normalized temporary runtime", t => {
+  const project = makeProject(t);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "leon-installed-hook-"));
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  const runtimeRoot = path.join(root, "runtime");
+  const sourceRoot = path.resolve(import.meta.dirname, "..");
+  installHarnessRuntime({sourceRoot, runtimeRoot});
+
+  const result = spawnSync(process.execPath, [path.join(runtimeRoot, "harness-hook.mjs"), "--phase", "pre", "--host", "codex"], {
+    encoding: "utf8",
+    input: JSON.stringify({cwd: project, session_id: "installed-hook-session", tool_name: "Bash", tool_input: {command: "pwd"}})
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fs.existsSync(path.join(project, ".ai", "harness")), true);
 });
 
 test("Codex apply_patch hooks record a write event", t => {

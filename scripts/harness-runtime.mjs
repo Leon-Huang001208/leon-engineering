@@ -5,7 +5,11 @@ import path from "node:path";
 import {execFileSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
 
-const SOURCE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const MODULE_PARENT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const SOURCE_ROOT = fs.existsSync(path.join(MODULE_PARENT, ".claude-plugin", "plugin.json"))
+  && fs.existsSync(path.join(MODULE_PARENT, "scripts"))
+  ? MODULE_PARENT
+  : null;
 const MANIFEST_NAME = ".leon-engineering-harness-runtime.json";
 export const HARNESS_RUNTIME_FILES = [
   "harness-runtime.mjs",
@@ -95,6 +99,7 @@ function readManifest(runtimeRoot) {
 }
 
 export function installHarnessRuntime({sourceRoot = SOURCE_ROOT, runtimeRoot = defaultHarnessRuntimeRoot()}) {
+  if (!sourceRoot) throw new Error("canonical runtime source is required");
   const root = ensureSafeDirectory(runtimeRoot);
   const existing = readManifest(root);
   const entries = fs.readdirSync(root).filter(name => name !== MANIFEST_NAME);
@@ -113,7 +118,11 @@ export function installHarnessRuntime({sourceRoot = SOURCE_ROOT, runtimeRoot = d
 }
 
 export function verifyHarnessRuntime({sourceRoot = SOURCE_ROOT, runtimeRoot = defaultHarnessRuntimeRoot()}) {
-  const root = ensureSafeDirectory(runtimeRoot);
+  const root = path.resolve(runtimeRoot);
+  if (!fs.existsSync(root)) return {valid: false, drift: ["missing runtime directory"]};
+  const stat = fs.lstatSync(root);
+  if (stat.isSymbolicLink()) throw new Error("runtime directory cannot be a symbolic link");
+  if (!stat.isDirectory()) throw new Error("runtime path is not a directory");
   const manifest = readManifest(root);
   if (!manifest) return {valid: false, drift: ["missing runtime manifest"]};
   const files = sourceRoot ? sourceFiles(sourceRoot) : null;
@@ -139,7 +148,7 @@ function parseArgs(args) {
   return {action: actions[0], runtimeRoot: index >= 0 ? args[index + 1] : defaultHarnessRuntimeRoot()};
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))) {
   try {
     const options = parseArgs(process.argv.slice(2));
     const result = options.action === "--install"

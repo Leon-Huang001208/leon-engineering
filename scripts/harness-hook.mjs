@@ -3,9 +3,12 @@ import fs from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {appendHarnessEvent, startHarnessSession} from "./harness-project.mjs";
-import {verifyHarnessRuntime} from "./harness-runtime.mjs";
+import {defaultHarnessRuntimeRoot, verifyHarnessRuntime} from "./harness-runtime.mjs";
 
-const RUNTIME_PATH = path.dirname(fileURLToPath(import.meta.url));
+const MODULE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
+const SOURCE_RUNTIME = path.basename(MODULE_DIRECTORY) === "scripts"
+  && fs.existsSync(path.join(MODULE_DIRECTORY, "..", ".claude-plugin", "plugin.json"));
+const RUNTIME_PATH = SOURCE_RUNTIME ? defaultHarnessRuntimeRoot() : MODULE_DIRECTORY;
 const MANIFEST_PATH = path.join(RUNTIME_PATH, ".leon-engineering-harness-runtime.json");
 const WRITE_TOOLS = new Set(["apply_patch", "Edit", "Write", "MultiEdit"]);
 const MUTATING_EXECUTABLES = new Set(["apply_patch", "chmod", "chown", "cp", "install", "mkdir", "mv", "rm", "tee", "touch"]);
@@ -139,7 +142,7 @@ export function classifyHookCommand(input) {
 }
 
 function sourceRuntime() {
-  return path.basename(RUNTIME_PATH) === "scripts" && fs.existsSync(path.join(RUNTIME_PATH, "..", ".claude-plugin", "plugin.json"));
+  return SOURCE_RUNTIME;
 }
 
 function verifyManagedRuntime() {
@@ -147,7 +150,9 @@ function verifyManagedRuntime() {
   const verification = verifyHarnessRuntime({sourceRoot: null, runtimeRoot: RUNTIME_PATH});
   if (verification.valid) return;
   const error = new Error(`runtime integrity check failed: ${verification.drift.join(", ")}`);
-  error.code = verification.drift.includes("missing runtime manifest") ? "HARNESS_RUNTIME_MISSING" : "HARNESS_RUNTIME_DRIFT";
+  error.code = verification.drift.some(item => ["missing runtime directory", "missing runtime manifest"].includes(item))
+    ? "HARNESS_RUNTIME_MISSING"
+    : "HARNESS_RUNTIME_DRIFT";
   throw error;
 }
 
@@ -202,6 +207,10 @@ function initializationFailure({phase, input, error, stage}) {
   return classification === "diagnostic_read"
     ? {decision: "allow", degraded: true, ...result}
     : {decision: "deny", ...result};
+}
+
+function logDiagnostic(diagnostic) {
+  process.stderr.write(`${JSON.stringify({component: "harness-hook", ...diagnostic})}\n`);
 }
 
 function taskIdFor(host, sessionId) {
@@ -276,6 +285,7 @@ async function main(args) {
     input = {};
   }
   const result = handleHarnessHook({phase, input, host});
+  if (result.diagnostic) logDiagnostic(result.diagnostic);
   if (phase === "pre" && (result.decision === "deny" || result.degraded)) {
     process.stdout.write(JSON.stringify({hookSpecificOutput: {
       hookEventName: "PreToolUse",
@@ -285,12 +295,14 @@ async function main(args) {
   }
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))) {
   main(process.argv.slice(2)).catch(() => {
+    const diagnostic = initializationDiagnostic(new Error("Harness hook execution failed."), "hook_execution");
+    logDiagnostic(diagnostic);
     process.stdout.write(JSON.stringify({hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
-      permissionDecisionReason: "Harness hook failed; project mutation is blocked."
+      permissionDecisionReason: diagnosticReason(diagnostic, "unknown")
     }}));
   });
 }
