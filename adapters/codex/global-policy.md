@@ -7,7 +7,7 @@
 - 对用户指定 Git 项目中的实现性改动，默认自动使用 `iteration-delivery` 完成闭环：从最新远端默认分支创建任务分支和隔离 worktree，提交并做分支验证，在临时集成 worktree 合并并重新验证，发布远端默认分支，等待 CI，再安全删除本地/远端任务分支和全部临时 worktree。默认分支从 `origin/HEAD` 识别；优先直推，保护规则拒绝时自动转 PR 并启用自动合并。该长期策略已授权，不得再次询问是否合并、推送或删除分支。
 - 显式 `no-push`、仅本地、草稿、调研、评审或只读任务不自动发布。项目级规则、分支保护、平台验证、秘密、依赖、发布、迁移和其他独立授权边界仍优先。全程禁止 force-push、强删脏 worktree 或删除未进入默认分支的提交；CI 失败最多修复三轮，之后只在远端 tip 完全属于本任务且回滚验证通过时自动回滚，否则保留现场并报告阻塞。
 - 对用户已启用强制 Harness 的目标项目，任何会形成项目交付、改动或调研结论的新任务都必须在第一次项目工具操作前自动开始 Harness；使用新的不透明任务键和 `harness-session.mjs --start --new-task`，不得要求用户手工建账。任务继续时恢复既有上下文；纯聊天和未指定项目的知识问答不创建项目记录。
-- Codex 全局 `PreToolUse`/`PostToolUse` Hook 会在本地工具边界自动建立或恢复 Harness 上下文，并记录非敏感事件。初始化失败时只开放受控的 `diagnostic_read`（`pwd`、受限 `sed`/`rg` 读取、Git 只读查询及受管 runtime `--verify`）；文件修改、Git 写入、安装和无法明确分类的命令继续 fail-closed。拒绝原因必须包含脱敏的失败阶段、错误代码、runtime/manifest 路径和恢复命令。实现任务以 `--delivery-required` 建账，最终运行 `harness-enforce.mjs --project <项目目录> --task-id <任务 ID> --require-delivery`；硬门除真实验证证据外还实时核验 receipt、远端提交、CI、任务分支和 worktree。Harness 只验证状态，不直接运行 Git。
+- Codex 全局 `PreToolUse`/`PostToolUse` Hook 会在本地工具边界自动建立或恢复 Harness 上下文，并记录非敏感事件。初始化失败时只开放受控的 `diagnostic_read`（`pwd`、配置/指令读取、受限 `sed`/`rg`、Git 只读查询及受管 runtime `--verify`）；`mutation` 与无法明确分类的 `unknown` 继续 fail closed。诊断只输出失败阶段、稳定错误码、runtime/manifest 路径和恢复命令，不回显原始异常或工具输入。实现任务以 `--delivery-required` 建账，最终运行 `harness-enforce.mjs --project <项目目录> --task-id <任务 ID> --require-delivery`；硬门除真实验证证据外还实时核验 receipt、远端提交、CI、任务分支和 worktree。Harness 只验证状态，不直接运行 Git。
 - 在改动前读取目标项目的指令、架构入口、运行方式、测试、日志和 CI 约定；仅记录已由文件或命令验证的事实。需要把项目档案写入仓库时，先取得明确授权。
 - 依据耦合度和风险选择直接执行、只读调研、隔离 worktree 或用户明确同意的代理团队。代理不得递归委派；涉及秘密、依赖、远程变更、发布、迁移、CI、全局配置或破坏性操作时升级处理。
 - 代码改动使用项目的日志和错误处理模式，并运行与风险相称的实际验证。交付必须区分已执行的证据与未验证的平台、环境或风险。

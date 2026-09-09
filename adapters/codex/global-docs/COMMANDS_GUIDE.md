@@ -43,13 +43,13 @@ node scripts/profile-project.mjs --project /absolute/project --format markdown
 node "$HOME/.agents/leon-engineering/runtime/harness-session.mjs" --start --new-task --project /absolute/project --host codex --session-id opaque-task-key --task-id task-id --goal "目标" --acceptance "验收标准" --delivery-required
 ```
 
-会话键包含宿主，Claude 与 Codex 即使收到相同 opaque session ID 也不会争用文件。若初始化失败，Hook 只允许 `pwd`、下述 runtime verify 或原生 `Read` 继续诊断；其他 shell、写入和未知工具保持拒绝。stderr 的结构化诊断只含 `phase`、稳定 `code`、`runtimePath`、`manifestPath` 与 `recovery`，不回显项目路径、命令或 session ID：
+会话键包含宿主，Claude 与 Codex 即使收到相同 opaque session ID 也不会争用文件。若 Hook 报告 Harness 初始化失败，先执行下述受管 runtime 自检；该命令属于允许的只读恢复诊断。其他写入与无法证明只读的操作保持拒绝，stderr 的结构化诊断不回显项目路径、命令或 session ID：
 
 ```bash
 node "$HOME/.agents/leon-engineering/runtime/harness-runtime.mjs" --verify
 ```
 
-安装副本自检只读核对自身清单；从权威仓库运行 `--verify-global` 时还会比较源码，能够识别陈旧安装。
+安装副本自检通过清单回指权威源并校验两侧内容；从权威仓库运行 `--verify-global` 时也会比较源码，能够识别陈旧安装。失败输出只提供阶段、稳定错误码、runtime/manifest 路径和恢复建议。恢复期间只有 `pwd`、配置/指令读取、`rg`/只读 `sed`、Git 只读命令和上述自检可放行；修改类与无法证明只读的命令仍拒绝。若自检失败，从 `leon-engineering` 权威源重新运行全局安装器后再次校验，不要手工修改安装副本。
 
 完成任务后，执行者先独立运行验证，再用 `--record-outcome` 写入已经观察到的状态、澄清轮次、返工次数、实测验证秒数和验证命令；记录命令本身不会运行该验证命令。`blocked` 结果还必须写入标准化阻塞分类，不能从推测补填。随后运行只读交付硬门；它不会执行任务命令，但会拒绝缺少开始事件、通过验证结果或验证完成事件的交付：
 

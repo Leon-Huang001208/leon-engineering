@@ -5,11 +5,7 @@ import path from "node:path";
 import {execFileSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
 
-const MODULE_PARENT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SOURCE_ROOT = fs.existsSync(path.join(MODULE_PARENT, ".claude-plugin", "plugin.json"))
-  && fs.existsSync(path.join(MODULE_PARENT, "scripts"))
-  ? MODULE_PARENT
-  : null;
+const MODULE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const MANIFEST_NAME = ".leon-engineering-harness-runtime.json";
 export const HARNESS_RUNTIME_FILES = [
   "harness-runtime.mjs",
@@ -37,6 +33,22 @@ function frameworkVersion(sourceRoot) {
 
 function sourceCommit(sourceRoot) {
   return execFileSync("git", ["-C", sourceRoot, "rev-parse", "HEAD"], {encoding: "utf8"}).trim();
+}
+
+function defaultCanonicalSourceRoot() {
+  const plugin = path.join(MODULE_ROOT, ".claude-plugin", "plugin.json");
+  const scripts = path.join(MODULE_ROOT, "scripts");
+  if (!fs.existsSync(plugin) || !fs.existsSync(scripts)) return null;
+  return fs.realpathSync(MODULE_ROOT);
+}
+
+function requireCanonicalSourceRoot(sourceRoot) {
+  if (typeof sourceRoot !== "string" || sourceRoot.trim().length === 0) {
+    throw new Error("canonical runtime source is required");
+  }
+  const root = fs.realpathSync(path.resolve(sourceRoot));
+  frameworkVersion(root);
+  return root;
 }
 
 function ensureSafeDirectory(directory) {
@@ -88,29 +100,33 @@ function readManifest(runtimeRoot) {
   if (manifest.schemaVersion !== 1 || manifest.adapter !== "leon-engineering" || !manifest.files || typeof manifest.files !== "object") {
     throw new Error("invalid runtime manifest");
   }
+  if (manifest.sourceRoot !== undefined && (typeof manifest.sourceRoot !== "string" || !path.isAbsolute(manifest.sourceRoot))) {
+    throw new Error("invalid runtime manifest");
+  }
   return manifest;
 }
 
-export function installHarnessRuntime({sourceRoot = SOURCE_ROOT, runtimeRoot = defaultHarnessRuntimeRoot()}) {
-  if (!sourceRoot) throw new Error("canonical runtime source is required");
+export function installHarnessRuntime({sourceRoot = defaultCanonicalSourceRoot(), runtimeRoot = defaultHarnessRuntimeRoot()} = {}) {
+  const canonicalRoot = requireCanonicalSourceRoot(sourceRoot);
   const root = ensureSafeDirectory(runtimeRoot);
   const existing = readManifest(root);
   const entries = fs.readdirSync(root).filter(name => name !== MANIFEST_NAME);
   if (!existing && entries.length > 0) throw new Error("foreign runtime directory");
-  const files = sourceFiles(sourceRoot);
+  const files = sourceFiles(canonicalRoot);
   for (const name of HARNESS_RUNTIME_FILES) writeAtomically(path.join(root, name), files[name].content);
   const manifest = {
     schemaVersion: 1,
     adapter: "leon-engineering",
-    frameworkVersion: frameworkVersion(sourceRoot),
-    sourceCommit: sourceCommit(sourceRoot),
+    frameworkVersion: frameworkVersion(canonicalRoot),
+    sourceCommit: sourceCommit(canonicalRoot),
+    sourceRoot: canonicalRoot,
     files: Object.fromEntries(HARNESS_RUNTIME_FILES.map(name => [name, files[name].checksum]))
   };
   writeAtomically(path.join(root, MANIFEST_NAME), `${JSON.stringify(manifest, null, 2)}\n`);
   return {runtimeRoot: root, files: HARNESS_RUNTIME_FILES, manifest};
 }
 
-export function verifyHarnessRuntime({sourceRoot = SOURCE_ROOT, runtimeRoot = defaultHarnessRuntimeRoot()}) {
+export function verifyHarnessRuntime({sourceRoot, runtimeRoot = defaultHarnessRuntimeRoot()} = {}) {
   const root = path.resolve(runtimeRoot);
   if (!fs.existsSync(root)) return {valid: false, drift: ["missing runtime directory"]};
   const stat = fs.lstatSync(root);
@@ -118,7 +134,14 @@ export function verifyHarnessRuntime({sourceRoot = SOURCE_ROOT, runtimeRoot = de
   if (!stat.isDirectory()) throw new Error("runtime path is not a directory");
   const manifest = readManifest(root);
   if (!manifest) return {valid: false, drift: ["missing runtime manifest"]};
-  const files = sourceRoot ? sourceFiles(sourceRoot) : null;
+  const candidateSource = sourceRoot ?? defaultCanonicalSourceRoot() ?? manifest.sourceRoot;
+  let files = null;
+  const sourceDrift = [];
+  try {
+    files = sourceFiles(requireCanonicalSourceRoot(candidateSource));
+  } catch {
+    sourceDrift.push("canonical source unavailable");
+  }
   const drift = HARNESS_RUNTIME_FILES.filter(name => {
     const destination = path.join(root, name);
     if (!fs.existsSync(destination)) return true;
@@ -127,7 +150,8 @@ export function verifyHarnessRuntime({sourceRoot = SOURCE_ROOT, runtimeRoot = de
     const installedChecksum = checksum(fs.readFileSync(destination));
     return installedChecksum !== manifest.files[name] || (files && installedChecksum !== files[name].checksum);
   });
-  return {valid: drift.length === 0, drift};
+  const combined = [...sourceDrift, ...drift];
+  return {valid: combined.length === 0, drift: combined};
 }
 
 function parseArgs(args) {
@@ -144,9 +168,7 @@ function parseArgs(args) {
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))) {
   try {
     const options = parseArgs(process.argv.slice(2));
-    const result = options.action === "--install"
-      ? installHarnessRuntime(options)
-      : verifyHarnessRuntime({runtimeRoot: options.runtimeRoot, sourceRoot: SOURCE_ROOT});
+    const result = options.action === "--install" ? installHarnessRuntime(options) : verifyHarnessRuntime(options);
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     if (!result.valid && options.action === "--verify") process.exitCode = 1;
   } catch (error) {

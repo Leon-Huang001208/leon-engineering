@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {appendHarnessEvent, startHarnessSession} from "./harness-project.mjs";
@@ -10,13 +11,17 @@ const SOURCE_RUNTIME = path.basename(MODULE_DIRECTORY) === "scripts"
   && fs.existsSync(path.join(MODULE_DIRECTORY, "..", ".claude-plugin", "plugin.json"));
 const RUNTIME_PATH = SOURCE_RUNTIME ? defaultHarnessRuntimeRoot() : MODULE_DIRECTORY;
 const MANIFEST_PATH = path.join(RUNTIME_PATH, ".leon-engineering-harness-runtime.json");
-const WRITE_TOOLS = new Set(["apply_patch", "Edit", "Write", "MultiEdit"]);
-const MUTATING_EXECUTABLES = new Set(["apply_patch", "chmod", "chown", "cp", "install", "mkdir", "mv", "rm", "tee", "touch"]);
+const SHELL_TOOLS = new Set(["Bash", "Shell", "exec_command", "shell_command"]);
+const READ_TOOLS = new Set(["Read", "read_file"]);
+const MUTATION_TOOLS = new Set(["apply_patch", "Edit", "Write", "MultiEdit", "NotebookEdit", "write_stdin"]);
+const MUTATING_EXECUTABLES = new Set(["apply_patch", "chmod", "chown", "cp", "install", "mkdir", "mv", "rm", "tee", "touch", "truncate"]);
 const MUTATING_GIT_ACTIONS = new Set([
   "add", "am", "apply", "bisect", "checkout", "cherry-pick", "clean", "clone", "commit", "fetch", "gc", "init", "merge",
-  "mv", "notes", "pull", "push", "rebase", "reflog", "remote", "reset", "restore", "revert", "rm", "stash", "switch", "tag"
+  "mv", "notes", "pull", "push", "rebase", "reflog", "reset", "restore", "revert", "rm", "stash", "switch"
 ]);
-const READ_ONLY_GIT_ACTIONS = new Set(["cat-file", "diff", "log", "ls-files", "ls-tree", "merge-base", "name-rev", "rev-parse", "show", "show-ref", "status"]);
+const READ_ONLY_GIT_ACTIONS = new Set([
+  "cat-file", "describe", "diff", "log", "ls-files", "ls-remote", "ls-tree", "merge-base", "name-rev", "rev-parse", "show", "show-ref", "status"
+]);
 
 function projectRoot(cwd) {
   if (typeof cwd !== "string" || cwd.length === 0) return null;
@@ -45,9 +50,9 @@ function opaqueSessionId(input, host) {
 }
 
 function toolCategory(name) {
-  if (name === "Bash") return "shell";
-  if (["apply_patch", "Edit", "Write", "MultiEdit"].includes(name)) return "write";
-  if (name === "Read") return "read";
+  if (SHELL_TOOLS.has(name)) return "shell";
+  if (MUTATION_TOOLS.has(name)) return "write";
+  if (READ_TOOLS.has(name)) return "read";
   return "other";
 }
 
@@ -79,25 +84,62 @@ function shellCommand(input) {
   return input?.tool_input?.command ?? input?.tool_input?.cmd;
 }
 
-function classifyGit(words) {
+function gitAction(words) {
   let index = 1;
-  if (words[index] === "--no-pager") index += 1;
-  if (words[index] === "-C") index += 2;
-  const action = words[index];
+  while (index < words.length) {
+    if (["-C", "--git-dir", "--work-tree", "--namespace"].includes(words[index])) {
+      index += 2;
+      continue;
+    }
+    if (/^--(?:git-dir|work-tree|namespace)=/.test(words[index]) || ["--no-pager", "--literal-pathspecs", "--no-optional-locks"].includes(words[index])) {
+      index += 1;
+      continue;
+    }
+    return {action: words[index], args: words.slice(index + 1)};
+  }
+  return {action: null, args: []};
+}
+
+function classifyGit(words) {
+  const {action, args} = gitAction(words);
   if (!action) return "unknown";
-  if (MUTATING_GIT_ACTIONS.has(action)) {
-    if (action === "remote" && [undefined, "-v", "get-url"].includes(words[index + 1])) return "diagnostic_read";
-    return "mutation";
-  }
-  if (action === "worktree") return words[index + 1] === "list" ? "diagnostic_read" : "mutation";
+  if (MUTATING_GIT_ACTIONS.has(action)) return "mutation";
+  if (action === "remote") return args.length === 0 || args[0] === "-v" || ["get-url", "show"].includes(args[0]) ? "diagnostic_read" : "mutation";
+  if (action === "worktree") return args[0] === "list" ? "diagnostic_read" : "mutation";
   if (action === "branch") {
-    return words.slice(index + 1).every(word => ["--show-current", "--list", "-a", "-r", "-v", "-vv"].includes(word))
-      ? "diagnostic_read"
-      : "mutation";
+    if (args.length === 0) return "diagnostic_read";
+    return ["--all", "-a", "--contains", "--list", "-l", "--merged", "--no-contains", "--no-merged", "--points-at", "--remotes", "-r", "--show-current", "-v", "-vv"].includes(args[0]) ? "diagnostic_read" : "mutation";
   }
+  if (action === "symbolic-ref") return args.filter(argument => !["-q", "--quiet", "--short"].includes(argument)).length === 1 ? "diagnostic_read" : "mutation";
+  if (action === "tag") return args.length === 0 || args[0] === "--list" || args[0] === "-l" ? "diagnostic_read" : "mutation";
+  if (action === "config") return args.some(argument => ["--get", "--get-all", "--get-regexp", "--list", "-l"].includes(argument)) ? "diagnostic_read" : "mutation";
   if (!READ_ONLY_GIT_ACTIONS.has(action)) return "unknown";
-  const unsafe = words.slice(index + 1).some(word => ["--ext-diff", "--textconv", "--filters", "--output", "--paginate"].includes(word) || word.startsWith("--output="));
+  const unsafe = args.some(word => ["--ext-diff", "--textconv", "--filters", "--output", "--paginate"].includes(word) || word.startsWith("--output="));
   return unsafe ? "unknown" : "diagnostic_read";
+}
+
+function resolvedRuntimePath(word) {
+  if (typeof word !== "string" || word.length === 0) return null;
+  let candidate = word;
+  if (candidate.startsWith("$HOME/")) candidate = path.join(os.homedir(), candidate.slice(6));
+  else if (candidate.startsWith("${HOME}/")) candidate = path.join(os.homedir(), candidate.slice(8));
+  else if (candidate.startsWith("~/")) candidate = path.join(os.homedir(), candidate.slice(2));
+  return path.resolve(candidate);
+}
+
+function isManagedRuntimeVerify(words) {
+  if (path.basename(words[0] ?? "") !== "node") return false;
+  const script = resolvedRuntimePath(words[1]);
+  if (!new Set([
+    path.join(RUNTIME_PATH, "harness-runtime.mjs"),
+    path.join(defaultHarnessRuntimeRoot(), "harness-runtime.mjs")
+  ]).has(script)) return false;
+  const args = words.slice(2);
+  if (args.length === 1 && args[0] === "--verify") return true;
+  return args.length === 3
+    && args[0] === "--verify"
+    && args[1] === "--runtime-root"
+    && resolvedRuntimePath(args[2]) === path.dirname(script);
 }
 
 function classifyShell(command) {
@@ -126,20 +168,17 @@ function classifyShell(command) {
     const unsafe = words.slice(1).some(word => word === "--pre" || word.startsWith("--pre=") || word === "--hostname-bin" || word.startsWith("--hostname-bin="));
     return unsafe ? "unknown" : "diagnostic_read";
   }
-  if (executable === "node" && path.resolve(words[1] ?? "") === path.join(RUNTIME_PATH, "harness-runtime.mjs")) {
-    const args = words.slice(2);
-    if (args.length === 1 && args[0] === "--verify") return "diagnostic_read";
-    if (args.length === 3 && args[0] === "--verify" && args[1] === "--runtime-root" && path.resolve(args[2]) === RUNTIME_PATH) return "diagnostic_read";
-  }
-  return "unknown";
+  return isManagedRuntimeVerify(words) ? "diagnostic_read" : "unknown";
 }
 
 export function classifyHookCommand(input) {
-  if (input?.tool_name === "Read") return "diagnostic_read";
-  if (WRITE_TOOLS.has(input?.tool_name)) return "mutation";
-  if (input?.tool_name === "Bash") return classifyShell(shellCommand(input));
+  if (READ_TOOLS.has(input?.tool_name)) return "diagnostic_read";
+  if (MUTATION_TOOLS.has(input?.tool_name)) return "mutation";
+  if (SHELL_TOOLS.has(input?.tool_name)) return classifyShell(shellCommand(input));
   return "unknown";
 }
+
+export const classifyHookOperation = classifyHookCommand;
 
 function sourceRuntime() {
   return SOURCE_RUNTIME;
@@ -147,27 +186,19 @@ function sourceRuntime() {
 
 function verifyManagedRuntime() {
   if (sourceRuntime()) return;
-  const verification = verifyHarnessRuntime({sourceRoot: null, runtimeRoot: RUNTIME_PATH});
+  const verification = verifyHarnessRuntime({runtimeRoot: RUNTIME_PATH});
   if (verification.valid) return;
-  const error = new Error(`runtime integrity check failed: ${verification.drift.join(", ")}`);
+  const error = new Error("runtime integrity check failed");
   error.code = verification.drift.some(item => ["missing runtime directory", "missing runtime manifest"].includes(item))
     ? "HARNESS_RUNTIME_MISSING"
     : "HARNESS_RUNTIME_DRIFT";
   throw error;
 }
 
-function sanitizeErrorMessage(error) {
-  return String(error?.message || "unknown initialization error")
-    .replace(/\b(?:ghp|github_pat|sk)-[A-Za-z0-9_-]+\b/gi, "[REDACTED]")
-    .replace(/((?:token|secret|password|api[_-]?key)\s*[:=]\s*)[^\s,;]+/gi, "$1[REDACTED]")
-    .replace(/[\r\n]+/g, " ")
-    .slice(0, 240);
-}
-
 function diagnosticCode(error, stage) {
   if (error?.code === "HARNESS_SESSION_ID_MISSING") return "missing_session_id";
   if (error?.code === "HARNESS_RUNTIME_MISSING" || (stage === "runtime_verify" && error?.code === "ENOENT")) return "runtime_missing";
-  if (error?.code === "HARNESS_RUNTIME_DRIFT" || /runtime manifest|runtime integrity/i.test(error?.message ?? "")) return "manifest_drift";
+  if (error?.code === "HARNESS_RUNTIME_DRIFT") return "manifest_drift";
   if (["EACCES", "EPERM"].includes(error?.code)) return "permission_denied";
   if (/invalid harness session/i.test(error?.message ?? "")) return "invalid_session_state";
   if (/(?:harness )?task record/i.test(error?.message ?? "")) return "invalid_task_state";
@@ -179,7 +210,6 @@ function initializationDiagnostic(error, stage) {
   return {
     stage,
     code: diagnosticCode(error, stage),
-    message: sanitizeErrorMessage(error),
     runtimePath: RUNTIME_PATH,
     manifestPath: MANIFEST_PATH,
     recoveryCommand: `node "${path.join(RUNTIME_PATH, "harness-runtime.mjs")}" --verify --runtime-root "${RUNTIME_PATH}"`
@@ -187,12 +217,12 @@ function initializationDiagnostic(error, stage) {
 }
 
 function diagnosticReason(diagnostic, classification) {
+  const prefix = diagnostic.code === "missing_session_id" ? "Harness requires an opaque session id" : "Harness initialization failed";
   return [
-    `Harness initialization failed`,
+    prefix,
     `classification=${classification}`,
     `stage=${diagnostic.stage}`,
     `code=${diagnostic.code}`,
-    `message=${diagnostic.message}`,
     `runtime=${diagnostic.runtimePath}`,
     `manifest=${diagnostic.manifestPath}`,
     `recovery=${diagnostic.recoveryCommand}`
@@ -200,17 +230,13 @@ function diagnosticReason(diagnostic, classification) {
 }
 
 function initializationFailure({phase, input, error, stage}) {
-  if (phase === "post") return {decision: "allow", skipped: true};
   const classification = classifyHookCommand(input);
   const diagnostic = initializationDiagnostic(error, stage);
   const result = {classification, diagnostic, reason: diagnosticReason(diagnostic, classification)};
+  if (phase === "post") return {decision: "allow", skipped: true, degraded: true, ...result};
   return classification === "diagnostic_read"
     ? {decision: "allow", degraded: true, ...result}
     : {decision: "deny", ...result};
-}
-
-function logDiagnostic(diagnostic) {
-  process.stderr.write(`${JSON.stringify({component: "harness-hook", ...diagnostic})}\n`);
 }
 
 function taskIdFor(host, sessionId) {
@@ -235,7 +261,7 @@ export function handleHarnessHook({
     stage = "session_identity";
     const sessionId = opaqueSessionId(input ?? {}, host);
     if (!sessionId) {
-      const error = new Error(`Harness requires an opaque ${host === "claude" ? "Claude Code" : "Codex"} session id.`);
+      const error = new Error("missing harness session identity");
       error.code = "HARNESS_SESSION_ID_MISSING";
       throw error;
     }
@@ -265,6 +291,26 @@ export function handleHarnessHook({
   }
 }
 
+function logDiagnostic(result) {
+  if (!result.diagnostic) return;
+  process.stderr.write(`${JSON.stringify({
+    component: "harness-hook",
+    event: "initialization_failed",
+    classification: result.classification,
+    decision: result.decision,
+    ...result.diagnostic
+  })}\n`);
+}
+
+function writePreHookDecision(result) {
+  if (result.decision !== "deny" && !result.degraded) return;
+  process.stdout.write(JSON.stringify({hookSpecificOutput: {
+    hookEventName: "PreToolUse",
+    permissionDecision: result.decision,
+    permissionDecisionReason: result.reason
+  }}));
+}
+
 function parseArgs(args) {
   if (args.length < 2 || args[0] !== "--phase" || !["pre", "post"].includes(args[1])) {
     throw new Error("use --phase pre|post [--host claude|codex]");
@@ -282,27 +328,23 @@ async function main(args) {
   try {
     input = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
   } catch {
-    input = {};
+    throw new Error("invalid harness hook input");
   }
   const result = handleHarnessHook({phase, input, host});
-  if (result.diagnostic) logDiagnostic(result.diagnostic);
-  if (phase === "pre" && (result.decision === "deny" || result.degraded)) {
-    process.stdout.write(JSON.stringify({hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: result.decision,
-      permissionDecisionReason: result.reason
-    }}));
-  }
+  logDiagnostic(result);
+  if (phase === "pre") writePreHookDecision(result);
 }
 
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))) {
-  main(process.argv.slice(2)).catch(() => {
-    const diagnostic = initializationDiagnostic(new Error("Harness hook execution failed."), "hook_execution");
-    logDiagnostic(diagnostic);
-    process.stdout.write(JSON.stringify({hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason: diagnosticReason(diagnostic, "unknown")
-    }}));
+  main(process.argv.slice(2)).catch((error) => {
+    const diagnostic = initializationDiagnostic(error, "hook_protocol");
+    const result = {
+      decision: "deny",
+      classification: "unknown",
+      diagnostic,
+      reason: diagnosticReason(diagnostic, "unknown")
+    };
+    logDiagnostic(result);
+    writePreHookDecision(result);
   });
 }

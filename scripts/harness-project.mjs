@@ -368,8 +368,8 @@ export function startHarnessSession({projectRoot, host, sessionId, task, newTask
       addHarnessTask({projectRoot: root, task: normalizedTask});
     }
   }
-  const context = {schemaVersion: 1, sessionKey: key, taskId: normalizedTask.id, host: normalizedHost, startedAt: new Date().toISOString()};
-  writeAtomically(destination, `${JSON.stringify(context, null, 2)}\n`);
+  const newContext = {schemaVersion: 1, sessionKey: key, taskId: normalizedTask.id, host: normalizedHost, startedAt: new Date().toISOString()};
+  writeAtomically(destination, `${JSON.stringify(newContext, null, 2)}\n`);
   appendHarnessEvent({projectRoot: root, taskId: normalizedTask.id, event: {event: "task_started", host: normalizedHost}});
   return {directory: harnessDirectory, taskId: normalizedTask.id, sessionKey: key, resumed: false};
 }
