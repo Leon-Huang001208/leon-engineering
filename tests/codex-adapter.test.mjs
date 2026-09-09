@@ -73,6 +73,30 @@ test("detects global hook drift and refuses to roll it back", t => {
   assert.throws(() => rollbackGlobalFramework({sourceRoot, codexHome}), /drifted global framework/);
 });
 
+test("repairs a canonical managed hook subset without accepting foreign hook content", t => {
+  const codexHome = makeCodexHome(t);
+  installGlobalFramework({sourceRoot, codexHome});
+  const hooksPath = path.join(codexHome, "hooks.json");
+  const hooks = JSON.parse(fs.readFileSync(hooksPath, "utf8"));
+  delete hooks.hooks.PreToolUse;
+  fs.writeFileSync(hooksPath, `${JSON.stringify(hooks, null, 2)}\n`);
+
+  installGlobalFramework({sourceRoot, codexHome});
+  assert.equal(verifyGlobalFramework({sourceRoot, codexHome}).valid, true);
+  assert.equal(
+    JSON.parse(fs.readFileSync(hooksPath, "utf8")).hooks.PreToolUse[0].hooks[0].type,
+    "command"
+  );
+
+  const drifted = JSON.parse(fs.readFileSync(hooksPath, "utf8"));
+  drifted.hooks.PostToolUse.push({matcher: ".*", hooks: []});
+  fs.writeFileSync(hooksPath, `${JSON.stringify(drifted, null, 2)}\n`);
+  assert.throws(
+    () => installGlobalFramework({sourceRoot, codexHome}),
+    /drifted global hooks/
+  );
+});
+
 test("adopts a matching legacy hook file and preserves it on rollback", t => {
   const codexHome = makeCodexHome(t);
   installGlobalFramework({sourceRoot, codexHome});

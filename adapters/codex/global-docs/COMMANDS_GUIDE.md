@@ -12,6 +12,8 @@ node scripts/install-codex-adapter.mjs --rollback-global --codex-home "$HOME/.co
 
 `--install-global` 会先拒绝与用户文件冲突的文档或未受管策略区块。`--verify-global` 只读检查策略和六份文档。`--rollback-global` 只在内容未漂移时移除该框架拥有的文档和标记区块；它不会修改技能、插件、模型、MCP、凭据或项目。
 
+受管 `hooks.json` 若只剩规范模板中完全一致的事件子集，安装器可补回缺失的受管事件；任何额外事件、matcher 或命令仍按外来漂移拒绝覆盖。
+
 本地 Claude 插件已经安装时，`claude plugin install` 只会报告“已安装”，不会刷新缓存版本。框架源码的插件版本升级后，应使用下面命令，并在现有 Claude Code 会话中重启后才会生效：
 
 ```bash
