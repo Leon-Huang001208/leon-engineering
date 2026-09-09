@@ -189,7 +189,11 @@ test("rebuilds integration for new feature commits after a completed delivery", 
   commit(started.featureWorktree, "feat: first delivery");
 
   const prepared = prepareDelivery({projectRoot: project, taskId: "task-follow-up"});
-  git(project, ["push", "origin", `${prepared.integrationCommit}:refs/heads/main`]);
+  publishDelivery({
+    projectRoot: project,
+    taskId: "task-follow-up",
+    verification: {command: "node --test", status: "passed", durationSeconds: 1}
+  });
   refreshDeliveryStatus({
     projectRoot: project,
     taskId: "task-follow-up",
@@ -213,8 +217,12 @@ test("rejects a completed delivery without new feature commits", t => {
   fs.writeFileSync(path.join(started.featureWorktree, "feature.txt"), "first\n");
   commit(started.featureWorktree, "feat: only delivery");
 
-  const prepared = prepareDelivery({projectRoot: project, taskId: "task-no-follow-up"});
-  git(project, ["push", "origin", `${prepared.integrationCommit}:refs/heads/main`]);
+  prepareDelivery({projectRoot: project, taskId: "task-no-follow-up"});
+  publishDelivery({
+    projectRoot: project,
+    taskId: "task-no-follow-up",
+    verification: {command: "node --test", status: "passed", durationSeconds: 1}
+  });
   refreshDeliveryStatus({
     projectRoot: project,
     taskId: "task-no-follow-up",
