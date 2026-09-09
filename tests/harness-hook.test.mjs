@@ -1,9 +1,10 @@
 import fs from "node:fs";
+import {spawnSync} from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
-import {handleHarnessHook} from "../scripts/harness-hook.mjs";
+import {classifyHookCommand, handleHarnessHook} from "../scripts/harness-hook.mjs";
 
 function makeProject(t) {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "leon-harness-hook-"));
@@ -39,6 +40,158 @@ test("Claude pre hook fails closed when an eligible project has no opaque sessio
   assert.equal(result.decision, "deny");
   assert.match(result.reason, /session id/);
   assert.equal(fs.existsSync(path.join(project, ".ai")), false);
+});
+
+test("missing session identity allows only diagnostic reads", t => {
+  const project = makeProject(t);
+  const diagnostic = handleHarnessHook({
+    phase: "pre",
+    input: {cwd: project, tool_name: "Bash", tool_input: {command: "pwd"}}
+  });
+  const unknown = handleHarnessHook({
+    phase: "pre",
+    input: {cwd: project, tool_name: "Bash", tool_input: {command: "custom-doctor"}}
+  });
+
+  assert.equal(diagnostic.decision, "allow");
+  assert.equal(diagnostic.degraded, true);
+  assert.equal(diagnostic.classification, "diagnostic_read");
+  assert.equal(diagnostic.diagnostic.stage, "session_identity");
+  assert.equal(diagnostic.diagnostic.code, "missing_session_id");
+  assert.equal(unknown.decision, "deny");
+  assert.equal(unknown.classification, "unknown");
+  assert.equal(fs.existsSync(path.join(project, ".ai")), false);
+});
+
+test("classifies the degraded-mode command boundary conservatively", () => {
+  const runtime = path.resolve(import.meta.dirname, "..", "scripts", "harness-runtime.mjs");
+  const diagnosticReads = [
+    {tool_name: "Read", tool_input: {file_path: "/tmp/AGENTS.md"}},
+    {tool_name: "Bash", tool_input: {command: "pwd"}},
+    {tool_name: "Bash", tool_input: {command: "sed -n '1,80p' AGENTS.md"}},
+    {tool_name: "Bash", tool_input: {command: "rg --files -g AGENTS.md"}},
+    {tool_name: "Bash", tool_input: {command: "git status --short --branch"}},
+    {tool_name: "Bash", tool_input: {command: `node ${runtime} --verify`}}
+  ];
+  for (const input of diagnosticReads) assert.equal(classifyHookCommand(input), "diagnostic_read");
+
+  const mutations = [
+    {tool_name: "apply_patch", tool_input: {}},
+    {tool_name: "Bash", tool_input: {command: "printf changed > AGENTS.md"}},
+    {tool_name: "Bash", tool_input: {command: "git commit -am fix"}},
+    {tool_name: "Bash", tool_input: {command: "git push origin main"}},
+    {tool_name: "Bash", tool_input: {command: "node scripts/install-codex-adapter.mjs --install-global"}},
+    {tool_name: "Bash", tool_input: {command: "python3 -m pip install package"}}
+  ];
+  for (const input of mutations) assert.equal(classifyHookCommand(input), "mutation");
+  assert.equal(classifyHookCommand({tool_name: "Bash", tool_input: {command: "custom-doctor"}}), "unknown");
+  assert.equal(classifyHookCommand({tool_name: "Bash", tool_input: {command: "rg TODO . | head"}}), "unknown");
+  assert.equal(classifyHookCommand({tool_name: "Bash", tool_input: {command: "sed -n '1p' -e '1w leaked.txt' AGENTS.md"}}), "unknown");
+});
+
+test("initialization errors return structured redacted diagnostics", t => {
+  const project = makeProject(t);
+  const permissionError = Object.assign(new Error("EACCES: token=PRIVATE_SENTINEL"), {code: "EACCES"});
+  const result = handleHarnessHook({
+    phase: "pre",
+    input: {cwd: project, session_id: "codex-session-02", tool_name: "Write"},
+    host: "codex",
+    runtimeVerifier: () => { throw permissionError; }
+  });
+
+  assert.equal(result.decision, "deny");
+  assert.equal(result.classification, "mutation");
+  assert.deepEqual(Object.keys(result.diagnostic).sort(), [
+    "code", "manifestPath", "message", "recoveryCommand", "runtimePath", "stage"
+  ]);
+  assert.equal(result.diagnostic.stage, "runtime_verify");
+  assert.equal(result.diagnostic.code, "permission_denied");
+  assert.doesNotMatch(JSON.stringify(result), /PRIVATE_SENTINEL/);
+  assert.match(result.reason, /stage=runtime_verify/);
+  assert.match(result.reason, /code=permission_denied/);
+});
+
+test("corrupt session state degrades reads but still blocks writes", t => {
+  const project = makeProject(t);
+  const invalidSession = () => { throw new Error("invalid harness session"); };
+  const read = handleHarnessHook({
+    phase: "pre",
+    input: {cwd: project, session_id: "codex-session-03", tool_name: "Bash", tool_input: {command: "git status"}},
+    host: "codex",
+    sessionStarter: invalidSession
+  });
+  const write = handleHarnessHook({
+    phase: "pre",
+    input: {cwd: project, session_id: "codex-session-03", tool_name: "Edit"},
+    host: "codex",
+    sessionStarter: invalidSession
+  });
+
+  assert.equal(read.decision, "allow");
+  assert.equal(read.diagnostic.code, "invalid_session_state");
+  assert.equal(write.decision, "deny");
+  assert.equal(write.diagnostic.code, "invalid_session_state");
+});
+
+test("corrupt task state is exposed as a stable diagnostic code", t => {
+  const project = makeProject(t);
+  const input = {cwd: project, session_id: "codex-session-05", tool_name: "Write"};
+  const started = handleHarnessHook({phase: "pre", input, host: "codex"});
+  fs.writeFileSync(path.join(project, ".ai", "harness", "tasks", `${started.taskId}.json`), "not json\n");
+
+  const result = handleHarnessHook({
+    phase: "pre",
+    input: {...input, tool_name: "Bash", tool_input: {command: "pwd"}},
+    host: "codex"
+  });
+
+  assert.equal(result.decision, "allow");
+  assert.equal(result.degraded, true);
+  assert.equal(result.diagnostic.stage, "session_start");
+  assert.equal(result.diagnostic.code, "invalid_task_state");
+});
+
+test("resolves a nested project root and skips an unmarked directory", t => {
+  const project = makeProject(t);
+  const nested = path.join(project, "src", "feature");
+  fs.mkdirSync(nested, {recursive: true});
+  fs.writeFileSync(path.join(project, ".git"), "gitdir: fixture\n");
+  fs.writeFileSync(path.join(nested, "AGENTS.md"), "# nested rules\n");
+  const handled = handleHarnessHook({
+    phase: "pre",
+    input: {cwd: nested, session_id: "codex-session-04", tool_name: "Bash", tool_input: {command: "pwd"}},
+    host: "codex"
+  });
+  assert.equal(handled.decision, "allow");
+  assert.equal(fs.existsSync(path.join(project, ".ai", "harness")), true);
+  assert.equal(fs.existsSync(path.join(nested, ".ai")), false);
+
+  const unmarked = fs.mkdtempSync(path.join(os.tmpdir(), "leon-harness-unmarked-"));
+  t.after(() => fs.rmSync(unmarked, {recursive: true, force: true}));
+  assert.deepEqual(handleHarnessHook({
+    phase: "pre",
+    input: {cwd: unmarked, tool_name: "Write"},
+    host: "codex"
+  }), {decision: "allow", skipped: true});
+  assert.equal(fs.existsSync(path.join(unmarked, ".ai")), false);
+});
+
+test("hook CLI emits an allow decision with structured degraded diagnostics", t => {
+  const project = makeProject(t);
+  const script = path.resolve(import.meta.dirname, "..", "scripts", "harness-hook.mjs");
+  const executed = spawnSync(process.execPath, [script, "--phase", "pre", "--host", "codex"], {
+    encoding: "utf8",
+    env: {...process.env, CODEX_SESSION_ID: ""},
+    input: JSON.stringify({cwd: project, tool_name: "Bash", tool_input: {command: "pwd", secret: "PRIVATE_TOOL_INPUT"}})
+  });
+
+  assert.equal(executed.status, 0, executed.stderr);
+  const output = JSON.parse(executed.stdout).hookSpecificOutput;
+  assert.equal(output.hookEventName, "PreToolUse");
+  assert.equal(output.permissionDecision, "allow");
+  assert.match(output.permissionDecisionReason, /classification=diagnostic_read/);
+  assert.match(output.permissionDecisionReason, /stage=session_identity/);
+  assert.doesNotMatch(executed.stdout, /PRIVATE_TOOL_INPUT/);
 });
 
 test("Codex apply_patch hooks record a write event", t => {

@@ -19,7 +19,7 @@ node "$HOME/.agents/leon-engineering/runtime/harness-runtime.mjs" --verify
 node "$HOME/.agents/leon-engineering/runtime/harness-session.mjs" --start --new-task --project /absolute/project --host codex --session-id opaque-task-key --task-id task-id --goal "Outcome" --acceptance "Observable result"
 ```
 
-会话入口创建 `.ai/harness/agent-map.md`、任务记录、`metrics.jsonl`、隐私受限的 `events.jsonl` 和会话上下文。事件流只记录任务 ID、宿主、事件类别及白名单状态，不记录目标、验收、会话 ID、命令、路径、提示词、源代码或密钥。对未启用强制 Harness 的项目，仍保持原有的预览与明确写入边界。
+会话入口创建 `.ai/harness/agent-map.md`、任务记录、`metrics.jsonl`、隐私受限的 `events.jsonl` 和会话上下文。会话文件使用 `host + session ID` 的哈希命名，避免 Claude 与 Codex 的同名会话互相覆盖；同宿主的旧键会被复制到新命名空间，旧文件保留以便回滚。事件流只记录任务 ID、宿主、事件类别及白名单状态，不记录目标、验收、会话 ID、命令、路径、提示词、源代码或密钥。对未启用强制 Harness 的项目，仍保持原有的预览与明确写入边界。
 
 未启用强制 Harness 时，可在用户明确授权后继续使用 `harness-project.mjs --write-harness` 创建首个账本；该兼容入口不会覆盖既有 Harness。
 
@@ -36,7 +36,7 @@ node "$HOME/.agents/leon-engineering/runtime/harness-project.mjs" --project /abs
 node "$HOME/.agents/leon-engineering/runtime/harness-enforce.mjs" --project /absolute/project --task-id task-id
 ```
 
-`harness-enforce` 是只读交付硬门：它要求同一任务具有 `task_started`、真实的 `completed/passed` 结果、实测验证耗时和 `verification_completed` 事件；不会运行记录中的验证命令。Codex 与 Claude 的 `PreToolUse`/`PostToolUse` Hook 都会在本地工具边界自动建立或恢复上下文并记录非敏感事件；初始化失败时拒绝受管项目调用。Hook 不能替代真实验证，仍由该硬门和项目 CI 机械验收。
+`harness-enforce` 是只读交付硬门：它要求同一任务具有 `task_started`、真实的 `completed/passed` 结果、实测验证耗时和 `verification_completed` 事件；不会运行记录中的验证命令。Codex 与 Claude 的 `PreToolUse`/`PostToolUse` Hook 都会在本地工具边界自动建立或恢复上下文并记录非敏感事件。Codex 初始化失败时只放行严格分类的 `diagnostic_read`；`mutation` 和 `unknown` 仍被拒绝，错误中给出脱敏的阶段、代码、runtime/manifest 路径和恢复命令。Hook 不能替代真实验证，仍由该硬门和项目 CI 机械验收。
 
 要审阅指定项目已记录的交付证据，使用只读评估器。它不创建 Harness、不写报告文件，也不运行任务声明的命令：
 
