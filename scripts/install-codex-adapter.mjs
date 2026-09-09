@@ -688,7 +688,9 @@ function main(args) {
     return;
   }
   if (args.includes("--verify")) {
-    console.log(JSON.stringify(verify({targetRoot}), null, 2));
+    const result = verify({targetRoot});
+    console.log(JSON.stringify(result, null, 2));
+    if (!result.valid) process.exitCode = 1;
     return;
   }
   if (args.includes("--rollback")) {
