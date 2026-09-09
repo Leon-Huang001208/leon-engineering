@@ -658,7 +658,7 @@ function main(args) {
 
   if (args.includes("--install-global")) {
     const {documents, manifest} = installGlobalFramework({codexHome});
-    installHarnessRuntime({});
+    installHarnessRuntime({sourceRoot: SOURCE_ROOT});
     console.log(JSON.stringify({
       installed: true,
       documents,
@@ -668,7 +668,7 @@ function main(args) {
   }
   if (args.includes("--verify-global")) {
     const verification = verifyGlobalFramework({codexHome});
-    const runtime = verifyHarnessRuntime({});
+    const runtime = verifyHarnessRuntime({sourceRoot: SOURCE_ROOT});
     const result = {valid: verification.valid && runtime.valid, drift: [...verification.drift, ...runtime.drift.map(item => `runtime:${item}`)]};
     console.log(JSON.stringify(result, null, 2));
     if (!result.valid) process.exitCode = 1;

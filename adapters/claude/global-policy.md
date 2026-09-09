@@ -12,7 +12,7 @@
 
 范围不明、调研受阻或并行工作有明确速度收益时，才升级代理或调研方式。实现闭环以外涉及秘密、新依赖、正式发布、部署、迁移、系统配置、破坏性操作或外部协调时，仍必须先询问并获得明确授权。
 
-对用户已启用强制 Harness 的目标项目，任何会形成项目交付、改动或调研结论的新任务都必须在第一次项目工具操作前自动开始 Harness；使用新的不透明任务键和 `harness-session.mjs --start --new-task`，不得要求用户手工建账。Claude 插件的写入型工具 Hook 会建立或恢复同一会话的 Harness 上下文；初始化失败时拒绝项目写入。任务继续时恢复既有上下文；纯聊天和未指定项目的知识问答不创建项目记录。
+对用户已启用强制 Harness 的目标项目，任何会形成项目交付、改动或调研结论的新任务都必须在第一次项目工具操作前自动开始 Harness；使用新的不透明任务键和 `harness-session.mjs --start --new-task`，不得要求用户手工建账。Claude 插件的写入型工具 Hook 会建立或恢复宿主隔离的 Harness 上下文；初始化失败时只降级放行 `diagnostic_read`，项目写入、其他 shell 和未知工具继续 fail closed，并输出不含项目输入的结构化恢复诊断。任务继续时恢复既有上下文；纯聊天和未指定项目的知识问答不创建项目记录。
 
 实现任务以 `--delivery-required` 建账，最终运行 `harness-enforce.mjs --project <项目目录> --task-id <任务 ID> --require-delivery`；硬门除真实验证证据外还实时核验 receipt、远端提交、CI、任务分支和 worktree。Harness 只验证状态，不直接运行 Git。
 

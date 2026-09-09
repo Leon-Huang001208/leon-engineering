@@ -95,3 +95,27 @@ test("installed hook reports missing and drifted runtime manifests without openi
   assert.equal(drifted.diagnostic.code, "manifest_drift");
   assert.match(drifted.diagnostic.manifestPath, /\.leon-engineering-harness-runtime\.json$/);
 });
+
+test("an installed runtime verifies itself without treating its parent as canonical source", t => {
+  const root = makeRoot(t);
+  const runtimeRoot = path.join(root, "runtime");
+  installHarnessRuntime({sourceRoot, runtimeRoot});
+
+  const result = spawnSync(process.execPath, [path.join(runtimeRoot, "harness-runtime.mjs"), "--verify", "--runtime-root", runtimeRoot], {
+    encoding: "utf8"
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), {valid: true, drift: []});
+});
+
+test("verification of a missing runtime is read-only", t => {
+  const root = makeRoot(t);
+  const runtimeRoot = path.join(root, "missing-runtime");
+
+  assert.deepEqual(verifyHarnessRuntime({sourceRoot: null, runtimeRoot}), {
+    valid: false,
+    drift: ["missing runtime directory"]
+  });
+  assert.equal(fs.existsSync(runtimeRoot), false);
+});

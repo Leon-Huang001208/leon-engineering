@@ -53,6 +53,8 @@ Harness 运行时由 Codex 全局框架和 Claude 受管策略的安装命令自
 
 若 Hook 报告 runtime 缺失或清单漂移，先执行错误中的恢复命令；它只读校验当前受管目录。确认来源后，从 `/Users/leon/Developer/claude-engineering` 权威源重新运行 Codex 全局安装器，禁止把安装副本当作源码手工维护。
 
+安装副本直接执行 `harness-runtime.mjs --verify` 时只按清单检查自身，不把安装目录误当成权威源码，也不会为了验证创建缺失目录。Codex/Claude 适配器从权威仓库验证时显式传入源码根，因此仍会拒绝相对源码陈旧但内部清单一致的安装。
+
 不确定某个受管 Harness 命令的参数时，先运行对应脚本的 `--help`（或 `-h`）。帮助文本不读取项目、不执行项目命令，也不写入任何文件；项目路径参数统一为 `--project <项目目录>`。
 
 项目已有 Harness 后，Agent Map 不会自动改写。用户明确授权后可执行 `--refresh-agent-map`；它只根据当前项目画像刷新 Map 并追加审计事件，保留任务和结果账本。
