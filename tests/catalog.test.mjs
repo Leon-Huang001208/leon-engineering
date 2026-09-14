@@ -18,7 +18,17 @@ const skills = {
   "project-adapter": ["read-only", "candidate"],
   "project-harness": ["handoff", "--write-harness"],
   "project-constraints": ["read-only", "--changed-file"],
-  "iteration-delivery": ["default branch", "cleanup"]
+  "iteration-delivery": ["default branch", "cleanup"],
+  "socratic-clarification": ["Triggers", "Anti-triggers", "Observable output"],
+  "dual-layer-explanation": ["Triggers", "Anti-triggers", "Observable output"],
+  "reverse-engineering": ["Triggers", "Anti-triggers", "Observable output"],
+  "horizontal-vertical-analysis": ["Triggers", "Anti-triggers", "Observable output"],
+  "fact-checking": ["Triggers", "Anti-triggers", "Observable output"],
+  "expert-perspectives": ["Triggers", "Anti-triggers", "Observable output"],
+  "first-principles": ["Triggers", "Anti-triggers", "Observable output"],
+  "cross-domain-transfer": ["Triggers", "Anti-triggers", "Observable output"],
+  "steelman-comparison": ["Triggers", "Anti-triggers", "Observable output"],
+  "minimal-experiment": ["Triggers", "Anti-triggers", "Observable output"]
 };
 
 const agents = {
@@ -38,6 +48,36 @@ function readSkill(name) {
 function readAgent(name) {
   return fs.readFileSync(path.join(root, "agents", `${name}.md`), "utf8");
 }
+
+function readPolicy(name) {
+  return fs.readFileSync(path.join(root, "adapters", name, "global-policy.md"), "utf8");
+}
+
+function readSharedPolicy() {
+  return fs.readFileSync(path.join(root, "adapters", "shared", "global-policy.md"), "utf8");
+}
+
+function readEffectivePolicy(host) {
+  return `${readSharedPolicy()}\n${readPolicy(host)}`;
+}
+
+test("separates shared engineering principles from host-specific policy deltas", () => {
+  const shared = readSharedPolicy();
+  const codex = readPolicy("codex");
+  const claude = readPolicy("claude");
+
+  for (const phrase of ["目标与约束", "事实与假设", "证据闭环", "系统边界", "期望效用", "不确定性", "反馈", "思考深度"]) {
+    assert.match(shared, new RegExp(phrase));
+  }
+  for (const method of [
+    "socratic-clarification", "dual-layer-explanation", "reverse-engineering", "horizontal-vertical-analysis",
+    "fact-checking", "expert-perspectives", "first-principles", "cross-domain-transfer",
+    "steelman-comparison", "minimal-experiment"
+  ]) assert.match(shared, new RegExp(method));
+  assert.match(codex, /Codex.*PreToolUse.*PostToolUse.*Hook/);
+  assert.match(claude, /^\{\{LEON_ENGINEERING_SHARED_POLICY_IMPORT\}\}/m);
+  assert.doesNotMatch(claude, /目标与约束|期望效用|first-principles/);
+});
 
 function frontmatter(source) {
   const match = source.match(/^---\n([\s\S]*?)\n---\n/);
@@ -137,10 +177,7 @@ test("defines a stable project profile schema", () => {
 });
 
 test("defaults implementation work to managed delivery while preserving the read-only fast path", () => {
-  const policy = fs.readFileSync(
-    path.join(root, "adapters", "codex", "global-policy.md"),
-    "utf8"
-  );
+  const policy = readEffectivePolicy("codex");
   const routing = readSkill("agent-routing");
 
   assert.match(policy, /只读或非实现工作，默认走快路径/);
@@ -176,14 +213,8 @@ test("documents fast path, investigation, and worktree pilots", () => {
 });
 
 test("checks installed capabilities before choosing the execution route", () => {
-  const codexPolicy = fs.readFileSync(
-    path.join(root, "adapters", "codex", "global-policy.md"),
-    "utf8"
-  );
-  const claudePolicy = fs.readFileSync(
-    path.join(root, "adapters", "claude", "global-policy.md"),
-    "utf8"
-  );
+  const codexPolicy = readEffectivePolicy("codex");
+  const claudePolicy = readEffectivePolicy("claude");
   const gettingStarted = fs.readFileSync(
     path.join(root, "adapters", "codex", "global-docs", "GETTING_STARTED.md"),
     "utf8"
@@ -203,10 +234,7 @@ test("checks installed capabilities before choosing the execution route", () => 
 });
 
 test("persists proactive framework corrections instead of leaving them in chat", () => {
-  const policy = fs.readFileSync(
-    path.join(root, "adapters", "codex", "global-policy.md"),
-    "utf8"
-  );
+  const policy = readEffectivePolicy("codex");
 
   assert.match(policy, /主动提炼跨项目可复用的错误和经验/);
   assert.match(policy, /自动更新受管源、测试和安装副本/);
@@ -214,14 +242,8 @@ test("persists proactive framework corrections instead of leaving them in chat",
 });
 
 test("proactively promotes low-risk reusable framework learning", () => {
-  const codexPolicy = fs.readFileSync(
-    path.join(root, "adapters", "codex", "global-policy.md"),
-    "utf8"
-  );
-  const claudePolicy = fs.readFileSync(
-    path.join(root, "adapters", "claude", "global-policy.md"),
-    "utf8"
-  );
+  const codexPolicy = readEffectivePolicy("codex");
+  const claudePolicy = readEffectivePolicy("claude");
   const gettingStarted = fs.readFileSync(
     path.join(root, "adapters", "codex", "global-docs", "GETTING_STARTED.md"),
     "utf8"
@@ -243,8 +265,8 @@ test("proactively promotes low-risk reusable framework learning", () => {
 });
 
 test("requires automatic Harness start and a cross-host delivery hard gate", () => {
-  const codexPolicy = fs.readFileSync(path.join(root, "adapters", "codex", "global-policy.md"), "utf8");
-  const claudePolicy = fs.readFileSync(path.join(root, "adapters", "claude", "global-policy.md"), "utf8");
+  const codexPolicy = readEffectivePolicy("codex");
+  const claudePolicy = readEffectivePolicy("claude");
   const harness = readSkill("project-harness");
   const commands = fs.readFileSync(path.join(root, "adapters", "codex", "global-docs", "COMMANDS_GUIDE.md"), "utf8");
 
@@ -258,14 +280,8 @@ test("requires automatic Harness start and a cross-host delivery hard gate", () 
 });
 
 test("governs the audited Claude catalog through explicit shared boundaries", () => {
-  const codexPolicy = fs.readFileSync(
-    path.join(root, "adapters", "codex", "global-policy.md"),
-    "utf8"
-  );
-  const claudePolicy = fs.readFileSync(
-    path.join(root, "adapters", "claude", "global-policy.md"),
-    "utf8"
-  );
+  const codexPolicy = readEffectivePolicy("codex");
+  const claudePolicy = readEffectivePolicy("claude");
   const agentGuide = fs.readFileSync(
     path.join(root, "adapters", "codex", "global-docs", "AGENTS_GUIDE.md"),
     "utf8"
@@ -281,7 +297,7 @@ test("governs the audited Claude catalog through explicit shared boundaries", ()
   }
   assert.match(agentGuide, /七个规范职责代理/);
   assert.match(routing, /不把 Claude 专用 agent 或 skill 隐式当成共享能力/);
-  for (const phrase of ["52 个", "51 个", "230 个", "11 个工作流", "iteration-delivery", "project-constraints", "project-harness", "ecc", "zq", "data-connector-development", "## 共享工作流", "## Claude 专用排除项"]) {
+  for (const phrase of ["52 个", "51 个", "230 个", "11 个工程工作流", "10 个推理 Skill", "iteration-delivery", "project-constraints", "project-harness", "first-principles", "minimal-experiment", "ecc", "zq", "data-connector-development", "## 共享工作流", "## 共享推理 Skill", "## Claude 专用排除项"]) {
     assert.match(catalog, new RegExp(phrase));
   }
 });

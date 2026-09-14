@@ -6,6 +6,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   installClaudePolicy,
+  installClaudeSkills,
   verifyClaudePolicy,
   rollbackClaudePolicy
 } from "../scripts/install-claude-adapter.mjs";
@@ -30,6 +31,9 @@ test("installs alongside user CLAUDE.md content and restores it exactly", t => {
 
   const installed = fs.readFileSync(path.join(claudeHome, "CLAUDE.md"), "utf8");
   assert.match(installed, /Keep every byte here\./);
+  assert.match(installed, new RegExp(`@${path.join(sourceRoot, "adapters", "shared", "global-policy.md").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
+  assert.doesNotMatch(installed, /目标与约束|期望效用|first-principles/);
+  assert.match(JSON.parse(fs.readFileSync(path.join(claudeHome, MANIFEST), "utf8")).policy.sharedChecksum, /^[0-9a-f]{64}$/);
   assert.equal(verifyClaudePolicy({sourceRoot, claudeHome}).valid, true);
 
   rollbackClaudePolicy({sourceRoot, claudeHome});
@@ -55,7 +59,7 @@ test("detects policy drift and refuses to roll it back", t => {
 
   const policyFile = path.join(claudeHome, "CLAUDE.md");
   const installed = fs.readFileSync(policyFile, "utf8");
-  fs.writeFileSync(policyFile, installed.replace("默认走快路径", "外来改动"));
+  fs.writeFileSync(policyFile, installed.replace("Claude 平台差异", "外来改动"));
 
   assert.deepEqual(
     verifyClaudePolicy({sourceRoot, claudeHome}),
@@ -69,33 +73,38 @@ test("detects policy drift and refuses to roll it back", t => {
 
 test("installs and verifies Claude policy through the command line", t => {
   const claudeHome = makeClaudeHome(t);
+  const runtimeRoot = path.join(claudeHome, "runtime");
   const script = path.join(sourceRoot, "scripts", "install-claude-adapter.mjs");
 
   const installed = spawnSync(
     process.execPath,
-    [script, "--install", "--claude-home", claudeHome],
+    [script, "--install", "--claude-home", claudeHome, "--runtime-root", runtimeRoot],
     {encoding: "utf8"}
   );
   assert.equal(installed.status, 0, installed.stderr);
+  assert.equal(fs.existsSync(path.join(claudeHome, "skills", "first-principles", "SKILL.md")), true);
+  assert.equal(fs.existsSync(path.join(claudeHome, "skills", ".leon-engineering.json")), true);
 
   const verified = spawnSync(
     process.execPath,
-    [script, "--verify", "--claude-home", claudeHome],
+    [script, "--verify", "--claude-home", claudeHome, "--runtime-root", runtimeRoot],
     {encoding: "utf8"}
   );
   assert.equal(verified.status, 0, verified.stderr);
   assert.match(verified.stdout, /"valid": true/);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(runtimeRoot, ".leon-engineering-harness-runtime.json"), "utf8")).sourceRoot, sourceRoot);
 });
 
 test("redacts user CLAUDE.md text from successful CLI installation output", t => {
   const claudeHome = makeClaudeHome(t);
+  const runtimeRoot = path.join(claudeHome, "runtime");
   const script = path.join(sourceRoot, "scripts", "install-claude-adapter.mjs");
   const sentinel = "USER_PRIVATE_SENTINEL_CLAUDE_INSTALL";
   fs.writeFileSync(path.join(claudeHome, "CLAUDE.md"), `# User rules\n${sentinel}\n`);
 
   const installed = spawnSync(
     process.execPath,
-    [script, "--install", "--claude-home", claudeHome],
+    [script, "--install", "--claude-home", claudeHome, "--runtime-root", runtimeRoot],
     {encoding: "utf8"}
   );
 
@@ -116,19 +125,21 @@ test("redacts user CLAUDE.md text from successful CLI installation output", t =>
 
 test("fails CLI verification safely when the managed policy has drifted", t => {
   const claudeHome = makeClaudeHome(t);
+  const runtimeRoot = path.join(claudeHome, "runtime");
   const policyFile = path.join(claudeHome, "CLAUDE.md");
   const script = path.join(sourceRoot, "scripts", "install-claude-adapter.mjs");
   const sentinel = "USER_PRIVATE_SENTINEL_9c7e";
   fs.writeFileSync(policyFile, `# User rules\n${sentinel}\n`);
   installClaudePolicy({sourceRoot, claudeHome});
+  installClaudeSkills({sourceRoot, claudeHome});
   fs.writeFileSync(
     policyFile,
-    fs.readFileSync(policyFile, "utf8").replace("默认走快路径", "外来改动")
+    fs.readFileSync(policyFile, "utf8").replace("Claude 平台差异", "外来改动")
   );
 
   const verified = spawnSync(
     process.execPath,
-    [script, "--verify", "--claude-home", claudeHome],
+    [script, "--verify", "--claude-home", claudeHome, "--runtime-root", runtimeRoot],
     {encoding: "utf8"}
   );
 

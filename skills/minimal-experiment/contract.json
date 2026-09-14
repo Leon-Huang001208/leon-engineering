@@ -1,0 +1,1 @@
+{"methodId":"minimal-experiment","version":"1.0.0","permissions":"none","triggerTerms":["最小实验","快速验证假设","最便宜的测试","minimal experiment"],"antiTriggerTerms":["直接上线","不可逆"],"positiveExamples":["设计最小实验快速验证这个假设","Find the minimal experiment with a clear stopping rule"],"negativeExamples":["不做测试直接上线","执行不可逆的数据迁移"]}

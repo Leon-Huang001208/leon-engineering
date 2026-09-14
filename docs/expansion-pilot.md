@@ -46,6 +46,46 @@ Provide one known-file edit, one unfamiliar repository exploration, and one conc
 
 Provide two skills with overlapping descriptions and one stale file reference. Confirm it reports collisions and stale references without deleting anything.
 
+### socratic-clarification
+
+Give one materially ambiguous requirement and one already approved implementation plan. Confirm the first produces a bounded clarification record while the second proceeds without a process-only question.
+
+### dual-layer-explanation
+
+Ask for an unfamiliar architecture explanation for a mixed audience. Confirm the result separates an intuitive model from precise mechanics and states where the analogy stops.
+
+### reverse-engineering
+
+Provide an observed successful artifact and partial evidence. Confirm the result separates observations from inferred mechanisms, labels confidence, and identifies reproducible levers.
+
+### horizontal-vertical-analysis
+
+Provide peer data across three periods with inconsistent units. Confirm the result normalizes definitions before comparing peers and change over time.
+
+### fact-checking
+
+Provide disputed claims with primary and secondary sources. Confirm the result separates source classes, contrary evidence, verdicts, confidence, and date scope.
+
+### expert-perspectives
+
+Provide a cross-functional decision. Confirm the result uses only materially distinct perspectives and does not present a persona as evidence or consensus.
+
+### first-principles
+
+Provide a convention-heavy design problem. Confirm the result separates hard constraints from inherited assumptions and preserves existing patterns that remain justified.
+
+### cross-domain-transfer
+
+Provide a source-domain mechanism and target-domain problem. Confirm the result maps causal roles, states analogy breaks, and produces a bounded testable transfer.
+
+### steelman-comparison
+
+Provide two contested alternatives with uneven evidence. Confirm the result formulates each viable option strongly without manufacturing false balance and names deciding variables.
+
+### minimal-experiment
+
+Provide a consequential uncertainty. Confirm the result defines one falsifiable hypothesis, a reversible intervention, threshold, guardrails, stopping rule, and decision mapping.
+
 ### repo-explorer
 
 Ask for an entry-point map of a fixture repository. Confirm the result contains file paths, verified findings, uncertainties, and no edits.

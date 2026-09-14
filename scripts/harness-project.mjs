@@ -10,11 +10,12 @@ export const METRICS_FILENAME = "metrics.jsonl";
 export const EVENTS_FILENAME = "events.jsonl";
 export const SESSION_DIRECTORY = "sessions";
 const BLOCKER_CATEGORIES = new Set(["environment", "dependency", "permission", "requirements", "test", "external", "unknown"]);
-const EVENT_NAMES = new Set(["task_started", "tool_completed", "policy_decision", "skill_selected", "agent_selected", "verification_completed", "task_finished"]);
+const EVENT_NAMES = new Set(["task_started", "tool_completed", "policy_decision", "skill_selected", "agent_selected", "verification_completed", "task_finished", "reasoning_method_selected", "reasoning_method_completed"]);
 const EVENT_HOSTS = new Set(["claude", "codex", "unknown"]);
 const EVENT_TOOLS = new Set(["shell", "read", "write", "other"]);
 const EVENT_DECISIONS = new Set(["allow", "ask", "deny"]);
 const VERIFICATION_STATUSES = new Set(["passed", "failed", "not_run"]);
+const REASONING_METHOD_SOURCES = new Set(["required", "user-selected", "recommended", "model-supplemented"]);
 const SESSION_SCHEMA_VERSIONS = new Set([1, 2]);
 
 function assertTask(task) {
@@ -163,7 +164,7 @@ function assertHost(host) {
 
 function normalizeHarnessEvent(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("harness event is required");
-  const allowed = new Set(["event", "host", "tool", "decision", "verificationStatus"]);
+  const allowed = new Set(["event", "host", "tool", "decision", "verificationStatus", "methodId", "methodVersion", "source", "artifactRef"]);
   for (const key of Object.keys(input)) if (!allowed.has(key)) throw new Error("invalid harness event field");
   if (!EVENT_NAMES.has(input.event)) throw new Error("invalid harness event name");
   const event = {event: input.event, host: assertHost(input.host)};
@@ -178,6 +179,27 @@ function normalizeHarnessEvent(input) {
   if (input.verificationStatus !== undefined) {
     if (!VERIFICATION_STATUSES.has(input.verificationStatus)) throw new Error("invalid harness verification status");
     event.verificationStatus = input.verificationStatus;
+  }
+  const isReasoningEvent = input.event === "reasoning_method_selected" || input.event === "reasoning_method_completed";
+  if (isReasoningEvent) {
+    if (typeof input.methodId !== "string" || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(input.methodId)) throw new Error("invalid reasoning method id");
+    if (typeof input.methodVersion !== "string" || !/^\d+\.\d+\.\d+$/.test(input.methodVersion)) throw new Error("invalid reasoning method version");
+    event.methodId = input.methodId;
+    event.methodVersion = input.methodVersion;
+  } else if (input.methodId !== undefined || input.methodVersion !== undefined || input.source !== undefined || input.artifactRef !== undefined) {
+    throw new Error("invalid reasoning method event fields");
+  }
+  if (input.event === "reasoning_method_selected") {
+    if (!REASONING_METHOD_SOURCES.has(input.source)) throw new Error("invalid reasoning method source");
+    if (input.artifactRef !== undefined) throw new Error("invalid reasoning method artifact");
+    event.source = input.source;
+  }
+  if (input.event === "reasoning_method_completed") {
+    if (input.source !== undefined) throw new Error("invalid reasoning method source");
+    if (typeof input.artifactRef !== "string" || input.artifactRef.length === 0 || input.artifactRef.length > 240 || /[\r\n]/.test(input.artifactRef)) {
+      throw new Error("invalid reasoning method artifact");
+    }
+    event.artifactRef = input.artifactRef;
   }
   return event;
 }
@@ -464,7 +486,7 @@ function parseArgs(args) {
   const options = {acceptanceCriteria: []};
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
-    if (["--project", "--task-id", "--goal", "--acceptance", "--status", "--clarification-rounds", "--rework-count", "--verification-command", "--verification-status", "--verification-duration-seconds", "--blocker-category", "--invalid-reason"].includes(argument)) {
+    if (["--project", "--task-id", "--goal", "--acceptance", "--status", "--clarification-rounds", "--rework-count", "--verification-command", "--verification-status", "--verification-duration-seconds", "--blocker-category", "--invalid-reason", "--host", "--method-id", "--method-version", "--method-source", "--artifact-ref"].includes(argument)) {
       const value = args[index + 1];
       if (!value || value.startsWith("--")) throw new Error(`${argument} requires a value`);
       if (argument === "--acceptance") options.acceptanceCriteria.push(value);
@@ -474,15 +496,25 @@ function parseArgs(args) {
     else if (argument === "--add-task") options.addTask = true;
     else if (argument === "--refresh-agent-map") options.refreshAgentMap = true;
     else if (argument === "--record-outcome") options.recordOutcome = true;
+    else if (argument === "--record-method-selected") options.recordMethodSelected = true;
+    else if (argument === "--record-method-completed") options.recordMethodCompleted = true;
     else if (argument === "--delivery-required") options.deliveryRequired = true;
     else throw new Error(`unknown option: ${argument}`);
   }
   if (!options.project) throw new Error("--project requires a value");
+  const methodModes = Number(Boolean(options.recordMethodSelected)) + Number(Boolean(options.recordMethodCompleted));
+  if (methodModes > 1) throw new Error("use one reasoning method event mode");
   if (options.refreshAgentMap) {
     if (options.writeHarness || options.addTask || options.recordOutcome || options.task_id || options.goal || options.acceptanceCriteria.length || options.deliveryRequired) throw new Error("refresh mode cannot set task options");
     return options;
   }
   if (!options.task_id) throw new Error("--task-id requires a value");
+  if (methodModes === 1) {
+    if (options.writeHarness || options.addTask || options.recordOutcome || options.goal || options.acceptanceCriteria.length || options.deliveryRequired) {
+      throw new Error("reasoning method event mode cannot create or complete a task");
+    }
+    return options;
+  }
   if (options.recordOutcome) {
     if (options.writeHarness || options.addTask || options.goal || options.acceptanceCriteria.length || options.deliveryRequired) {
       throw new Error("outcome mode cannot create a task");
@@ -500,6 +532,8 @@ function formatUsage() {
   return [
     "用法：harness-project.mjs --project <项目目录> --task-id <任务 ID> --goal <目标> --acceptance <验收标准> [--acceptance <验收标准>] [--delivery-required] [--write-harness|--add-task]",
     "      harness-project.mjs --project <项目目录> --task-id <任务 ID> --record-outcome --status <状态> --clarification-rounds <次数> --rework-count <次数> --verification-command <命令> --verification-status <状态> --verification-duration-seconds <秒数>",
+    "      harness-project.mjs --project <项目目录> --task-id <任务 ID> --record-method-selected --host claude|codex --method-id <ID> --method-version <版本> --method-source <来源>",
+    "      harness-project.mjs --project <项目目录> --task-id <任务 ID> --record-method-completed --host claude|codex --method-id <ID> --method-version <版本> --artifact-ref <引用>",
     "      harness-project.mjs --project <项目目录> --refresh-agent-map",
     "",
     "默认仅预览；--write-harness、--add-task、--record-outcome 和 --refresh-agent-map 会写入指定项目。"
@@ -530,6 +564,27 @@ function main(args) {
         verificationDurationSeconds: Number(options.verification_duration_seconds),
         blockerCategory: options.blocker_category,
         invalidReason: options.invalid_reason
+      }
+    });
+    process.stdout.write(`${JSON.stringify({recorded: true, result})}\n`);
+    return;
+  }
+  if (options.recordMethodSelected || options.recordMethodCompleted) {
+    const result = appendHarnessEvent({
+      projectRoot: options.project,
+      taskId: options.task_id,
+      event: options.recordMethodSelected ? {
+        event: "reasoning_method_selected",
+        host: options.host,
+        methodId: options.method_id,
+        methodVersion: options.method_version,
+        source: options.method_source
+      } : {
+        event: "reasoning_method_completed",
+        host: options.host,
+        methodId: options.method_id,
+        methodVersion: options.method_version,
+        artifactRef: options.artifact_ref
       }
     });
     process.stdout.write(`${JSON.stringify({recorded: true, result})}\n`);

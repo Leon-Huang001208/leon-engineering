@@ -1,0 +1,1 @@
+{"methodId":"fact-checking","version":"1.0.0","permissions":"none","triggerTerms":["事实核查","验证说法","来源是否可靠","fact check"],"antiTriggerTerms":["创意写作","无需核查"],"positiveExamples":["事实核查这些说法并区分原始来源","Fact check the claims and identify contrary evidence"],"negativeExamples":["写一段创意文案","无需核查，把段落缩短"]}

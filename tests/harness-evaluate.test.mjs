@@ -21,7 +21,13 @@ function makeHarnessFixture(t) {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "leon-harness-evaluation-"));
   t.after(() => fs.rmSync(project, {recursive: true, force: true}));
   writeFile(path.join(project, "AGENTS.md"), "# Fixture instructions\n");
+  writeFile(path.join(project, ".ai", "harness", "agent-map.md"), "# Fixture map\n");
   writeFile(path.join(project, ".ai", "harness", "metrics.jsonl"), "{\"event\":\"fixture\"}\n");
+  writeFile(path.join(project, ".ai", "harness", "events.jsonl"), [
+    {timestamp: "2026-09-14T00:00:00.000Z", taskId: "first-pass", event: "reasoning_method_selected", host: "codex", methodId: "first-principles", methodVersion: "1.0.0", source: "user-selected"},
+    {timestamp: "2026-09-14T00:00:01.000Z", taskId: "first-pass", event: "reasoning_method_selected", host: "codex", methodId: "minimal-experiment", methodVersion: "1.0.0", source: "recommended"},
+    {timestamp: "2026-09-14T00:00:02.000Z", taskId: "first-pass", event: "reasoning_method_completed", host: "codex", methodId: "first-principles", methodVersion: "1.0.0", artifactRef: "artifact:variables"}
+  ].map(event => JSON.stringify(event)).join("\n") + "\n");
   writeTask(project, "first-pass", {
     id: "first-pass",
     status: "completed",
@@ -64,9 +70,22 @@ test("summarizes terminal evidence without writing or running project commands",
     averageReworkCount: 0.5,
     verificationDurationCoverage: 0.5,
     averageVerificationDurationSeconds: 12,
-    blockerCategories: {environment: 1}
+    blockerCategories: {environment: 1},
+    reasoningMethods: {
+      selectedCount: 2,
+      completedCount: 1,
+      tasksWithSelection: 1,
+      adoptionRate: 0.5,
+      combinationTaskCount: 1,
+      completionRate: 0.5,
+      byMethod: {
+        "first-principles": {selected: 1, completed: 1, passedTasks: 1, reworkTasks: 0},
+        "minimal-experiment": {selected: 1, completed: 0, passedTasks: 1, reworkTasks: 0}
+      }
+    }
   });
   assert.match(formatEvaluation(result, "markdown"), /一次通过率.*50%/);
+  assert.match(formatEvaluation(result, "markdown"), /方法采用率.*50%/);
   assert.equal(fs.readFileSync(metrics, "utf8"), before);
   assert.equal(fs.existsSync(path.join(project, "this-command-must-not-run")), false);
 });

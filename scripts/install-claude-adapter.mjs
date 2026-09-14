@@ -5,6 +5,7 @@ import path from "node:path";
 import {execFileSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
 import {installHarnessRuntime, verifyHarnessRuntime} from "./harness-runtime.mjs";
+import {install as installSkills, rollback as rollbackSkills, verify as verifySkills} from "./install-codex-adapter.mjs";
 
 const SOURCE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const START = "<!-- leon-engineering:claude-policy:start -->";
@@ -41,6 +42,25 @@ function claudeFile(claudeHome) {
 
 function manifestFile(claudeHome) {
   return path.join(claudeHome, MANIFEST);
+}
+
+function claudeSkillsRoot(claudeHome) {
+  return path.join(claudeHome, "skills");
+}
+
+export function installClaudeSkills({sourceRoot = SOURCE_ROOT, claudeHome}) {
+  if (!claudeHome) throw fail("claudeHome is required", "invalid_arguments");
+  return installSkills({sourceRoot, targetRoot: claudeSkillsRoot(claudeHome), logResult: false});
+}
+
+export function verifyClaudeSkills({sourceRoot = SOURCE_ROOT, claudeHome}) {
+  if (!claudeHome) throw fail("claudeHome is required", "invalid_arguments");
+  return verifySkills({sourceRoot, targetRoot: claudeSkillsRoot(claudeHome), logResult: false});
+}
+
+export function rollbackClaudeSkills({claudeHome}) {
+  if (!claudeHome) throw fail("claudeHome is required", "invalid_arguments");
+  return rollbackSkills({targetRoot: claudeSkillsRoot(claudeHome), logResult: false});
 }
 
 function writeAtomically(destination, content) {
@@ -95,11 +115,22 @@ function policySource(sourceRoot) {
   if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
     throw fail("missing canonical Claude policy");
   }
-  const policy = fs.readFileSync(file, "utf8").trim();
+  const shared = path.join(sourceRoot, "adapters", "shared", "global-policy.md");
+  if (!fs.existsSync(shared) || !fs.statSync(shared).isFile()) throw fail("missing canonical shared policy");
+  const policy = fs.readFileSync(file, "utf8").trim().replace(
+    "{{LEON_ENGINEERING_SHARED_POLICY_IMPORT}}",
+    `@${shared}`
+  );
   if (!policy || policy.includes(START) || policy.includes(END)) {
     throw fail("invalid canonical Claude policy");
   }
   return policy;
+}
+
+function sharedPolicyChecksum(sourceRoot) {
+  const shared = path.join(sourceRoot, "adapters", "shared", "global-policy.md");
+  if (!fs.existsSync(shared) || !fs.statSync(shared).isFile()) throw fail("missing canonical shared policy");
+  return checksum(fs.readFileSync(shared));
 }
 
 function renderPolicyBlock(policy) {
@@ -138,6 +169,7 @@ function assertPolicyManifest(policy) {
     || typeof policy !== "object"
     || Array.isArray(policy)
     || !/^[0-9a-f]{64}$/.test(policy.checksum)
+    || !/^[0-9a-f]{64}$/.test(policy.sharedChecksum)
     || !/^[0-9a-f]{64}$/.test(policy.placementChecksum)
     || typeof policy.prefix !== "string"
     || typeof policy.suffix !== "string"
@@ -245,6 +277,7 @@ function buildInstallingManifest({sourceRoot, block, placement, previousPolicyCh
     state: "installing",
     policy: {
       checksum: checksum(block),
+      sharedChecksum: sharedPolicyChecksum(sourceRoot),
       prefix: placement.prefix,
       suffix: placement.suffix,
       hadClaudeFile: placement.hadClaudeFile,
@@ -451,6 +484,7 @@ export function verifyClaudePolicy({sourceRoot = SOURCE_ROOT, claudeHome, logRes
     if (
       !managedBlockIsIntact({claude, range, manifest: record.manifest})
       || installed !== expected
+      || record.manifest.policy.sharedChecksum !== sharedPolicyChecksum(sourceRoot)
     ) {
       drift.push("policy");
     }
@@ -536,36 +570,55 @@ function parseCli(args) {
   ) {
     throw fail("--claude-home requires a directory", "invalid_arguments");
   }
+  const runtimeIndexes = args.reduce(
+    (indexes, value, index) => value === "--runtime-root" ? [...indexes, index] : indexes,
+    []
+  );
+  if (runtimeIndexes.length > 1) throw fail("--runtime-root may be supplied once", "invalid_arguments");
+  const runtimeIndex = runtimeIndexes[0];
+  if (runtimeIndex !== undefined && (!args[runtimeIndex + 1] || args[runtimeIndex + 1].startsWith("--"))) {
+    throw fail("--runtime-root requires a directory", "invalid_arguments");
+  }
 
   const accepted = new Set(actions);
   if (homeIndex !== undefined) {
     accepted.add("--claude-home");
     accepted.add(args[homeIndex + 1]);
   }
+  if (runtimeIndex !== undefined) {
+    accepted.add("--runtime-root");
+    accepted.add(args[runtimeIndex + 1]);
+  }
   if (args.some(argument => !accepted.has(argument))) {
     throw fail("unsupported argument", "invalid_arguments");
   }
   return {
     action: actions[0],
-    claudeHome: homeIndex === undefined ? path.join(os.homedir(), ".claude") : args[homeIndex + 1]
+    claudeHome: homeIndex === undefined ? path.join(os.homedir(), ".claude") : args[homeIndex + 1],
+    runtimeRoot: runtimeIndex === undefined ? undefined : args[runtimeIndex + 1]
   };
 }
 
 function main(args) {
-  const {action, claudeHome} = parseCli(args);
+  const {action, claudeHome, runtimeRoot} = parseCli(args);
   if (action === "--install") {
+    installClaudeSkills({sourceRoot: SOURCE_ROOT, claudeHome});
     const {manifest} = installClaudePolicy({claudeHome});
-    installHarnessRuntime({sourceRoot: SOURCE_ROOT});
+    installHarnessRuntime({sourceRoot: SOURCE_ROOT, ...(runtimeRoot ? {runtimeRoot} : {})});
     console.log(JSON.stringify({installed: true, frameworkVersion: manifest.frameworkVersion}));
   } else if (action === "--verify") {
     const verification = verifyClaudePolicy({claudeHome, logResult: false});
-    const runtime = verifyHarnessRuntime({sourceRoot: SOURCE_ROOT});
-    if (!verification.valid || !runtime.valid) {
+    const skills = verifyClaudeSkills({sourceRoot: SOURCE_ROOT, claudeHome});
+    const runtime = verifyHarnessRuntime({sourceRoot: SOURCE_ROOT, ...(runtimeRoot ? {runtimeRoot} : {})});
+    if (!verification.valid || !skills.valid || !runtime.valid) {
       throw fail("Claude policy drift detected", "drifted_policy");
     }
     console.log(JSON.stringify(verification, null, 2));
   } else {
+    const skills = verifyClaudeSkills({sourceRoot: SOURCE_ROOT, claudeHome});
+    if (!skills.valid) throw fail("Claude skill drift detected", "drifted_skills");
     rollbackClaudePolicy({claudeHome});
+    rollbackClaudeSkills({claudeHome});
   }
 }
 

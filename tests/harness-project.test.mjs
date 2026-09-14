@@ -197,6 +197,78 @@ test("records only whitelisted Harness event metadata and never stores task text
   assert.doesNotMatch(events, /不要泄露|私有验收|\.env/);
 });
 
+test("records reasoning method selection and completion without prompt or chain-of-thought fields", t => {
+  const project = makeFixture(t);
+  const harness = buildHarness({
+    projectRoot: project,
+    task: {id: "method-audit", goal: "private goal", acceptanceCriteria: ["private acceptance"]}
+  });
+  writeHarness({projectRoot: project, harness});
+
+  const selected = appendHarnessEvent({
+    projectRoot: project,
+    taskId: "method-audit",
+    event: {
+      event: "reasoning_method_selected",
+      host: "codex",
+      methodId: "first-principles",
+      methodVersion: "1.0.0",
+      source: "user-selected"
+    }
+  });
+  const completed = appendHarnessEvent({
+    projectRoot: project,
+    taskId: "method-audit",
+    event: {
+      event: "reasoning_method_completed",
+      host: "codex",
+      methodId: "first-principles",
+      methodVersion: "1.0.0",
+      artifactRef: "artifact:decision-variables"
+    }
+  });
+
+  assert.equal(selected.source, "user-selected");
+  assert.equal(completed.artifactRef, "artifact:decision-variables");
+  assert.throws(() => appendHarnessEvent({
+    projectRoot: project,
+    taskId: "method-audit",
+    event: {
+      event: "reasoning_method_selected",
+      host: "codex",
+      methodId: "first-principles",
+      methodVersion: "1.0.0",
+      source: "user-selected",
+      prompt: "private prompt"
+    }
+  }), /invalid harness event field/);
+});
+
+test("CLI records reasoning method audit events", t => {
+  const project = makeFixture(t);
+  const harness = buildHarness({
+    projectRoot: project,
+    task: {id: "method-cli", goal: "private goal", acceptanceCriteria: ["private acceptance"]}
+  });
+  writeHarness({projectRoot: project, harness});
+  const script = path.join(sourceRoot, "scripts", "harness-project.mjs");
+
+  const selected = spawnSync(process.execPath, [
+    script, "--project", project, "--task-id", "method-cli", "--record-method-selected",
+    "--host", "claude", "--method-id", "fact-checking", "--method-version", "1.0.0", "--method-source", "required"
+  ], {encoding: "utf8"});
+  const completed = spawnSync(process.execPath, [
+    script, "--project", project, "--task-id", "method-cli", "--record-method-completed",
+    "--host", "claude", "--method-id", "fact-checking", "--method-version", "1.0.0", "--artifact-ref", "artifact:claim-table"
+  ], {encoding: "utf8"});
+
+  assert.equal(selected.status, 0, selected.stderr);
+  assert.equal(completed.status, 0, completed.stderr);
+  assert.deepEqual(readHarnessEvents({projectRoot: project, taskId: "method-cli"}).map(event => event.event), [
+    "reasoning_method_selected", "reasoning_method_completed"
+  ]);
+});
+
 test("reads only the requested task events from a shared event stream", t => {
   const project = makeFixture(t);
   const primary = buildHarness({

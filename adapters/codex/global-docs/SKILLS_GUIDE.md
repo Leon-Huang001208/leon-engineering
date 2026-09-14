@@ -16,6 +16,8 @@
 | `review-ship` | 审查改动、验证证据并准备交付。 |
 | `skill-health` | 审计技能目录、生命周期和重叠触发条件。 |
 
+工程轨还提供十个无权限推理 Skill：`socratic-clarification`、`dual-layer-explanation`、`reverse-engineering`、`horizontal-vertical-analysis`、`fact-checking`、`expert-perspectives`、`first-principles`、`cross-domain-transfer`、`steelman-comparison` 与 `minimal-experiment`。它们只在正向触发成立时改变分析程序，最多组合三个；反向触发、版本、可观察输出和组合边界由各自 `contract.json` 与 `SKILL.md` 共同定义。
+
 处理可能受益于专门能力的任务时，先检查已安装目录中与目标匹配的 skill、agent 和工具；这属于任务路由，不是安装动作。发现外部候选不等于安装：没有现成匹配时继续以通用能力完成当前工作；只有外部候选预计有明确质量或速度收益，才进入下述生命周期并取得用户同意。
 
 跨宿主的可用范围以 `docs/shared-capability-catalog.md` 为准。目录把已经逐文件比对的宿主共用 skill 与七个规范职责代理列为可路由能力；Claude 专用候选不能因为名称相近而被 Codex 隐式调用或复制。
@@ -37,3 +39,5 @@
 `iteration-delivery` 是实现性 Git 任务的默认收尾方式。它自动识别远端默认分支，优先直推并在分支保护拒绝时转 PR；只有交付提交已进入远端默认分支、CI 通过或明确未配置、所有 worktree 干净时才清理。显式 `no-push`、仅本地、草稿、调研、评审和只读任务不进入自动发布。
 
 `project-constraints` 默认也只读。它只读取受跟踪的 `.agents/project-constraints.json` 与调用方明确传入的相对变更路径；有违反时以 JSON 和退出码交给 CI，不能把静态检查当作运行时或 Windows 平台验证。
+
+推理方法的选择与完成可通过 Harness 记录脱敏 ID、版本、来源和产物引用。该审计是非阻断的；普通任务没有选方法不会导致 `harness-enforce` 失败。

@@ -1,7 +1,7 @@
 {
   "name": "leon-engineering",
-  "version": "0.16.3",
-  "description": "Personal engineering workflow: safe autonomy and evidence-first delivery",
+  "version": "0.17.0",
+  "description": "Shared Codex and Claude engineering workflows with evidence-first reasoning",
   "author": {"name": "Leon"},
   "license": "UNLICENSED",
   "skills": ["./skills/"],
