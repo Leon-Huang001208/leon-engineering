@@ -152,33 +152,36 @@ test("reports global drift and rolls back only framework-owned content", t => {
 
 test("installs and verifies the global framework through the command line", t => {
   const codexHome = makeCodexHome(t);
+  const runtimeRoot = path.join(codexHome, "runtime");
   const script = path.join(sourceRoot, "scripts", "install-codex-adapter.mjs");
 
   const installed = spawnSync(
     process.execPath,
-    [script, "--install-global", "--codex-home", codexHome],
+    [script, "--install-global", "--codex-home", codexHome, "--runtime-root", runtimeRoot],
     {encoding: "utf8"}
   );
   assert.equal(installed.status, 0, installed.stderr);
 
   const verified = spawnSync(
     process.execPath,
-    [script, "--verify-global", "--codex-home", codexHome],
+    [script, "--verify-global", "--codex-home", codexHome, "--runtime-root", runtimeRoot],
     {encoding: "utf8"}
   );
   assert.equal(verified.status, 0, verified.stderr);
   assert.match(verified.stdout, /"valid": true/);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(runtimeRoot, ".leon-engineering-harness-runtime.json"), "utf8")).sourceRoot, sourceRoot);
 });
 
 test("redacts user AGENTS.md text from successful global CLI installation output", t => {
   const codexHome = makeCodexHome(t);
+  const runtimeRoot = path.join(codexHome, "runtime");
   const script = path.join(sourceRoot, "scripts", "install-codex-adapter.mjs");
   const sentinel = "USER_PRIVATE_SENTINEL_CODEX_GLOBAL_INSTALL";
   fs.writeFileSync(path.join(codexHome, "AGENTS.md"), `# User rules\n${sentinel}\n`);
 
   const installed = spawnSync(
     process.execPath,
-    [script, "--install-global", "--codex-home", codexHome],
+    [script, "--install-global", "--codex-home", codexHome, "--runtime-root", runtimeRoot],
     {encoding: "utf8"}
   );
 
@@ -207,7 +210,7 @@ test("installs every canonical skill and writes a checksum manifest", t => {
 
   const manifest = JSON.parse(fs.readFileSync(path.join(target, ".leon-engineering.json"), "utf8"));
   assert.equal(manifest.schemaVersion, 1);
-  assert.deepEqual(Object.keys(manifest.skills).sort(), SKILL_NAMES);
+  assert.deepEqual(Object.keys(manifest.skills).sort(), [...SKILL_NAMES].sort());
   assert.match(
     fs.readFileSync(
       path.join(target, "agent-routing", "references", "codex-role-templates.md"),

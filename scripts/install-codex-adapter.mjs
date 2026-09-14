@@ -5,6 +5,7 @@ import path from "node:path";
 import {execFileSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
 import {defaultHarnessRuntimeRoot, installHarnessRuntime, verifyHarnessRuntime} from "./harness-runtime.mjs";
+import {REASONING_SKILL_NAMES} from "./reasoning-skills.mjs";
 
 const MANIFEST_NAME = ".leon-engineering.json";
 const GLOBAL_MANIFEST_NAME = ".leon-engineering-global.json";
@@ -25,7 +26,8 @@ export const SKILL_NAMES = [
   "project-constraints",
   "project-harness",
   "review-ship",
-  "skill-health"
+  "skill-health",
+  ...REASONING_SKILL_NAMES
 ];
 
 export const GLOBAL_DOCUMENT_NAMES = [
@@ -111,9 +113,12 @@ function globalHooksPath(codexHome) {
 }
 
 function canonicalGlobalPolicy(sourceRoot) {
-  const file = path.join(sourceRoot, "adapters", "codex", "global-policy.md");
-  if (!fs.existsSync(file)) throw new Error("missing canonical global policy");
-  const content = fs.readFileSync(file, "utf8").trim();
+  const files = [
+    path.join(sourceRoot, "adapters", "shared", "global-policy.md"),
+    path.join(sourceRoot, "adapters", "codex", "global-policy.md")
+  ];
+  if (files.some(file => !fs.existsSync(file))) throw new Error("missing canonical global policy");
+  const content = files.map(file => fs.readFileSync(file, "utf8").trim()).join("\n\n");
   if (!content || content.includes(GLOBAL_POLICY_START) || content.includes(GLOBAL_POLICY_END)) {
     throw new Error("invalid canonical global policy");
   }
@@ -558,7 +563,7 @@ export function rollbackGlobalFramework({sourceRoot = SOURCE_ROOT, codexHome}) {
   }
 }
 
-export function install({sourceRoot = SOURCE_ROOT, targetRoot}) {
+export function install({sourceRoot = SOURCE_ROOT, targetRoot, logResult = true}) {
   if (!targetRoot) throw new Error("targetRoot is required");
   fs.mkdirSync(targetRoot, {recursive: true});
 
@@ -594,17 +599,17 @@ export function install({sourceRoot = SOURCE_ROOT, targetRoot}) {
       skills
     };
     writeAtomically(manifestPath(targetRoot), `${JSON.stringify(manifest, null, 2)}\n`);
-    log("installed", {skillCount: SKILL_NAMES.length});
+    if (logResult) log("installed", {skillCount: SKILL_NAMES.length});
     return {skills: SKILL_NAMES, manifest};
   } catch (error) {
-    log("install_failed", {message: error.message});
+    if (logResult) log("install_failed", {message: error.message});
     throw error;
   } finally {
     fs.rmSync(staging, {recursive: true, force: true});
   }
 }
 
-export function verify({sourceRoot = SOURCE_ROOT, targetRoot}) {
+export function verify({sourceRoot = SOURCE_ROOT, targetRoot, logResult = true}) {
   if (!targetRoot) throw new Error("targetRoot is required");
   const manifest = readManifest(targetRoot);
   if (!manifest) throw new Error("adapter manifest not found");
@@ -620,11 +625,11 @@ export function verify({sourceRoot = SOURCE_ROOT, targetRoot}) {
       return true;
     }
   });
-  log("verified", {valid: drift.length === 0, driftCount: drift.length});
+  if (logResult) log("verified", {valid: drift.length === 0, driftCount: drift.length});
   return {valid: drift.length === 0, drift};
 }
 
-export function rollback({targetRoot}) {
+export function rollback({targetRoot, logResult = true}) {
   if (!targetRoot) throw new Error("targetRoot is required");
   const manifest = readManifest(targetRoot);
   if (!manifest) throw new Error("adapter manifest not found");
@@ -647,7 +652,7 @@ export function rollback({targetRoot}) {
     fs.rmSync(path.join(targetRoot, name), {recursive: true, force: true});
   }
   fs.rmSync(manifestPath(targetRoot), {force: true});
-  log("rolled_back", {skillCount: Object.keys(manifest.skills).length});
+  if (logResult) log("rolled_back", {skillCount: Object.keys(manifest.skills).length});
 }
 
 function main(args) {
@@ -657,12 +662,19 @@ function main(args) {
   if (codexHomeIndex >= 0 && !args[codexHomeIndex + 1]) {
     throw new Error("--codex-home requires a directory");
   }
+  const runtimeRootIndex = args.indexOf("--runtime-root");
+  if (runtimeRootIndex >= 0 && (!args[runtimeRootIndex + 1] || args[runtimeRootIndex + 1].startsWith("--"))) {
+    throw new Error("--runtime-root requires a directory");
+  }
   const targetRoot = targetIndex >= 0
     ? args[targetIndex + 1]
     : path.join(os.homedir(), ".codex", "skills");
   const codexHome = codexHomeIndex >= 0
     ? args[codexHomeIndex + 1]
     : path.join(os.homedir(), ".codex");
+  const runtimeRoot = runtimeRootIndex >= 0
+    ? args[runtimeRootIndex + 1]
+    : defaultHarnessRuntimeRoot();
   const globalActions = ["--install-global", "--verify-global", "--rollback-global"]
     .filter(action => args.includes(action));
   if (globalActions.length > 1) throw new Error("use only one global framework action");
@@ -672,7 +684,7 @@ function main(args) {
 
   if (args.includes("--install-global")) {
     const {documents, manifest} = installGlobalFramework({codexHome});
-    installHarnessRuntime({sourceRoot: SOURCE_ROOT});
+    installHarnessRuntime({sourceRoot: SOURCE_ROOT, runtimeRoot});
     console.log(JSON.stringify({
       installed: true,
       documents,
@@ -682,7 +694,7 @@ function main(args) {
   }
   if (args.includes("--verify-global")) {
     const verification = verifyGlobalFramework({codexHome});
-    const runtime = verifyHarnessRuntime({sourceRoot: SOURCE_ROOT});
+    const runtime = verifyHarnessRuntime({sourceRoot: SOURCE_ROOT, runtimeRoot});
     const result = {valid: verification.valid && runtime.valid, drift: [...verification.drift, ...runtime.drift.map(item => `runtime:${item}`)]};
     console.log(JSON.stringify(result, null, 2));
     if (!result.valid) process.exitCode = 1;

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {buildProfile} from "./profile-project.mjs";
-import {HARNESS_DIRECTORY} from "./harness-project.mjs";
+import {HARNESS_DIRECTORY, readHarnessEvents} from "./harness-project.mjs";
 
 const OUTCOME_STATUSES = new Set(["completed", "blocked", "rework", "invalidated"]);
 const VERIFICATION_STATUSES = new Set(["passed", "failed", "not_run"]);
@@ -91,7 +91,51 @@ function average(values) {
   return values.length === 0 ? null : values.reduce((total, value) => total + value, 0) / values.length;
 }
 
-function summarize(records) {
+function summarizeReasoningMethods(records, eventsByTask) {
+  const terminalByTask = new Map(records.map(record => [record.id, record.outcomes.at(-1)]));
+  const selected = [];
+  const completed = [];
+  const selectionsByTask = new Map();
+  for (const [taskId, events] of eventsByTask) {
+    for (const event of events) {
+      if (event.event === "reasoning_method_selected") {
+        selected.push(event);
+        const methods = selectionsByTask.get(taskId) ?? new Set();
+        methods.add(event.methodId);
+        selectionsByTask.set(taskId, methods);
+      } else if (event.event === "reasoning_method_completed") completed.push(event);
+    }
+  }
+  const byMethod = {};
+  for (const event of selected) {
+    const summary = byMethod[event.methodId] ?? {selected: 0, completed: 0, passedTasks: 0, reworkTasks: 0};
+    summary.selected += 1;
+    byMethod[event.methodId] = summary;
+  }
+  for (const event of completed) {
+    const summary = byMethod[event.methodId] ?? {selected: 0, completed: 0, passedTasks: 0, reworkTasks: 0};
+    summary.completed += 1;
+    byMethod[event.methodId] = summary;
+  }
+  for (const [taskId, methods] of selectionsByTask) {
+    const outcome = terminalByTask.get(taskId);
+    for (const methodId of methods) {
+      if (outcome?.status === "completed" && outcome.verification.status === "passed") byMethod[methodId].passedTasks += 1;
+      if ((outcome?.reworkCount ?? 0) > 0) byMethod[methodId].reworkTasks += 1;
+    }
+  }
+  return {
+    selectedCount: selected.length,
+    completedCount: completed.length,
+    tasksWithSelection: selectionsByTask.size,
+    adoptionRate: ratio(selectionsByTask.size, records.length),
+    combinationTaskCount: [...selectionsByTask.values()].filter(methods => methods.size > 1).length,
+    completionRate: ratio(completed.length, selected.length),
+    byMethod
+  };
+}
+
+function summarize(records, eventsByTask) {
   const terminal = records.filter(record => record.outcomes.length > 0).map(record => ({...record, outcome: record.outcomes.at(-1)}));
   const completedPassed = terminal.filter(record => record.outcome.status === "completed" && record.outcome.verification.status === "passed");
   const firstPass = completedPassed.filter(record => record.outcomes.length === 1 && record.outcome.reworkCount === 0);
@@ -112,7 +156,8 @@ function summarize(records) {
     averageReworkCount: average(terminal.map(record => record.outcome.reworkCount)),
     verificationDurationCoverage: ratio(durations.length, terminal.length),
     averageVerificationDurationSeconds: average(durations),
-    blockerCategories
+    blockerCategories,
+    reasoningMethods: summarizeReasoningMethods(records, eventsByTask)
   };
 }
 
@@ -122,7 +167,9 @@ export function evaluateHarness({projectRoot}) {
   if (!directory) throw new Error("missing task harness");
   const tasks = existingSafeDirectory(root, path.posix.join(HARNESS_DIRECTORY, "tasks"));
   if (!tasks) throw new Error("missing task harness");
-  return {schemaVersion: 1, projectRoot: root, summary: summarize(readTaskRecords(tasks))};
+  const records = readTaskRecords(tasks);
+  const eventsByTask = new Map(records.map(record => [record.id, readHarnessEvents({projectRoot: root, taskId: record.id})]));
+  return {schemaVersion: 1, projectRoot: root, summary: summarize(records, eventsByTask)};
 }
 
 function formatPercentage(value) {
@@ -150,6 +197,7 @@ export function formatEvaluation(result, format = "json") {
     `- 平均澄清轮次：${formatNumber(summary.averageClarificationRounds)}；平均返工次数：${formatNumber(summary.averageReworkCount)}。`,
     `- 验证耗时覆盖率：${formatPercentage(summary.verificationDurationCoverage)}；已记录样本平均验证耗时：${formatNumber(summary.averageVerificationDurationSeconds)} 秒。`,
     `- 阻塞分类：${blockers}。`,
+    `- 方法采用率：${formatPercentage(summary.reasoningMethods.adoptionRate)}；选择 ${summary.reasoningMethods.selectedCount} 次，完成 ${summary.reasoningMethods.completedCount} 次，组合任务 ${summary.reasoningMethods.combinationTaskCount} 个。`,
     "",
     "说明：本报告只读取已记录的任务证据，不执行记录中的任何命令。历史任务缺少耗时或阻塞分类时会降低覆盖率，不能据此推断实际速度。"
   ].join("\n");
