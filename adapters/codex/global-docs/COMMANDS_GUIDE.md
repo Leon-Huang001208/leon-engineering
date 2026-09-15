@@ -29,6 +29,19 @@ claude plugin list
 
 技能安装与全局文档安装是独立操作。不要用全局框架命令代替目标项目的测试、lint、构建、浏览器检查或平台验证。实际运行过的命令和结果才可作为交付证据。
 
+## 已登记 verifier 的观察执行
+
+Harness 初始化或刷新 Agent Map 时会写入机器可读的 verifier 清单和稳定 verifier ID。只对清单中已知、非交互的 verifier 使用受管执行入口；未知命令继续使用原生 `exec_command`：
+
+```bash
+node "$HOME/.agents/leon-engineering/runtime/harness-run.mjs" --project /absolute/project --task-id task-id --verifier-id verifier-test-0123456789ab
+node "$HOME/.agents/leon-engineering/runtime/harness-run.mjs" --project /absolute/project --task-id task-id --read-observation observation-0123456789abcdef01234567
+```
+
+Codex 的 patch→verify 仍使用现有 `functions.exec` 顺序调用：先执行 `apply_patch`，确认补丁成功后才调用 `harness-run.mjs` 运行 verifier；补丁失败不得启动 verifier。该集成不新增工具 schema，也不把任意命令塞入观察层。
+
+完整 stdout/stderr 以 `0600` 留在 `.ai/harness/logs/<task-id>/`，路径穿越和符号链接会被拒绝，日志不会自动删除。总输出不超过 8 KiB 时完整返回；更大输出只返回不超过 6 KiB 的去重回执（2 KiB 头、1.5 KiB 尾、最多 2.5 KiB 错误上下文）。回执含 observation ID、状态、退出码、信号、耗时、完整/返回字节数、SHA-256、截断状态和日志引用；疑似秘密永不进入回执或回查，主归档失败则落到持久本地 fallback。`observation_recorded` / `observation_recalled` 指标不保存命令、日志或输出。
+
 对用户指定的陌生项目，可从源仓库运行以下只读命令：
 
 ```bash

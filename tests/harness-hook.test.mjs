@@ -91,6 +91,31 @@ test("classifies the degraded-mode command boundary conservatively", () => {
   assert.equal(classifyHookCommand({tool_name: "Bash", tool_input: {command: "sed -n '1p' -e '1w leaked.txt' AGENTS.md"}}), "unknown");
 });
 
+test("tokenizes quoted rg patterns without opening shell composition", () => {
+  const safe = [
+    "rg -n 'alpha|beta' .",
+    String.raw`rg -n 'C:\\fixtures\\alpha' .`,
+    String.raw`rg -n "alpha\\|beta" .`,
+    "rg -n '$(whoami)|literal' ."
+  ];
+  for (const command of safe) {
+    assert.equal(classifyHookCommand({tool_name: "exec_command", tool_input: {cmd: command}}), "diagnostic_read", command);
+  }
+
+  const unsafe = [
+    "rg alpha . | head",
+    "rg alpha . > result.txt",
+    "rg alpha . && pwd",
+    "rg $(whoami) .",
+    "rg \"$(whoami)\" .",
+    "rg 'unterminated .",
+    String.raw`rg alpha\\ beta .`
+  ];
+  for (const command of unsafe) {
+    assert.notEqual(classifyHookCommand({tool_name: "exec_command", tool_input: {cmd: command}}), "diagnostic_read", command);
+  }
+});
+
 test("initialization errors return structured redacted diagnostics", t => {
   const project = makeProject(t);
   const permissionError = Object.assign(new Error("EACCES: token=PRIVATE_SENTINEL"), {code: "EACCES"});
@@ -104,7 +129,7 @@ test("initialization errors return structured redacted diagnostics", t => {
   assert.equal(result.decision, "deny");
   assert.equal(result.classification, "mutation");
   assert.deepEqual(Object.keys(result.diagnostic).sort(), [
-    "code", "manifestPath", "recoveryCommand", "runtimePath", "stage"
+    "code", "manifestPath", "recoveryCommand", "recoveryKind", "runtimePath", "stage"
   ]);
   assert.equal(result.diagnostic.stage, "runtime_verify");
   assert.equal(result.diagnostic.code, "permission_denied");
@@ -151,6 +176,45 @@ test("corrupt task state is exposed as a stable diagnostic code", t => {
   assert.equal(result.degraded, true);
   assert.equal(result.diagnostic.stage, "session_start");
   assert.equal(result.diagnostic.code, "invalid_task_state");
+});
+
+test("recovery diagnostics route runtime session task and event faults differently", t => {
+  const project = makeProject(t);
+  const input = {cwd: project, session_id: "routed-recovery", tool_name: "Bash", tool_input: {command: "pwd"}};
+  const runtime = handleHarnessHook({
+    phase: "pre",
+    input,
+    host: "codex",
+    runtimeVerifier: () => { throw Object.assign(new Error("missing"), {code: "HARNESS_RUNTIME_MISSING"}); }
+  });
+  const session = handleHarnessHook({
+    phase: "pre",
+    input,
+    host: "codex",
+    sessionStarter: () => { throw new Error("invalid harness session"); }
+  });
+  const task = handleHarnessHook({
+    phase: "pre",
+    input,
+    host: "codex",
+    sessionStarter: () => { throw new Error("invalid harness task record"); }
+  });
+  const event = handleHarnessHook({
+    phase: "pre",
+    input,
+    host: "codex",
+    eventAppender: () => { throw new Error("append failed"); }
+  });
+
+  assert.equal(runtime.diagnostic.recoveryKind, "runtime_repair");
+  assert.match(runtime.diagnostic.recoveryCommand, /harness-runtime\.mjs.*--verify/);
+  assert.equal(session.diagnostic.recoveryKind, "session_repair");
+  assert.match(session.diagnostic.recoveryCommand, /harness-session\.mjs.*--help/);
+  assert.equal(task.diagnostic.recoveryKind, "task_repair");
+  assert.match(task.diagnostic.recoveryCommand, /harness-project\.mjs.*--help/);
+  assert.equal(event.diagnostic.recoveryKind, "event_repair");
+  assert.match(event.diagnostic.recoveryCommand, /harness-evaluate\.mjs.*--help/);
+  assert.equal(new Set([runtime.diagnostic.recoveryCommand, session.diagnostic.recoveryCommand, task.diagnostic.recoveryCommand, event.diagnostic.recoveryCommand]).size, 4);
 });
 
 test("version 2 sessions initialize normally without entering degraded mode", t => {
@@ -207,6 +271,41 @@ test("resolves a nested project root and skips an unmarked directory", t => {
   assert.equal(fs.existsSync(path.join(unmarked, ".ai")), false);
 });
 
+test("does not treat an ancestor-only instruction file as a project marker", t => {
+  const globalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "leon-harness-global-root-"));
+  t.after(() => fs.rmSync(globalRoot, {recursive: true, force: true}));
+  fs.writeFileSync(path.join(globalRoot, "AGENTS.md"), "# global rules\n");
+  const projectless = path.join(globalRoot, "scratch", "notes");
+  fs.mkdirSync(projectless, {recursive: true});
+  const script = path.resolve(import.meta.dirname, "..", "scripts", "harness-hook.mjs");
+  const result = spawnSync(process.execPath, [script, "--phase", "pre", "--host", "codex"], {
+    encoding: "utf8",
+    env: {...process.env, HOME: globalRoot, CODEX_SESSION_ID: "global-root-session"},
+    input: JSON.stringify({cwd: projectless, tool_name: "Write"})
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, "");
+  assert.equal(fs.existsSync(path.join(projectless, ".ai")), false);
+  assert.equal(fs.existsSync(path.join(globalRoot, ".ai")), false);
+});
+
+test("retains a non-git project instruction root for nested work", t => {
+  const project = makeProject(t);
+  const nested = path.join(project, "src", "feature");
+  fs.mkdirSync(nested, {recursive: true});
+
+  const result = handleHarnessHook({
+    phase: "pre",
+    input: {cwd: nested, session_id: "nested-instruction-project", tool_name: "Bash", tool_input: {command: "pwd"}},
+    host: "codex"
+  });
+
+  assert.equal(result.decision, "allow");
+  assert.equal(fs.existsSync(path.join(project, ".ai", "harness")), true);
+  assert.equal(fs.existsSync(path.join(nested, ".ai")), false);
+});
+
 test("hook CLI emits an allow decision with structured degraded diagnostics", t => {
   const project = makeProject(t);
   const script = path.resolve(import.meta.dirname, "..", "scripts", "harness-hook.mjs");
@@ -229,7 +328,7 @@ test("hook CLI emits an allow decision with structured degraded diagnostics", t 
   assert.equal(diagnostic.code, "missing_session_id");
   assert.match(diagnostic.runtimePath, /leon-engineering\/runtime$/);
   assert.match(diagnostic.manifestPath, /\.leon-engineering-harness-runtime\.json$/);
-  assert.match(diagnostic.recoveryCommand, /--verify/);
+  assert.match(diagnostic.recoveryCommand, /harness-session\.mjs.*--help/);
   assert.doesNotMatch(executed.stderr, /PRIVATE_TOOL_INPUT/);
 });
 
@@ -333,7 +432,7 @@ test("initialization failure allows diagnostics but denies mutation and unknown 
     assert.equal(result.diagnostic.code, "invalid_session_state");
     assert.match(result.diagnostic.runtimePath, /\/(?:scripts|runtime)$/);
     assert.match(result.diagnostic.manifestPath, /\.leon-engineering-harness-runtime\.json$/);
-    assert.match(result.diagnostic.recoveryCommand, /--verify/);
+    assert.match(result.diagnostic.recoveryCommand, /harness-session\.mjs.*--help/);
     assert.doesNotMatch(JSON.stringify(result), /broken-session|\{broken/);
   }
 });

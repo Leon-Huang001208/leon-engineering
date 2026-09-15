@@ -22,7 +22,13 @@ function makeHarnessFixture(t) {
   t.after(() => fs.rmSync(project, {recursive: true, force: true}));
   writeFile(path.join(project, "AGENTS.md"), "# Fixture instructions\n");
   writeFile(path.join(project, ".ai", "harness", "agent-map.md"), "# Fixture map\n");
-  writeFile(path.join(project, ".ai", "harness", "metrics.jsonl"), "{\"event\":\"fixture\"}\n");
+  writeFile(path.join(project, ".ai", "harness", "metrics.jsonl"), [
+    {event: "fixture"},
+    {timestamp: "2026-09-14T00:00:03.000Z", event: "observation_recorded", taskId: "first-pass", verifierId: "verifier-test-111111111111", status: "passed", durationMs: 10, fullBytes: 100, returnedBytes: 50, truncated: true, archiveFailed: false},
+    {timestamp: "2026-09-14T00:00:04.000Z", event: "observation_recorded", taskId: "first-pass", verifierId: "verifier-test-111111111111", status: "passed", durationMs: 20, fullBytes: 200, returnedBytes: 100, truncated: true, archiveFailed: false},
+    {timestamp: "2026-09-14T00:00:05.000Z", event: "observation_recorded", taskId: "environment-blocker", verifierId: "verifier-lint-222222222222", status: "failed", durationMs: 30, fullBytes: 50, returnedBytes: 50, truncated: false, archiveFailed: true},
+    {timestamp: "2026-09-14T00:00:06.000Z", event: "observation_recalled", taskId: "first-pass", verifierId: "verifier-test-111111111111", status: "passed", durationMs: 10, fullBytes: 100, returnedBytes: 50, truncated: true, archiveFailed: false, recallCount: 1}
+  ].map(event => JSON.stringify(event)).join("\n") + "\n");
   writeFile(path.join(project, ".ai", "harness", "events.jsonl"), [
     {timestamp: "2026-09-14T00:00:00.000Z", taskId: "first-pass", event: "reasoning_method_selected", host: "codex", methodId: "first-principles", methodVersion: "1.0.0", source: "user-selected"},
     {timestamp: "2026-09-14T00:00:01.000Z", taskId: "first-pass", event: "reasoning_method_selected", host: "codex", methodId: "minimal-experiment", methodVersion: "1.0.0", source: "recommended"},
@@ -71,6 +77,20 @@ test("summarizes terminal evidence without writing or running project commands",
     verificationDurationCoverage: 0.5,
     averageVerificationDurationSeconds: 12,
     blockerCategories: {environment: 1},
+    observations: {
+      sampleSize: 3,
+      fullBytes: 350,
+      returnedBytes: 200,
+      returnedByteRatio: 200 / 350,
+      recallCount: 1,
+      recallRate: 1 / 3,
+      archiveFailureCount: 1,
+      archiveFailureRate: 1 / 3,
+      consistencySampleSize: 1,
+      consistentVerifierCount: 1,
+      verifierResultConsistencyRate: 1,
+      statusCounts: {passed: 2, failed: 1}
+    },
     reasoningMethods: {
       selectedCount: 2,
       completedCount: 1,
@@ -86,6 +106,11 @@ test("summarizes terminal evidence without writing or running project commands",
   });
   assert.match(formatEvaluation(result, "markdown"), /一次通过率.*50%/);
   assert.match(formatEvaluation(result, "markdown"), /方法采用率.*50%/);
+  assert.match(formatEvaluation(result, "markdown"), /Observation 样本：3/);
+  assert.match(formatEvaluation(result, "markdown"), /返回字节比：57%/);
+  assert.match(formatEvaluation(result, "markdown"), /回查率：33%/);
+  assert.match(formatEvaluation(result, "markdown"), /归档失败率：33%/);
+  assert.match(formatEvaluation(result, "markdown"), /verifier 结果一致率：100%.*1\/1/);
   assert.equal(fs.readFileSync(metrics, "utf8"), before);
   assert.equal(fs.existsSync(path.join(project, "this-command-must-not-run")), false);
 });

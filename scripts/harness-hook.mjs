@@ -26,12 +26,15 @@ const READ_ONLY_GIT_ACTIONS = new Set([
 function projectRoot(cwd) {
   if (typeof cwd !== "string" || cwd.length === 0) return null;
   try {
-    let candidate = fs.realpathSync(cwd);
+    const start = fs.realpathSync(cwd);
+    let candidate = start;
     if (!fs.statSync(candidate).isDirectory()) return null;
+    const globalInstructionRoot = fs.realpathSync(os.homedir());
     let instructionRoot = null;
     while (true) {
       if (fs.existsSync(path.join(candidate, ".git")) || fs.existsSync(path.join(candidate, ".ai", "harness"))) return candidate;
-      if (!instructionRoot && (fs.existsSync(path.join(candidate, "AGENTS.md")) || fs.existsSync(path.join(candidate, "CLAUDE.md")))) {
+      if (!instructionRoot && candidate !== globalInstructionRoot
+        && (fs.existsSync(path.join(candidate, "AGENTS.md")) || fs.existsSync(path.join(candidate, "CLAUDE.md")))) {
         instructionRoot = candidate;
       }
       const parent = path.dirname(candidate);
@@ -58,16 +61,30 @@ function toolCategory(name) {
 
 function tokenizeShell(command) {
   if (typeof command !== "string" || command.trim().length === 0 || command.length > 4096) return null;
-  if (/[\r\n;&|`]/.test(command) || /\$\(|\$\{/.test(command) || command.includes("\\")) return null;
   const words = [];
   let word = "";
   let quote = null;
-  for (const character of command.trim()) {
-    if (quote) {
-      if (character === quote) quote = null;
+  const source = command.trim();
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (quote === "'") {
+      if (character === "'") quote = null;
       else word += character;
+    } else if (quote === '"') {
+      if (character === '"') quote = null;
+      else if (character === "\\") {
+        if (index + 1 >= source.length) return null;
+        word += source[index + 1];
+        index += 1;
+      } else if (character === "`" || (character === "$" && ["(", "{"].includes(source[index + 1]))) {
+        return null;
+      } else word += character;
     } else if (character === "'" || character === '"') {
       quote = character;
+    } else if (character === ">" || character === "<") {
+      return {words: [], redirection: true};
+    } else if (/[\r\n;&|`]/.test(character) || character === "\\" || (character === "$" && ["(", "{"].includes(source[index + 1]))) {
+      return null;
     } else if (/\s/.test(character)) {
       if (word) words.push(word);
       word = "";
@@ -77,7 +94,7 @@ function tokenizeShell(command) {
   }
   if (quote) return null;
   if (word) words.push(word);
-  return words;
+  return {words, redirection: false};
 }
 
 function shellCommand(input) {
@@ -144,8 +161,9 @@ function isManagedRuntimeVerify(words) {
 
 function classifyShell(command) {
   if (typeof command !== "string" || command.trim().length === 0) return "unknown";
-  if (/[<>]/.test(command)) return "mutation";
-  const words = tokenizeShell(command);
+  const tokenized = tokenizeShell(command);
+  if (tokenized?.redirection) return "mutation";
+  const words = tokenized?.words;
   if (!words?.length) return "unknown";
   const executable = path.basename(words[0]);
   if (MUTATING_EXECUTABLES.has(executable)) return "mutation";
@@ -207,12 +225,34 @@ function diagnosticCode(error, stage) {
 }
 
 function initializationDiagnostic(error, stage) {
+  const code = diagnosticCode(error, stage);
+  let recoveryKind = "runtime_repair";
+  let recoveryScript = "harness-runtime.mjs";
+  let recoveryArgument = "--verify";
+  if (code === "missing_session_id" || code === "invalid_session_state" || stage === "session_start") {
+    recoveryKind = "session_repair";
+    recoveryScript = "harness-session.mjs";
+    recoveryArgument = "--help";
+  }
+  if (code === "invalid_task_state") {
+    recoveryKind = "task_repair";
+    recoveryScript = "harness-project.mjs";
+    recoveryArgument = "--help";
+  }
+  if (code === "event_record_failed" || stage === "event_record") {
+    recoveryKind = "event_repair";
+    recoveryScript = "harness-evaluate.mjs";
+    recoveryArgument = "--help";
+  }
   return {
     stage,
-    code: diagnosticCode(error, stage),
+    code,
     runtimePath: RUNTIME_PATH,
     manifestPath: MANIFEST_PATH,
-    recoveryCommand: `node "${path.join(RUNTIME_PATH, "harness-runtime.mjs")}" --verify --runtime-root "${RUNTIME_PATH}"`
+    recoveryKind,
+    recoveryCommand: recoveryArgument === "--verify"
+      ? `node "${path.join(RUNTIME_PATH, recoveryScript)}" --verify --runtime-root "${RUNTIME_PATH}"`
+      : `node "${path.join(RUNTIME_PATH, recoveryScript)}" ${recoveryArgument}`
   };
 }
 

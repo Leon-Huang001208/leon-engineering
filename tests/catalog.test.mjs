@@ -279,6 +279,27 @@ test("requires automatic Harness start and a cross-host delivery hard gate", () 
   assert.match(commands, /交付硬门/);
 });
 
+test("documents observed verifier execution without changing the Codex tool schema", () => {
+  const harness = fs.readFileSync(path.join(root, "skills", "project-harness", "SKILL.md"), "utf8");
+  const commands = fs.readFileSync(path.join(root, "adapters", "codex", "global-docs", "COMMANDS_GUIDE.md"), "utf8");
+  const harnessDoc = fs.readFileSync(path.join(root, "docs", "harness-v1.md"), "utf8");
+
+  for (const content of [harness, commands, harnessDoc]) {
+    assert.match(content, /harness-run\.mjs/);
+    assert.match(content, /verifier ID/i);
+    assert.match(content, /8\s*KiB/i);
+    assert.match(content, /6\s*KiB/i);
+    assert.match(content, /observation_recorded/);
+    assert.match(content, /observation_recalled/);
+  }
+  assert.match(harness, /runObserved\(spec\)/);
+  assert.match(harness, /readObservation\(query\)/);
+  assert.match(commands, /functions\.exec/);
+  assert.match(commands, /补丁成功.*verifier/s);
+  assert.match(commands, /原生 `exec_command`/);
+  assert.match(commands, /不新增工具 schema/);
+});
+
 test("governs the audited Claude catalog through explicit shared boundaries", () => {
   const codexPolicy = readEffectivePolicy("codex");
   const claudePolicy = readEffectivePolicy("claude");
