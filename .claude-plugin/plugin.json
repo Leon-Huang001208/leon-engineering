@@ -1,6 +1,6 @@
 {
   "name": "leon-engineering",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "description": "Shared Codex and Claude engineering workflows with evidence-first reasoning",
   "author": {"name": "Leon"},
   "license": "UNLICENSED",

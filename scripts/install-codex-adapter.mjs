@@ -688,7 +688,12 @@ function main(args) {
     console.log(JSON.stringify({
       installed: true,
       documents,
-      frameworkVersion: manifest.frameworkVersion
+      frameworkVersion: manifest.frameworkVersion,
+      activation: {
+        status: "restart_required",
+        scope: "codex_host_process",
+        note: "New tasks created before the Codex host restarts may still use cached hooks."
+      }
     }));
     return;
   }

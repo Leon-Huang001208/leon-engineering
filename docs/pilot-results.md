@@ -188,3 +188,11 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - Codex 的用户级 `hooks.json` 接入 `PreToolUse` 与 `PostToolUse`，在本地工具边界调用受管 `harness-hook.mjs`。运行时使用与源代码相同的校验和清单；出现漂移时不将 Hook 视为合格。
 - 回归覆盖了共享事件流中多个任务的隔离读取，以及 Codex `apply_patch` 被正确分类为 `write`。这两项均先以失败测试复现后修复。
 - Hook 只记录任务 ID、宿主、事件类别和白名单状态；交付结论仍必须由 `harness-enforce` 的真实验证结果支持。
+
+## Codex Hook 宿主刷新边界复核
+
+**日期：**2026-09-15
+
+- 0.18.0 安装后，源码与 `/Users/leon/.agents/leon-engineering/runtime/harness-hook.mjs` 的 SHA-256 完全一致，`--verify-global` 与 runtime `--verify` 均返回 `valid: true`；同一失败 cwd 和 session ID 直接调用当前安装 Hook 时退出码为 0，且 stdout/stderr 为空，证明磁盘安装副本会正确跳过 projectless 目录。
+- 同时，原有 projectless 任务和安装后新建的 projectless 任务仍由 PreToolUse 返回旧诊断：`classification=unknown`、`stage=session_start`、`code=initialization_failed`，并错误建议 runtime `--verify`。Codex app-server 进程启动时间早于 `hooks.json` 与 runtime 更新时间，说明新任务继续继承宿主进程缓存；新建任务不是刷新边界。
+- 0.18.1 将这一平台激活边界变成安装器的机器可读契约：全局安装成功输出包含 `activation.status=restart_required` 与 `activation.scope=codex_host_process`。命令指南明确要求完整重启 Codex 本地宿主进程后再创建 projectless 验证任务，避免把磁盘校验通过误报成已热激活。

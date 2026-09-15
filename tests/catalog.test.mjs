@@ -306,6 +306,13 @@ test("documents observed verifier execution without changing the Codex tool sche
   assert.match(commands, /不新增工具 schema/);
 });
 
+test("documents the Codex host restart boundary after global hook installation", () => {
+  const commands = fs.readFileSync(path.join(root, "adapters", "codex", "global-docs", "COMMANDS_GUIDE.md"), "utf8");
+
+  assert.match(commands, /Codex.*宿主进程.*重启/s);
+  assert.match(commands, /新建任务.*不会.*刷新/s);
+});
+
 test("governs the audited Claude catalog through explicit shared boundaries", () => {
   const codexPolicy = readEffectivePolicy("codex");
   const claudePolicy = readEffectivePolicy("claude");
