@@ -56,7 +56,10 @@ test("upgrades a legacy active manifest that predates shared policy checksums", 
 
   const upgradedManifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   assert.match(upgradedManifest.policy.sharedChecksum, /^[0-9a-f]{64}$/);
-  assert.equal(upgradedManifest.frameworkVersion, "0.17.0");
+  assert.equal(
+    upgradedManifest.frameworkVersion,
+    JSON.parse(fs.readFileSync(path.join(sourceRoot, ".claude-plugin", "plugin.json"), "utf8")).version
+  );
   assert.match(fs.readFileSync(path.join(claudeHome, "CLAUDE.md"), "utf8"), /Keep this content unchanged\./);
   assert.equal(verifyClaudePolicy({sourceRoot, claudeHome}).valid, true);
 });

@@ -86,16 +86,24 @@ function packageCommands(root, profile) {
   const scripts = parsed.scripts;
   if (!scripts || typeof scripts !== "object" || Array.isArray(scripts)) return;
   const candidates = [
-    {kind: "build", script: "build", command: "npm run build"},
-    {kind: "lint", script: "lint", command: "npm run lint"},
-    {kind: "test", script: "test", command: "npm test"}
+    {kind: "build", script: "build", command: "npm run build", argv: ["npm", "run", "build"]},
+    {kind: "lint", script: "lint", command: "npm run lint", argv: ["npm", "run", "lint"]},
+    {kind: "test", script: "test", command: "npm test", argv: ["npm", "test"]}
   ];
   for (const candidate of candidates) {
     if (typeof scripts[candidate.script] === "string" && scripts[candidate.script].trim()) {
+      const workingDirectory = ".";
+      const verifierId = `verifier-${candidate.kind}-${crypto.createHash("sha256")
+        .update(`${candidate.command}\0${workingDirectory}\0${manifest}`)
+        .digest("hex").slice(0, 12)}`;
       profile.commands.push({
         kind: candidate.kind,
+        verifierId,
         command: candidate.command,
+        argv: candidate.argv,
+        workingDirectory,
         source: manifest,
+        interactive: false,
         status: "candidate"
       });
     }

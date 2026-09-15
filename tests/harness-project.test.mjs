@@ -47,6 +47,8 @@ test("builds a read-only agent map and task handoff without creating project fil
   });
   assert.match(formatAgentMap(harness), /AGENTS\.md/);
   assert.match(formatAgentMap(harness), /npm test/);
+  assert.match(formatAgentMap(harness), /verifier-test-[a-f0-9]{12}/);
+  assert.match(formatAgentMap(harness), /cwd `\.`.*source `package\.json`.*non-interactive/);
   assert.equal(fs.existsSync(path.join(project, ".ai", "harness")), false);
 });
 
@@ -64,6 +66,19 @@ test("persists an explicit harness once and appends only declared outcome eviden
   const files = writeHarness({projectRoot: project, harness});
   assert.equal(files.directory, path.join(fs.realpathSync(project), ".ai", "harness"));
   assert.match(fs.readFileSync(files.map, "utf8"), /Read the task record/);
+  const verifierManifest = JSON.parse(fs.readFileSync(files.verifiers, "utf8"));
+  assert.equal(verifierManifest.schemaVersion, 1);
+  assert.equal(verifierManifest.projectRoot, fs.realpathSync(project));
+  assert.deepEqual(verifierManifest.verifiers, harness.profile.commands.map(command => ({
+    id: command.verifierId,
+    kind: command.kind,
+    command: command.command,
+    argv: command.argv,
+    workingDirectory: command.workingDirectory,
+    source: command.source,
+    interactive: false
+  })));
+  assert.equal(fs.statSync(files.verifiers).mode & 0o777, 0o600);
   assert.equal(JSON.parse(fs.readFileSync(files.task, "utf8")).status, "ready");
   assert.equal(JSON.parse(fs.readFileSync(files.metrics, "utf8")).event, "task_created");
   assert.throws(() => writeHarness({projectRoot: project, harness}), /existing harness or task/);

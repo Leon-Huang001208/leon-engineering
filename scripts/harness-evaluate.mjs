@@ -135,7 +135,60 @@ function summarizeReasoningMethods(records, eventsByTask) {
   };
 }
 
-function summarize(records, eventsByTask) {
+function readMetrics(directory) {
+  const file = path.join(directory, "metrics.jsonl");
+  if (!fs.existsSync(file)) throw new Error("missing task harness");
+  const stat = fs.lstatSync(file);
+  if (stat.isSymbolicLink() || !stat.isFile()) throw new Error("invalid harness metrics");
+  return fs.readFileSync(file, "utf8").split("\n").filter(Boolean).map(line => {
+    try {
+      return JSON.parse(line);
+    } catch {
+      throw new Error("invalid harness metrics");
+    }
+  });
+}
+
+function summarizeObservations(metrics) {
+  const recorded = metrics.filter(metric => metric?.event === "observation_recorded");
+  const recalled = metrics.filter(metric => metric?.event === "observation_recalled");
+  const fullBytes = recorded.reduce((total, metric) => total + metric.fullBytes, 0);
+  const returnedBytes = recorded.reduce((total, metric) => total + metric.returnedBytes, 0);
+  const archiveFailureCount = recorded.filter(metric => metric.archiveFailed === true).length;
+  const statusCounts = {};
+  const byVerifier = new Map();
+  for (const metric of recorded) {
+    if (typeof metric.verifierId !== "string" || typeof metric.status !== "string"
+      || !Number.isInteger(metric.fullBytes) || metric.fullBytes < 0
+      || !Number.isInteger(metric.returnedBytes) || metric.returnedBytes < 0
+      || !Number.isInteger(metric.durationMs) || metric.durationMs < 0
+      || typeof metric.truncated !== "boolean" || typeof metric.archiveFailed !== "boolean") {
+      throw new Error("invalid observation metric");
+    }
+    statusCounts[metric.status] = (statusCounts[metric.status] ?? 0) + 1;
+    const statuses = byVerifier.get(metric.verifierId) ?? [];
+    statuses.push(metric.status);
+    byVerifier.set(metric.verifierId, statuses);
+  }
+  const repeated = [...byVerifier.values()].filter(statuses => statuses.length > 1);
+  const consistentVerifierCount = repeated.filter(statuses => new Set(statuses).size === 1).length;
+  return {
+    sampleSize: recorded.length,
+    fullBytes,
+    returnedBytes,
+    returnedByteRatio: ratio(returnedBytes, fullBytes),
+    recallCount: recalled.length,
+    recallRate: ratio(recalled.length, recorded.length),
+    archiveFailureCount,
+    archiveFailureRate: ratio(archiveFailureCount, recorded.length),
+    consistencySampleSize: repeated.length,
+    consistentVerifierCount,
+    verifierResultConsistencyRate: ratio(consistentVerifierCount, repeated.length),
+    statusCounts
+  };
+}
+
+function summarize(records, eventsByTask, metrics) {
   const terminal = records.filter(record => record.outcomes.length > 0).map(record => ({...record, outcome: record.outcomes.at(-1)}));
   const completedPassed = terminal.filter(record => record.outcome.status === "completed" && record.outcome.verification.status === "passed");
   const firstPass = completedPassed.filter(record => record.outcomes.length === 1 && record.outcome.reworkCount === 0);
@@ -157,6 +210,7 @@ function summarize(records, eventsByTask) {
     verificationDurationCoverage: ratio(durations.length, terminal.length),
     averageVerificationDurationSeconds: average(durations),
     blockerCategories,
+    observations: summarizeObservations(metrics),
     reasoningMethods: summarizeReasoningMethods(records, eventsByTask)
   };
 }
@@ -169,7 +223,7 @@ export function evaluateHarness({projectRoot}) {
   if (!tasks) throw new Error("missing task harness");
   const records = readTaskRecords(tasks);
   const eventsByTask = new Map(records.map(record => [record.id, readHarnessEvents({projectRoot: root, taskId: record.id})]));
-  return {schemaVersion: 1, projectRoot: root, summary: summarize(records, eventsByTask)};
+  return {schemaVersion: 1, projectRoot: root, summary: summarize(records, eventsByTask, readMetrics(directory))};
 }
 
 function formatPercentage(value) {
@@ -197,6 +251,9 @@ export function formatEvaluation(result, format = "json") {
     `- 平均澄清轮次：${formatNumber(summary.averageClarificationRounds)}；平均返工次数：${formatNumber(summary.averageReworkCount)}。`,
     `- 验证耗时覆盖率：${formatPercentage(summary.verificationDurationCoverage)}；已记录样本平均验证耗时：${formatNumber(summary.averageVerificationDurationSeconds)} 秒。`,
     `- 阻塞分类：${blockers}。`,
+    `- Observation 样本：${summary.observations.sampleSize}；返回字节比：${formatPercentage(summary.observations.returnedByteRatio)}（${summary.observations.returnedBytes}/${summary.observations.fullBytes}）。`,
+    `- 回查率：${formatPercentage(summary.observations.recallRate)}（${summary.observations.recallCount}/${summary.observations.sampleSize}）；归档失败率：${formatPercentage(summary.observations.archiveFailureRate)}（${summary.observations.archiveFailureCount}/${summary.observations.sampleSize}）。`,
+    `- verifier 结果一致率：${formatPercentage(summary.observations.verifierResultConsistencyRate)}（${summary.observations.consistentVerifierCount}/${summary.observations.consistencySampleSize}；仅统计重复运行的 verifier）。`,
     `- 方法采用率：${formatPercentage(summary.reasoningMethods.adoptionRate)}；选择 ${summary.reasoningMethods.selectedCount} 次，完成 ${summary.reasoningMethods.completedCount} 次，组合任务 ${summary.reasoningMethods.combinationTaskCount} 个。`,
     "",
     "说明：本报告只读取已记录的任务证据，不执行记录中的任何命令。历史任务缺少耗时或阻塞分类时会降低覆盖率，不能据此推断实际速度。"

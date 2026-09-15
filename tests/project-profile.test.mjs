@@ -44,10 +44,12 @@ test("builds bounded project evidence without writing", t => {
     {kind: "architecture", path: "docs/ARCHITECTURE.md"}
   ]);
   assert.deepEqual(profile.commands, [
-    {kind: "build", command: "npm run build", source: "package.json", status: "candidate"},
-    {kind: "lint", command: "npm run lint", source: "package.json", status: "candidate"},
-    {kind: "test", command: "npm test", source: "package.json", status: "candidate"}
+    {kind: "build", verifierId: profile.commands[0].verifierId, command: "npm run build", argv: ["npm", "run", "build"], workingDirectory: ".", source: "package.json", interactive: false, status: "candidate"},
+    {kind: "lint", verifierId: profile.commands[1].verifierId, command: "npm run lint", argv: ["npm", "run", "lint"], workingDirectory: ".", source: "package.json", interactive: false, status: "candidate"},
+    {kind: "test", verifierId: profile.commands[2].verifierId, command: "npm test", argv: ["npm", "test"], workingDirectory: ".", source: "package.json", interactive: false, status: "candidate"}
   ]);
+  for (const command of profile.commands) assert.match(command.verifierId, /^verifier-[a-z]+-[a-f0-9]{12}$/);
+  assert.deepEqual(buildProfile({projectRoot: project}).commands, profile.commands);
   assert.deepEqual(profile.ci, [{kind: "workflow", path: ".github/workflows/ci.yml"}]);
   assert.deepEqual(profile.platformSignals, [{kind: "desktop", path: "src-tauri"}]);
   assert.match(formatMarkdown(profile), /Candidate validation commands/);

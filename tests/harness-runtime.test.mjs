@@ -25,6 +25,8 @@ test("installs a verified Harness runtime that can preview a real project", t =>
   fs.writeFileSync(path.join(project, "package.json"), JSON.stringify({scripts: {test: "node --test"}}));
 
   const installed = installHarnessRuntime({sourceRoot, runtimeRoot});
+  assert.ok(HARNESS_RUNTIME_FILES.includes("harness-execution.mjs"));
+  assert.ok(HARNESS_RUNTIME_FILES.includes("harness-run.mjs"));
   assert.equal(installed.files.length, HARNESS_RUNTIME_FILES.length);
   assert.deepEqual(verifyHarnessRuntime({sourceRoot, runtimeRoot}), {valid: true, drift: []});
   for (const name of HARNESS_RUNTIME_FILES) assert.equal(fs.existsSync(path.join(runtimeRoot, name)), true);
@@ -44,6 +46,11 @@ test("installs a verified Harness runtime that can preview a real project", t =>
   assert.notEqual(preview.stdout, "", preview.stderr);
   assert.equal(JSON.parse(preview.stdout).persisted, false);
   assert.equal(fs.existsSync(path.join(project, ".ai", "harness")), false);
+
+  const runHelp = spawnSync(process.execPath, [path.join(runtimeRoot, "harness-run.mjs"), "--help"], {encoding: "utf8"});
+  assert.equal(runHelp.status, 0, runHelp.stderr);
+  assert.match(runHelp.stdout, /--verifier-id/);
+  assert.match(runHelp.stdout, /--read-observation/);
 });
 
 test("detects runtime drift and refuses symbolic-link runtime roots", t => {

@@ -10,6 +10,8 @@ Harness v1 解决“新会话忘记上下文、完成标准不稳定、无法衡
 - `.ai/harness/tasks/<task-id>.json`：目标、验收标准、当前状态和已记录的结果。
 - `.ai/harness/metrics.jsonl`：任务创建与结果事件，用于统计澄清轮次、返工次数、验证状态、实测验证耗时和阻塞分类。
 - `.ai/harness/events.jsonl`：只追加的跨宿主执行事件；只含任务 ID、宿主、事件类别和白名单状态，绝不含提示词、命令、路径、源代码、密钥或会话 ID。
+- `.ai/harness/verifiers.json`：Agent Map 的机器可读 verifier 清单；每项包含稳定 verifier ID、命令、相对工作目录、来源、参数数组和非交互标记。
+- `.ai/harness/logs/<task-id>/`：`0600` 的完整 stdout/stderr 和 observation 元数据；拒绝符号链接与路径穿越，不自动删除。
 
 默认命令只输出预览。`--write-harness` 是项目内写入的明确边界；已有 Harness 或同名任务不会被覆盖。`--record-outcome` 只保存执行者已经获得的证据，绝不执行命令、读取环境变量或访问网络。每条新结果都必须附带执行者实际测得的 `verificationDurationSeconds`；`blocked` 结果还必须附带标准化 `blockerCategory`。这些字段不是脚本估算出来的，也不能从聊天内容回填。
 
@@ -22,6 +24,19 @@ Harness v1 解决“新会话忘记上下文、完成标准不稳定、无法衡
 完成时必须先实际运行验证，再写入结果并运行 `harness-enforce.mjs --project <目录> --task-id <ID>`。实现任务加 `--require-delivery`；该硬门除开始事件、最新 `completed/passed` 结果、验证命令、实测耗时和验证完成事件外，还实时检查 receipt 中的远端提交、CI、分支和 worktree 状态。它不运行记录的命令，也不执行 Git 写操作。Codex 与 Claude 都在本地工具边界通过 `PreToolUse`/`PostToolUse` Hook 自动建立或恢复会话并记录非敏感事件。会话文件按宿主与不透明 session ID 联合摘要隔离；旧同宿主文件可迁移恢复，旧异宿主文件保持不变。读取端接受结构兼容的 v1/v2 会话记录，并仍校验摘要键、宿主和对应任务；损坏或不匹配记录不会被静默信任。
 
 初始化失败时，Hook 进入受限恢复模式：只有 `pwd`、配置/指令读取、`rg`、只读 `sed`、Git 只读命令和受管 runtime `--verify` 等明确 `diagnostic_read` 操作可继续；已知 `mutation` 和无法证明只读的 `unknown` 都拒绝。诊断只输出阶段、稳定错误码、受管 runtime/manifest 路径与恢复建议，不回显 session ID、命令、路径参数、源代码或原始异常。交付仍由硬门和项目 CI 机械验收，Hook 不能替代真实验证证据。
+
+## Observation 执行与回查
+
+`scripts/harness-execution.mjs` 公开 `runObserved(spec)` 和 `readObservation(query)`；`scripts/harness-run.mjs` 是不接受任意命令的薄 CLI：
+
+```bash
+node scripts/harness-run.mjs --project /absolute/project --task-id task-id --verifier-id verifier-test-0123456789ab
+node scripts/harness-run.mjs --project /absolute/project --task-id task-id --read-observation observation-0123456789abcdef01234567
+```
+
+观察层只运行 `.ai/harness/verifiers.json` 中已登记且标记为非交互的 verifier；未知命令仍由原生 `exec_command` 执行。完整 stdout/stderr 写入本地日志。总输出不超过 8 KiB 时完整返回；更大输出返回不超过 6 KiB 的去重回执，内容预算为 2 KiB 头、1.5 KiB 尾和最多 2.5 KiB 错误上下文。回执包含版本、observation ID、状态、退出码、信号、耗时、完整/返回字节数、SHA-256、截断状态与日志引用。疑似秘密不进入模型可见回执或 `readObservation` 回查，原文只留本地；主归档失败时持久 fallback 仍保存原始字节。
+
+`metrics.jsonl` 增加 `observation_recorded` 与 `observation_recalled`，仅记录 verifier ID、状态、耗时、字节量、截断、归档失败标记与回查次数，不记录命令正文、日志引用、哈希或输出。评估器汇总 Observation 样本量、返回字节比、回查率、归档失败率，以及有重复样本的 verifier 结果一致率。
 
 旧 `.ai/tasks`、`.ai/reports` 和历史 Harness 记录不会被回填或删除；事件流只从启用后开始产生。
 

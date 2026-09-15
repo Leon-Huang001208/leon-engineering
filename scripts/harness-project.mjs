@@ -8,6 +8,7 @@ export const HARNESS_DIRECTORY = ".ai/harness";
 export const AGENT_MAP_FILENAME = "agent-map.md";
 export const METRICS_FILENAME = "metrics.jsonl";
 export const EVENTS_FILENAME = "events.jsonl";
+export const VERIFIERS_FILENAME = "verifiers.json";
 export const SESSION_DIRECTORY = "sessions";
 const BLOCKER_CATEGORIES = new Set(["environment", "dependency", "permission", "requirements", "test", "external", "unknown"]);
 const EVENT_NAMES = new Set(["task_started", "tool_completed", "policy_decision", "skill_selected", "agent_selected", "verification_completed", "task_finished", "reasoning_method_selected", "reasoning_method_completed"]);
@@ -73,7 +74,7 @@ export function formatAgentMap(harness) {
     : harness.profile.instructions.map(item => `- \`${item.path}\` (${item.kind})`);
   const commandLines = harness.profile.commands.length === 0
     ? ["- No candidate validation command was discovered."]
-    : harness.profile.commands.map(item => `- \`${item.command}\` from \`${item.source}\` (candidate only)`);
+    : harness.profile.commands.map(item => `- \`${item.verifierId}\`: \`${item.command}\`; cwd \`${item.workingDirectory}\`; source \`${item.source}\`; non-interactive (candidate only)`);
   const ciLines = harness.profile.ci.length === 0
     ? ["- No CI workflow was discovered."]
     : harness.profile.ci.map(item => `- \`${item.path}\``);
@@ -98,6 +99,22 @@ export function formatAgentMap(harness) {
     "",
     "Read the task record before changing code. Record only executed verification evidence with --record-outcome; candidate commands are not proof of success."
   ].join("\n");
+}
+
+function verifierManifest(harness) {
+  return {
+    schemaVersion: 1,
+    projectRoot: harness.projectRoot,
+    verifiers: harness.profile.commands.map(item => ({
+      id: item.verifierId,
+      kind: item.kind,
+      command: item.command,
+      argv: item.argv,
+      workingDirectory: item.workingDirectory,
+      source: item.source,
+      interactive: item.interactive
+    }))
+  };
 }
 
 function isWithin(root, candidate) {
@@ -214,7 +231,8 @@ export function writeHarness({projectRoot, harness}) {
   const task = taskFile(directory, harness.task.id);
   const metrics = path.join(directory, METRICS_FILENAME);
   const events = path.join(directory, EVENTS_FILENAME);
-  if (fs.existsSync(map) || fs.existsSync(metrics) || fs.existsSync(events) || fs.existsSync(task)) {
+  const verifiers = path.join(directory, VERIFIERS_FILENAME);
+  if (fs.existsSync(map) || fs.existsSync(metrics) || fs.existsSync(events) || fs.existsSync(verifiers) || fs.existsSync(task)) {
     throw new Error("existing harness or task");
   }
   if (!isWithin(tasks, task)) throw new Error("unsafe task destination");
@@ -222,7 +240,8 @@ export function writeHarness({projectRoot, harness}) {
   writeAtomically(task, `${JSON.stringify(harness.task, null, 2)}\n`);
   writeAtomically(metrics, `${JSON.stringify(metricEvent("task_created", harness.task.id, {status: harness.task.status}))}\n`);
   writeAtomically(events, "");
-  return {directory, map, task, metrics, events};
+  writeAtomically(verifiers, `${JSON.stringify(verifierManifest(harness), null, 2)}\n`);
+  return {directory, map, task, metrics, events, verifiers};
 }
 
 function existingHarnessFiles(root) {
@@ -413,13 +432,17 @@ export function refreshAgentMap({projectRoot}) {
   if (!directory) throw new Error("missing task harness");
   const map = path.join(directory, AGENT_MAP_FILENAME);
   const metrics = path.join(directory, METRICS_FILENAME);
+  const verifiers = path.join(directory, VERIFIERS_FILENAME);
   if (!fs.existsSync(map) || !fs.existsSync(metrics)) throw new Error("missing task harness");
-  if (fs.lstatSync(map).isSymbolicLink() || fs.lstatSync(metrics).isSymbolicLink()) throw new Error("invalid harness file");
+  if (fs.lstatSync(map).isSymbolicLink() || fs.lstatSync(metrics).isSymbolicLink() || (fs.existsSync(verifiers) && fs.lstatSync(verifiers).isSymbolicLink())) {
+    throw new Error("invalid harness file");
+  }
   const profile = buildProfile({projectRoot: root});
   const refreshed = {schemaVersion: 1, projectRoot: root, profile, task: {id: "agent-map-refresh", goal: "refresh", acceptanceCriteria: ["refresh"]}};
   writeAtomically(map, `${formatAgentMap(refreshed)}\n`);
+  writeAtomically(verifiers, `${JSON.stringify(verifierManifest(refreshed), null, 2)}\n`);
   fs.appendFileSync(metrics, `${JSON.stringify(metricEvent("agent_map_refreshed", "agent-map", {}))}\n`, {mode: 0o600});
-  return {directory, map, metrics};
+  return {directory, map, metrics, verifiers};
 }
 
 function nonNegativeInteger(value, field) {
