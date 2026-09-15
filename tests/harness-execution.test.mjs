@@ -175,6 +175,21 @@ test("never returns a suspected secret from execution or recall while retaining 
   assert.doesNotMatch(JSON.stringify(recalled), new RegExp(secret));
 });
 
+test("rejects tampered observation metadata before recall", async t => {
+  const fixture = makeExecutionFixture(t, "process.stdout.write('safe\\n');\n");
+  const result = await runObserved({projectRoot: fixture.project, taskId: "observed-task", verifierId: fixture.verifierId});
+  const metadataFile = result.archiveFiles.find(file => file.endsWith(".json"));
+  const metadata = JSON.parse(fs.readFileSync(metadataFile, "utf8"));
+  metadata.verifierId = "api_key=PRIVATE_METADATA_SENTINEL";
+  fs.writeFileSync(metadataFile, `${JSON.stringify(metadata, null, 2)}\n`);
+
+  assert.throws(() => readObservation({
+    projectRoot: fixture.project,
+    taskId: "observed-task",
+    observationId: result.observationId
+  }), /invalid observation/);
+});
+
 test("distinguishes timeout signal and caller cancellation", async t => {
   const timed = makeExecutionFixture(t, "setInterval(() => {}, 1000);\n");
   const timeout = await runObserved({
