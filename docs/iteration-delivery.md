@@ -33,4 +33,4 @@ receipt 记录任务、远端、默认分支、功能/集成提交、`direct|pr`
 
 ## 安装与验证
 
-控制器随 Harness runtime 由 Codex 和 Claude 适配器安装。安装器测试必须覆盖临时 home 中的安装、幂等、漂移检测和用户配置保护；真实安装后分别运行两个适配器的 `--verify`。Claude 插件版本变更后，现有 Claude 会话需要重启才能加载新版本。
+控制器随 Harness runtime 由 Codex 和 Claude 适配器安装。安装器测试必须覆盖临时 home 中的安装、幂等、漂移检测和用户配置保护；真实安装后分别运行两个适配器的 `--verify`。Codex 全局 Hook 更新后必须重启本地主机进程，新建任务本身不保证刷新宿主缓存；Claude 插件版本变更后，现有 Claude 会话需要重启才能加载新版本。

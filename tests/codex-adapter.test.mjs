@@ -197,7 +197,12 @@ test("redacts user AGENTS.md text from successful global CLI installation output
     documents: GLOBAL_DOCUMENT_NAMES,
     frameworkVersion: JSON.parse(
       fs.readFileSync(path.join(sourceRoot, ".claude-plugin", "plugin.json"), "utf8")
-    ).version
+    ).version,
+    activation: {
+      status: "restart_required",
+      scope: "codex_host_process",
+      note: "New tasks created before the Codex host restarts may still use cached hooks."
+    }
   });
 });
 
