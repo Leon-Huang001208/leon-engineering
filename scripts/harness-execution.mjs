@@ -304,6 +304,32 @@ function writeMetadata(file, metadata) {
   }
 }
 
+function validNonNegativeInteger(value) {
+  return Number.isInteger(value) && value >= 0;
+}
+
+function assertObservationMetadata(metadata, taskId, observationId) {
+  const expectedKeys = new Set([
+    "schemaVersion", "observationId", "taskId", "verifierId", "status", "exitCode", "signal", "durationMs",
+    "stdoutBytes", "stderrBytes", "fullBytes", "sha256", "truncated", "secretSuppressed", "archiveFailed",
+    "archiveLocation", "recallCount", "returnedBytes"
+  ]);
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)
+    || Object.keys(metadata).some(key => !expectedKeys.has(key))
+    || metadata.schemaVersion !== 1 || metadata.taskId !== taskId || metadata.observationId !== observationId
+    || !/^verifier-[a-z0-9-]+-[a-f0-9]{12}$/.test(metadata.verifierId ?? "")
+    || !new Set(["passed", "failed", "timed_out", "signaled", "cancelled"]).has(metadata.status)
+    || !(metadata.exitCode === null || validNonNegativeInteger(metadata.exitCode))
+    || !(metadata.signal === null || /^SIG[A-Z0-9]+$/.test(metadata.signal))
+    || ![metadata.durationMs, metadata.stdoutBytes, metadata.stderrBytes, metadata.fullBytes, metadata.recallCount, metadata.returnedBytes].every(validNonNegativeInteger)
+    || !/^[a-f0-9]{64}$/.test(metadata.sha256 ?? "")
+    || ![metadata.truncated, metadata.secretSuppressed, metadata.archiveFailed].every(value => typeof value === "boolean")
+    || !new Set(["primary", "fallback"]).has(metadata.archiveLocation)) {
+    throw new Error("invalid observation");
+  }
+  return metadata;
+}
+
 function observationFiles(root, taskId, observationId) {
   const relativeDirectory = path.posix.join(LOGS_RELATIVE, taskId);
   const directory = path.resolve(root, relativeDirectory);
@@ -431,9 +457,7 @@ export function readObservation(query) {
   } catch {
     throw new Error("invalid observation");
   }
-  if (metadata?.schemaVersion !== 1 || metadata.taskId !== taskId || metadata.observationId !== observationId) {
-    throw new Error("invalid observation");
-  }
+  assertObservationMetadata(metadata, taskId, observationId);
   const stdout = fs.readFileSync(files.stdoutFile);
   const stderr = fs.readFileSync(files.stderrFile);
   const full = Buffer.concat([stdout, stderr]);
