@@ -174,6 +174,12 @@ test("defines a stable project profile schema", () => {
     ]
   );
   assert.equal(schema.properties.commands.items.properties.status.const, "candidate");
+  assert.deepEqual(schema.properties.commands.items.required, [
+    "kind", "verifierId", "command", "argv", "workingDirectory", "source", "interactive", "status"
+  ]);
+  assert.equal(schema.properties.commands.items.properties.interactive.const, false);
+  assert.equal(schema.properties.commands.items.properties.workingDirectory.type, "string");
+  assert.equal(schema.properties.commands.items.properties.argv.items.type, "string");
 });
 
 test("defaults implementation work to managed delivery while preserving the read-only fast path", () => {
