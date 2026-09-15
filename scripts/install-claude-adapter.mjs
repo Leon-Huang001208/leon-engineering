@@ -163,13 +163,16 @@ function sourceCommit(sourceRoot) {
   }
 }
 
-function assertPolicyManifest(policy) {
+function assertPolicyManifest(policy, {allowMissingSharedChecksum = false} = {}) {
   if (
     !policy
     || typeof policy !== "object"
     || Array.isArray(policy)
     || !/^[0-9a-f]{64}$/.test(policy.checksum)
-    || !/^[0-9a-f]{64}$/.test(policy.sharedChecksum)
+    || (
+      !allowMissingSharedChecksum
+      && !/^[0-9a-f]{64}$/.test(policy.sharedChecksum)
+    )
     || !/^[0-9a-f]{64}$/.test(policy.placementChecksum)
     || typeof policy.prefix !== "string"
     || typeof policy.suffix !== "string"
@@ -179,7 +182,7 @@ function assertPolicyManifest(policy) {
   }
 }
 
-function assertManifest(manifest) {
+function assertManifest(manifest, {allowLegacySharedChecksum = false} = {}) {
   if (
     !manifest
     || typeof manifest !== "object"
@@ -192,7 +195,15 @@ function assertManifest(manifest) {
   ) {
     throw fail("invalid Claude policy manifest", "invalid_manifest");
   }
-  assertPolicyManifest(manifest.policy);
+  const isLegacyActiveManifest = (
+    allowLegacySharedChecksum
+    && manifest.frameworkVersion === "0.16.3"
+    && manifest.state === "active"
+    && manifest.policy?.sharedChecksum === undefined
+  );
+  assertPolicyManifest(manifest.policy, {
+    allowMissingSharedChecksum: isLegacyActiveManifest
+  });
   if (manifest.transition !== undefined) {
     if (
       !manifest.transition
@@ -213,7 +224,7 @@ function previousPolicyChecksum(manifest) {
   return manifest.transition?.previousPolicyChecksum ?? null;
 }
 
-function readManifestRecord(claudeHome) {
+function readManifestRecord(claudeHome, {allowLegacySharedChecksum = false} = {}) {
   const file = manifestFile(claudeHome);
   let stat;
   try {
@@ -235,7 +246,7 @@ function readManifestRecord(claudeHome) {
   } catch {
     throw fail("invalid Claude policy manifest", "invalid_manifest");
   }
-  assertManifest(manifest);
+  assertManifest(manifest, {allowLegacySharedChecksum});
   return {manifest, raw};
 }
 
@@ -397,12 +408,12 @@ export function installClaudePolicy({sourceRoot = SOURCE_ROOT, claudeHome}) {
 
   try {
     const policy = policySource(sourceRoot);
-    let record = readManifestRecord(claudeHome);
+    let record = readManifestRecord(claudeHome, {allowLegacySharedChecksum: true});
     let claude = readClaudeFile(claudeHome);
     let range = markerRange(claude.content);
     if (record) {
       recoverPendingForInstall({claudeHome, manifest: record.manifest, claude, range});
-      record = readManifestRecord(claudeHome);
+      record = readManifestRecord(claudeHome, {allowLegacySharedChecksum: true});
       claude = readClaudeFile(claudeHome);
       range = markerRange(claude.content);
     }

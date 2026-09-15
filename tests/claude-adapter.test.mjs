@@ -40,6 +40,27 @@ test("installs alongside user CLAUDE.md content and restores it exactly", t => {
   assert.equal(fs.readFileSync(path.join(claudeHome, "CLAUDE.md"), "utf8"), original);
 });
 
+test("upgrades a legacy active manifest that predates shared policy checksums", t => {
+  const claudeHome = makeClaudeHome(t);
+  const original = "# User rules\n\nKeep this content unchanged.\n";
+  const manifestPath = path.join(claudeHome, MANIFEST);
+  fs.writeFileSync(path.join(claudeHome, "CLAUDE.md"), original);
+  installClaudePolicy({sourceRoot, claudeHome});
+
+  const legacyManifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  legacyManifest.frameworkVersion = "0.16.3";
+  delete legacyManifest.policy.sharedChecksum;
+  fs.writeFileSync(manifestPath, `${JSON.stringify(legacyManifest, null, 2)}\n`);
+
+  installClaudePolicy({sourceRoot, claudeHome});
+
+  const upgradedManifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  assert.match(upgradedManifest.policy.sharedChecksum, /^[0-9a-f]{64}$/);
+  assert.equal(upgradedManifest.frameworkVersion, "0.17.0");
+  assert.match(fs.readFileSync(path.join(claudeHome, "CLAUDE.md"), "utf8"), /Keep this content unchanged\./);
+  assert.equal(verifyClaudePolicy({sourceRoot, claudeHome}).valid, true);
+});
+
 test("refuses a foreign Claude policy block without an owned manifest", t => {
   const claudeHome = makeClaudeHome(t);
   fs.writeFileSync(
