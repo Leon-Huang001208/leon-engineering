@@ -217,6 +217,13 @@ test("caps model-visible tool receipts without weakening evidence gates", () => 
   assert.match(shared, /真实.*平台硬门/s);
 });
 
+test("keeps Harness delivery documentation scoped to the full-delivery tier", () => {
+  const harness = fs.readFileSync(path.join(root, "docs", "harness-v1.md"), "utf8");
+
+  assert.doesNotMatch(harness, /实现任务加 `--require-delivery`/);
+  assert.match(harness, /完整交付.*`--delivery-required`.*`--require-delivery`/s);
+});
+
 test("keeps fast path documentation aligned", () => {
   const documents = [
     {name: "GETTING_STARTED.md", phrase: /快路径/},
