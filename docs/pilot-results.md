@@ -204,4 +204,10 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - 交付路由改为四档：只读快路径、窄小改本地环、中高风险隔离实现、明确发布/高风险完整交付。只有完整交付使用 delivery flags 和远端 receipt；窄小改保留真实本地验证与 Harness 结果。
 - 共享政策要求独立只读检查同轮批量、普通回执目标 ≤4 KiB、宽查询最多 8,000 字符，原文留本地并返回摘要、SHA-256 与定点回查方式；不得用省略错误、`|| true` 或减少验收换 Token。
 - Harness evaluator 新增 `--task-id`：只打开指定普通任务 JSON，坏兄弟记录不阻断定点评估；损坏或符号链接目标失败，无参数全量评估仍对坏记录严格失败，且两种模式都不执行账本命令。
+
+## 低 Token 文档一致性修复 v0.18.3
+
+- 0.18.2 的四档风险路由已经限制只有完整交付档使用 delivery flags，但 `docs/harness-v1.md` 仍遗留“实现任务加 `--require-delivery`”的旧表述；这会把后续实现误导回全量交付。
+- 新增跨文档回归测试，禁止该旧表述，并要求 Harness 文档同时写明完整交付档的 `--delivery-required` 与 `--require-delivery` 契约。
+- 修正文档而不改变运行时代码、四档路由、权限、依赖或交付控制器行为。
 - 该版本只交付可机械验证的路由和监测能力，不声称真实 Token 已下降。实际 A/B 必须在 Codex 宿主重启后的前三个新任务中与既有基线比较。
