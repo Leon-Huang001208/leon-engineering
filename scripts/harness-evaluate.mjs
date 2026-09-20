@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {buildProfile} from "./profile-project.mjs";
-import {HARNESS_DIRECTORY, readHarnessEvents} from "./harness-project.mjs";
+import {HARNESS_DIRECTORY, readHarnessEvents, readHarnessTask} from "./harness-project.mjs";
 
 const OUTCOME_STATUSES = new Set(["completed", "blocked", "rework", "invalidated"]);
 const VERIFICATION_STATUSES = new Set(["passed", "failed", "not_run"]);
@@ -83,6 +83,13 @@ function readTaskRecords(directory) {
   return records;
 }
 
+function readTargetTaskRecord(projectRoot, taskId) {
+  const task = readHarnessTask({projectRoot, taskId});
+  if (!Array.isArray(task.outcomes)) throw new Error("invalid task record");
+  task.outcomes.forEach(assertOutcome);
+  return {id: taskId, outcomes: task.outcomes};
+}
+
 function ratio(numerator, denominator) {
   return denominator === 0 ? null : numerator / denominator;
 }
@@ -135,18 +142,19 @@ function summarizeReasoningMethods(records, eventsByTask) {
   };
 }
 
-function readMetrics(directory) {
+function readMetrics(directory, taskId) {
   const file = path.join(directory, "metrics.jsonl");
   if (!fs.existsSync(file)) throw new Error("missing task harness");
   const stat = fs.lstatSync(file);
   if (stat.isSymbolicLink() || !stat.isFile()) throw new Error("invalid harness metrics");
-  return fs.readFileSync(file, "utf8").split("\n").filter(Boolean).map(line => {
+  const metrics = fs.readFileSync(file, "utf8").split("\n").filter(Boolean).map(line => {
     try {
       return JSON.parse(line);
     } catch {
       throw new Error("invalid harness metrics");
     }
   });
+  return taskId === undefined ? metrics : metrics.filter(metric => metric?.taskId === taskId);
 }
 
 function summarizeObservations(metrics) {
@@ -215,15 +223,17 @@ function summarize(records, eventsByTask, metrics) {
   };
 }
 
-export function evaluateHarness({projectRoot}) {
+export function evaluateHarness({projectRoot, taskId}) {
   const root = buildProfile({projectRoot}).projectRoot;
   const directory = existingSafeDirectory(root, HARNESS_DIRECTORY);
   if (!directory) throw new Error("missing task harness");
   const tasks = existingSafeDirectory(root, path.posix.join(HARNESS_DIRECTORY, "tasks"));
   if (!tasks) throw new Error("missing task harness");
-  const records = readTaskRecords(tasks);
+  const records = taskId === undefined
+    ? readTaskRecords(tasks)
+    : [readTargetTaskRecord(root, taskId)];
   const eventsByTask = new Map(records.map(record => [record.id, readHarnessEvents({projectRoot: root, taskId: record.id})]));
-  return {schemaVersion: 1, projectRoot: root, summary: summarize(records, eventsByTask, readMetrics(directory))};
+  return {schemaVersion: 1, projectRoot: root, summary: summarize(records, eventsByTask, readMetrics(directory, taskId))};
 }
 
 function formatPercentage(value) {
@@ -265,7 +275,7 @@ function parseArgs(args) {
   const options = {format: "json"};
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
-    if (argument === "--project" || argument === "--format") {
+    if (["--project", "--task-id", "--format"].includes(argument)) {
       const value = args[index + 1];
       if (!value || value.startsWith("--")) throw new Error(`${argument} requires a value`);
       options[argument.slice(2)] = value;
@@ -281,7 +291,7 @@ function parseArgs(args) {
 
 function formatUsage() {
   return [
-    "用法：harness-evaluate.mjs --project <项目目录> [--format json|markdown]",
+    "用法：harness-evaluate.mjs --project <项目目录> [--task-id <任务 ID>] [--format json|markdown]",
     "",
     "只读汇总已记录的 Harness 任务证据；不会执行账本中的验证命令或写入项目。"
   ].join("\n");
@@ -293,7 +303,7 @@ function main(args) {
     process.stdout.write(`${formatUsage()}\n`);
     return;
   }
-  process.stdout.write(formatEvaluation(evaluateHarness({projectRoot: options.project}), options.format));
+  process.stdout.write(formatEvaluation(evaluateHarness({projectRoot: options.project, taskId: options["task-id"]}), options.format));
 }
 
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))) {

@@ -182,15 +182,39 @@ test("defines a stable project profile schema", () => {
   assert.equal(schema.properties.commands.items.properties.argv.items.type, "string");
 });
 
-test("defaults implementation work to managed delivery while preserving the read-only fast path", () => {
+test("routes work through four mechanical risk tiers without auto-publishing narrow edits", () => {
+  const shared = readSharedPolicy();
   const policy = readEffectivePolicy("codex");
   const routing = readSkill("agent-routing");
 
-  assert.match(policy, /只读或非实现工作，默认走快路径/);
-  assert.match(policy, /实现性改动，默认自动使用 `iteration-delivery`/);
-  assert.match(policy, /不得再次询问是否合并、推送或删除分支/);
+  assert.match(shared, /\| 只读快路径 \|[^\n]*\| `read-only` \|/);
+  assert.match(shared, /\| 窄小改本地环 \|[^\n]*\| `local-only` \|/);
+  assert.match(shared, /\| 中高风险隔离实现 \|[^\n]*\| `isolated` \|/);
+  assert.match(shared, /\| 明确发布\/高风险完整交付 \|[^\n]*\| `full-delivery` \|/);
+  assert.match(policy, /窄小改.*局部、可逆.*公开接口.*schema.*依赖.*CI.*数据库.*桌面.*并发冲突/s);
+  assert.match(policy, /窄小改本地环.*本地验证.*Harness.*不伪造远端 receipt/s);
+  assert.doesNotMatch(shared.match(/^\| 窄小改本地环 \|.*$/m)?.[0] ?? "", /iteration-delivery|delivery-required|require-delivery/);
+  assert.match(policy, /明确发布\/高风险完整交付.*`--delivery-required`.*`--require-delivery`/s);
+  assert.equal((shared.match(/--delivery-required/g) ?? []).length, 1);
+  assert.equal((shared.match(/--require-delivery/g) ?? []).length, 1);
   assert.match(routing, /只有在.*明确速度收益.*时才派发代理/);
   assert.match(routing, /不得为了流程而向用户提问/);
+});
+
+test("caps model-visible tool receipts without weakening evidence gates", () => {
+  const shared = readSharedPolicy();
+  const codex = readPolicy("codex");
+
+  assert.ok(Buffer.byteLength(shared) + Buffer.byteLength(codex) <= 4400);
+  assert.match(shared, /独立只读检查.*同轮批量执行/);
+  assert.match(shared, /普通工具回执.*≤4\s*KiB/);
+  assert.match(shared, /宽查询.*8,000\s*字符/);
+  assert.match(shared, /全文留在本地.*摘要.*SHA-256.*定点回查/s);
+  assert.match(shared, /不重复读取相同输出/);
+  assert.match(shared, /CI\/线程.*状态变化.*超时.*需要操作/s);
+  assert.match(shared, /不得.*省略错误.*`\|\| true`.*减少必需验收.*Token/s);
+  assert.match(shared, /秘密.*依赖.*授权/s);
+  assert.match(shared, /真实.*平台硬门/s);
 });
 
 test("keeps fast path documentation aligned", () => {

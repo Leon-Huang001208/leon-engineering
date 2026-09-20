@@ -42,7 +42,7 @@ node scripts/harness-run.mjs --project /absolute/project --task-id task-id --rea
 
 ## 评估闭环
 
-`scripts/harness-evaluate.mjs --project /absolute/project --format markdown` 只读指定项目的任务记录，输出：
+`scripts/harness-evaluate.mjs --project /absolute/project --format markdown` 只读指定项目的全部任务记录；加入 `--task-id <id>` 时只打开该普通 JSON 任务文件，不枚举兄弟记录。目标损坏或为符号链接时失败；不带 task id 的全量模式遇到任一坏记录仍严格失败。两种模式都不运行账本命令，输出：
 
 - 已有结果的任务数、完成且验证通过数；
 - 一次通过率：唯一结果为 `completed`、验证 `passed` 且返工次数为 0 的任务数，除以所有已有结果的任务数；

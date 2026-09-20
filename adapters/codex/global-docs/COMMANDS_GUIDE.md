@@ -1,6 +1,6 @@
 # 全局工程工作流：命令与验证
 
-全局框架不替项目选择构建或测试命令。先从目标仓库的文档、脚本和 CI 中确认命令，再执行最小且相关的验证。快路径只运行目标验证，不把项目档案生成、全量测试或全局适配器校验混入普通项目交付。
+全局框架不替项目选择构建或测试命令。先从目标仓库确认命令，再按只读快路径、窄小改本地环、中高风险隔离实现、明确发布/高风险完整交付执行最小充分验证。快路径不把项目档案生成混入普通交付；独立只读检查同轮批量执行。普通回执目标 ≤4 KiB、宽查询最多 8,000 字符，全文留本地并返回摘要、SHA-256 与定点回查方式。
 
 安装器仅维护它拥有的全局内容。以下命令需要从 `leon-engineering` 源仓库运行：
 
@@ -52,9 +52,10 @@ node scripts/profile-project.mjs --project /absolute/project --format markdown
 
 它只检查固定的指令、清单、CI 和平台路径，输出的命令均标为 `candidate`，不会执行。只有用户针对该项目明确授权后，才可加入 `--write-profile` 创建 `.ai/project-profile.json`；已有档案还需要 `--replace-profile` 才会更新。安装全局框架本身不会调用该命令或扫描任何项目。
 
-对已启用强制 Harness 的目标项目，Agent 自动开始新任务；用户不需要先运行命令。新任务使用 `--new-task`，连续处理同一任务时省略它以恢复上下文：
+对已启用强制 Harness 的目标项目，Agent 自动开始新任务；用户不需要先运行命令。窄小改不带 delivery flag，只有完整交付加入 `--delivery-required`：
 
 ```bash
+node "$HOME/.agents/leon-engineering/runtime/harness-session.mjs" --start --new-task --project /absolute/project --host codex --session-id opaque-task-key --task-id task-id --goal "目标" --acceptance "验收标准"
 node "$HOME/.agents/leon-engineering/runtime/harness-session.mjs" --start --new-task --project /absolute/project --host codex --session-id opaque-task-key --task-id task-id --goal "目标" --acceptance "验收标准" --delivery-required
 ```
 
@@ -66,13 +67,14 @@ node "$HOME/.agents/leon-engineering/runtime/harness-runtime.mjs" --verify
 
 安装副本自检通过清单回指权威源并校验两侧内容；从权威仓库运行 `--verify-global` 时也会比较源码，能够识别陈旧安装。失败输出只提供阶段、稳定错误码、runtime/manifest 路径和恢复建议。恢复期间只有 `pwd`、配置/指令读取、`rg`/只读 `sed`、Git 只读命令和上述自检可放行；修改类与无法证明只读的命令仍拒绝。若自检失败，从 `leon-engineering` 权威源重新运行全局安装器后再次校验，不要手工修改安装副本。
 
-完成任务后，执行者先独立运行验证，再用 `--record-outcome` 写入已经观察到的状态、澄清轮次、返工次数、实测验证秒数和验证命令；记录命令本身不会运行该验证命令。`blocked` 结果还必须写入标准化阻塞分类，不能从推测补填。随后运行只读交付硬门；它不会执行任务命令，但会拒绝缺少开始事件、通过验证结果或验证完成事件的交付：
+完成任务后先运行验证，再记录实测结果。窄小改运行普通交付硬门 `harness-enforce`；只有完整交付使用 `--require-delivery`，它读取真实远端 receipt：
 
 ```bash
+node "$HOME/.agents/leon-engineering/runtime/harness-enforce.mjs" --project /absolute/project --task-id task-id
 node "$HOME/.agents/leon-engineering/runtime/harness-enforce.mjs" --project /absolute/project --task-id task-id --require-delivery
 ```
 
-实现性 Git 任务由交付控制器管理。`start` 返回功能 worktree；在那里实现、提交并运行分支验证。`prepare` 创建临时集成 worktree；在那里运行合并后验证，再 `publish`。随后重复只读 `status`，直到 CI 通过或明确未配置，最后 `cleanup`：
+明确发布或高风险 Git 任务由交付控制器管理；窄小改不得启动下列发布链。`start` 返回功能 worktree，`prepare` 创建集成 worktree，验证后 `publish`，只在状态变化、超时或需要操作时查询 CI，最后 `cleanup`：
 
 ```bash
 node "$HOME/.agents/leon-engineering/runtime/iteration-delivery.mjs" --start --project /absolute/project --task-id task-id --slug short-slug
@@ -89,9 +91,10 @@ node "$HOME/.agents/leon-engineering/runtime/iteration-delivery.mjs" --cleanup -
 ```bash
 node scripts/harness-evaluate.mjs --project /absolute/project --format json
 node scripts/harness-evaluate.mjs --project /absolute/project --format markdown
+node scripts/harness-evaluate.mjs --project /absolute/project --task-id task-id --format markdown
 ```
 
-报告中的一次通过率、平均值只针对已有结果；验证耗时覆盖率不足时，不得把它解释为项目实际速度。
+`--task-id` 只读取指定普通 JSON 任务文件，不扫描兄弟任务记录；目标损坏或为符号链接时失败。不带参数的全量模式保持严格，任何坏记录都会失败。两种模式都不运行记录中的命令。报告中的一次通过率、平均值只针对已有结果；验证耗时覆盖率不足时，不得把它解释为项目实际速度。
 
 对已经初始化 Harness 的依赖任务、中断恢复或显式重试，先预览项目内任务计划；它不创建控制文件、不运行任务命令：
 
