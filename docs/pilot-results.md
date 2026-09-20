@@ -196,3 +196,12 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - 0.18.0 安装后，源码与 `/Users/leon/.agents/leon-engineering/runtime/harness-hook.mjs` 的 SHA-256 完全一致，`--verify-global` 与 runtime `--verify` 均返回 `valid: true`；同一失败 cwd 和 session ID 直接调用当前安装 Hook 时退出码为 0，且 stdout/stderr 为空，证明磁盘安装副本会正确跳过 projectless 目录。
 - 同时，原有 projectless 任务和安装后新建的 projectless 任务仍由 PreToolUse 返回旧诊断：`classification=unknown`、`stage=session_start`、`code=initialization_failed`，并错误建议 runtime `--verify`。Codex app-server 进程启动时间早于 `hooks.json` 与 runtime 更新时间，说明新任务继续继承宿主进程缓存；新建任务不是刷新边界。
 - 0.18.1 将这一平台激活边界变成安装器的机器可读契约：全局安装成功输出包含 `activation.status=restart_required` 与 `activation.scope=codex_host_process`。命令指南明确要求完整重启 Codex 本地宿主进程后再创建 projectless 验证任务，避免把磁盘校验通过误报成已热激活。
+
+## 低 Token 风险分级 v0.18.2
+
+**日期：**2026-09-20
+
+- 交付路由改为四档：只读快路径、窄小改本地环、中高风险隔离实现、明确发布/高风险完整交付。只有完整交付使用 delivery flags 和远端 receipt；窄小改保留真实本地验证与 Harness 结果。
+- 共享政策要求独立只读检查同轮批量、普通回执目标 ≤4 KiB、宽查询最多 8,000 字符，原文留本地并返回摘要、SHA-256 与定点回查方式；不得用省略错误、`|| true` 或减少验收换 Token。
+- Harness evaluator 新增 `--task-id`：只打开指定普通任务 JSON，坏兄弟记录不阻断定点评估；损坏或符号链接目标失败，无参数全量评估仍对坏记录严格失败，且两种模式都不执行账本命令。
+- 该版本只交付可机械验证的路由和监测能力，不声称真实 Token 已下降。实际 A/B 必须在 Codex 宿主重启后的前三个新任务中与既有基线比较。

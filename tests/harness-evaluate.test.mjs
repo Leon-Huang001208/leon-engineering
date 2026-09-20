@@ -148,5 +148,53 @@ test("CLI displays Chinese usage for help without reading a project", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /用法：/);
   assert.match(result.stdout, /--project <项目目录>/);
+  assert.match(result.stdout, /--task-id <任务 ID>/);
   assert.match(result.stdout, /--format json\|markdown/);
+});
+
+test("targets one regular task record without scanning a damaged sibling", t => {
+  const project = makeHarnessFixture(t);
+  writeFile(path.join(project, ".ai", "harness", "tasks", "damaged.json"), "{not-json\n");
+
+  const result = evaluateHarness({projectRoot: project, taskId: "first-pass"});
+
+  assert.equal(result.summary.taskCount, 1);
+  assert.equal(result.summary.completedPassedCount, 1);
+  assert.equal(fs.existsSync(path.join(project, "this-command-must-not-run")), false);
+});
+
+test("rejects a damaged or symbolic-link targeted task record", async t => {
+  await t.test("damaged JSON", () => {
+    const project = makeHarnessFixture(t);
+    writeFile(path.join(project, ".ai", "harness", "tasks", "first-pass.json"), "{not-json\n");
+    assert.throws(() => evaluateHarness({projectRoot: project, taskId: "first-pass"}), /invalid task record/);
+  });
+
+  await t.test("symbolic link", () => {
+    const project = makeHarnessFixture(t);
+    const target = path.join(project, "external-task.json");
+    writeFile(target, JSON.stringify({id: "first-pass", outcomes: []}));
+    fs.rmSync(path.join(project, ".ai", "harness", "tasks", "first-pass.json"));
+    fs.symlinkSync(target, path.join(project, ".ai", "harness", "tasks", "first-pass.json"));
+    assert.throws(() => evaluateHarness({projectRoot: project, taskId: "first-pass"}), /invalid task record/);
+  });
+});
+
+test("keeps full evaluation strict when any sibling task record is damaged", t => {
+  const project = makeHarnessFixture(t);
+  writeFile(path.join(project, ".ai", "harness", "tasks", "damaged.json"), "{not-json\n");
+
+  assert.throws(() => evaluateHarness({projectRoot: project}), /invalid task record/);
+});
+
+test("CLI accepts --task-id and remains read-only with damaged siblings", t => {
+  const project = makeHarnessFixture(t);
+  const script = path.join(sourceRoot, "scripts", "harness-evaluate.mjs");
+  writeFile(path.join(project, ".ai", "harness", "tasks", "damaged.json"), "{not-json\n");
+
+  const result = spawnSync(process.execPath, [script, "--project", project, "--task-id", "first-pass", "--format", "markdown"], {encoding: "utf8"});
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /任务：1 个/);
+  assert.equal(fs.existsSync(path.join(project, "this-command-must-not-run")), false);
 });
