@@ -32,6 +32,26 @@ function makeCodexHome(t) {
   return home;
 }
 
+function makeSourceClone(t) {
+  const clone = fs.mkdtempSync(path.join(os.tmpdir(), "leon-codex-source-"));
+  t.after(() => fs.rmSync(clone, {recursive: true, force: true}));
+  fs.cpSync(sourceRoot, clone, {
+    recursive: true,
+    filter: source => path.basename(source) !== ".git" && path.basename(source) !== ".ai"
+  });
+  for (const args of [
+    ["init", "-q"],
+    ["config", "user.name", "Test"],
+    ["config", "user.email", "test@example.invalid"],
+    ["add", "."],
+    ["commit", "-qm", "fixture"]
+  ]) {
+    const result = spawnSync("git", ["-C", clone, ...args], {encoding: "utf8"});
+    assert.equal(result.status, 0, result.stderr);
+  }
+  return clone;
+}
+
 test("installs the global framework without replacing custom global rules", t => {
   const codexHome = makeCodexHome(t);
   const original = "# User rules\n\nKeep this text.\n";
@@ -305,4 +325,23 @@ test("refuses plugin-only migration when a managed skill drifted", t => {
     /refusing to migrate drifted skills: project-harness/
   );
   assert.equal(fs.existsSync(path.join(target, "project-harness")), true);
+});
+
+test("plugin-only migration accepts a new canonical version when installed skills still match their old manifest", t => {
+  const changingSource = makeSourceClone(t);
+  const codexHome = makeCodexHome(t);
+  const target = path.join(codexHome, "skills");
+  install({sourceRoot: changingSource, targetRoot: target});
+  fs.appendFileSync(
+    path.join(changingSource, "plugins", "leon-engineering-core", "skills", "project-harness", "SKILL.md"),
+    "\nNew canonical release text.\n"
+  );
+  const commit = spawnSync("git", ["-C", changingSource, "add", "."], {encoding: "utf8"});
+  assert.equal(commit.status, 0, commit.stderr);
+  const committed = spawnSync("git", ["-C", changingSource, "commit", "-qm", "new version"], {encoding: "utf8"});
+  assert.equal(committed.status, 0, committed.stderr);
+
+  const result = migrateToPluginDistribution({sourceRoot: changingSource, targetRoot: target});
+  assert.equal(result.retiredSkills.length, SKILL_NAMES.length);
+  assert.equal(verifyPluginDistribution({sourceRoot: changingSource, targetRoot: target}).valid, true);
 });
