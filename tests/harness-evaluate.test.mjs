@@ -17,6 +17,13 @@ function writeTask(project, id, task) {
   writeFile(path.join(project, ".ai", "harness", "tasks", `${id}.json`), `${JSON.stringify(task, null, 2)}\n`);
 }
 
+function writeIndex(project, records) {
+  writeFile(
+    path.join(project, ".ai", "harness", "task-index.jsonl"),
+    records.map(record => JSON.stringify(record)).join("\n") + "\n"
+  );
+}
+
 function makeHarnessFixture(t) {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), "leon-harness-evaluation-"));
   t.after(() => fs.rmSync(project, {recursive: true, force: true}));
@@ -56,6 +63,26 @@ function makeHarnessFixture(t) {
       blockerCategory: "environment"
     }]
   });
+  writeIndex(project, [
+    {
+      schemaVersion: 1,
+      taskId: "first-pass",
+      outcomeCount: 1,
+      terminalStatus: "completed",
+      verificationStatus: "passed",
+      updatedAt: "2026-09-14T00:00:07.000Z",
+      outcome: {status: "completed", clarificationRounds: 1, reworkCount: 0, verificationStatus: "passed", verificationDurationSeconds: 12}
+    },
+    {
+      schemaVersion: 1,
+      taskId: "environment-blocker",
+      outcomeCount: 1,
+      terminalStatus: "blocked",
+      verificationStatus: "not_run",
+      updatedAt: "2026-09-14T00:00:08.000Z",
+      outcome: {status: "blocked", clarificationRounds: 1, reworkCount: 1, verificationStatus: "not_run", blockerCategory: "environment"}
+    }
+  ]);
   return project;
 }
 
@@ -64,7 +91,14 @@ test("summarizes terminal evidence without writing or running project commands",
   const metrics = path.join(project, ".ai", "harness", "metrics.jsonl");
   const before = fs.readFileSync(metrics, "utf8");
 
-  const result = evaluateHarness({projectRoot: project});
+  const result = evaluateHarness({projectRoot: project, all: true});
+
+  assert.deepEqual(result.health, {
+    complete: true,
+    invalidIndexEntries: 0,
+    unindexedTasks: [],
+    timedOutRecords: []
+  });
 
   assert.deepEqual(result.summary, {
     taskCount: 2,
@@ -132,7 +166,7 @@ test("CLI renders a read-only markdown evaluation without running task commands"
   const project = makeHarnessFixture(t);
   const script = path.join(sourceRoot, "scripts", "harness-evaluate.mjs");
 
-  const result = spawnSync(process.execPath, [script, "--project", project, "--format", "markdown"], {encoding: "utf8"});
+  const result = spawnSync(process.execPath, [script, "--project", project, "--all", "--format", "markdown"], {encoding: "utf8"});
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^# Harness 交付评估/m);
@@ -149,6 +183,8 @@ test("CLI displays Chinese usage for help without reading a project", () => {
   assert.match(result.stdout, /用法：/);
   assert.match(result.stdout, /--project <项目目录>/);
   assert.match(result.stdout, /--task-id <任务 ID>/);
+  assert.match(result.stdout, /--all/);
+  assert.match(result.stdout, /--rebuild-index/);
   assert.match(result.stdout, /--format json\|markdown/);
 });
 
@@ -180,11 +216,48 @@ test("rejects a damaged or symbolic-link targeted task record", async t => {
   });
 });
 
-test("keeps full evaluation strict when any sibling task record is damaged", t => {
+test("full evaluation reports an unindexed damaged sibling without reading it", t => {
   const project = makeHarnessFixture(t);
   writeFile(path.join(project, ".ai", "harness", "tasks", "damaged.json"), "{not-json\n");
 
-  assert.throws(() => evaluateHarness({projectRoot: project}), /invalid task record/);
+  const result = evaluateHarness({projectRoot: project, all: true});
+  assert.equal(result.health.complete, false);
+  assert.deepEqual(result.health.unindexedTasks, ["damaged"]);
+  assert.equal(result.summary.taskCount, 2);
+});
+
+test("CLI requires an explicit evaluation scope", t => {
+  const project = makeHarnessFixture(t);
+  const script = path.join(sourceRoot, "scripts", "harness-evaluate.mjs");
+  const result = spawnSync(process.execPath, [script, "--project", project], {encoding: "utf8"});
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /use --task-id or --all/);
+});
+
+test("CLI emits a partial report and exit code 2 for incomplete all-scope evidence", t => {
+  const project = makeHarnessFixture(t);
+  const script = path.join(sourceRoot, "scripts", "harness-evaluate.mjs");
+  writeFile(path.join(project, ".ai", "harness", "tasks", "damaged.json"), "{not-json\n");
+  const result = spawnSync(process.execPath, [script, "--project", project, "--all"], {encoding: "utf8"});
+  assert.equal(result.status, 2, result.stderr);
+  const body = JSON.parse(result.stdout);
+  assert.equal(body.health.complete, false);
+  assert.deepEqual(body.health.unindexedTasks, ["damaged"]);
+});
+
+test("rebuild-index records valid tasks and reports damaged records without hiding them", t => {
+  const project = makeHarnessFixture(t);
+  const script = path.join(sourceRoot, "scripts", "harness-evaluate.mjs");
+  fs.rmSync(path.join(project, ".ai", "harness", "task-index.jsonl"));
+  writeFile(path.join(project, ".ai", "harness", "tasks", "damaged.json"), "{not-json\n");
+  const result = spawnSync(process.execPath, [script, "--project", project, "--rebuild-index"], {encoding: "utf8"});
+  assert.equal(result.status, 2, result.stderr);
+  const body = JSON.parse(result.stdout);
+  assert.equal(body.indexedTaskCount, 2);
+  assert.deepEqual(body.invalidRecords, ["damaged"]);
+  assert.deepEqual(body.timedOutRecords, []);
+  const lines = fs.readFileSync(path.join(project, ".ai", "harness", "task-index.jsonl"), "utf8").trim().split("\n").map(JSON.parse);
+  assert.deepEqual(lines.map(line => line.taskId).sort(), ["environment-blocker", "first-pass"]);
 });
 
 test("CLI accepts --task-id and remains read-only with damaged siblings", t => {

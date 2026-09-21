@@ -9,6 +9,9 @@ import {
   verify,
   rollback,
   SKILL_NAMES,
+  migrateToPluginDistribution,
+  verifyPluginDistribution,
+  rollbackPluginDistribution,
   GLOBAL_DOCUMENT_NAMES,
   installGlobalFramework,
   verifyGlobalFramework,
@@ -264,4 +267,42 @@ test("skill verification CLI exits nonzero when managed content drifts", t => {
   assert.equal(result.status, 1, result.stderr);
   assert.equal(JSON.parse(result.stdout).valid, false);
   assert.match(result.stdout, /project-harness/);
+});
+
+test("migrates checksum-owned global skills to plugin-only distribution and restores them exactly", t => {
+  const codexHome = makeCodexHome(t);
+  const target = path.join(codexHome, "skills");
+  install({sourceRoot, targetRoot: target});
+  const before = Object.fromEntries(SKILL_NAMES.map(name => [
+    name,
+    fs.readFileSync(path.join(target, name, "SKILL.md"), "utf8")
+  ]));
+  fs.mkdirSync(path.join(target, "foreign-skill"));
+  fs.writeFileSync(path.join(target, "foreign-skill", "SKILL.md"), "foreign\n");
+
+  const migrated = migrateToPluginDistribution({sourceRoot, targetRoot: target});
+
+  assert.equal(migrated.retiredSkills.length, SKILL_NAMES.length);
+  assert.equal(verifyPluginDistribution({sourceRoot, targetRoot: target}).valid, true);
+  for (const name of SKILL_NAMES) assert.equal(fs.existsSync(path.join(target, name)), false);
+  assert.equal(fs.readFileSync(path.join(target, "foreign-skill", "SKILL.md"), "utf8"), "foreign\n");
+
+  rollbackPluginDistribution({sourceRoot, targetRoot: target});
+  for (const [name, content] of Object.entries(before)) {
+    assert.equal(fs.readFileSync(path.join(target, name, "SKILL.md"), "utf8"), content);
+  }
+  assert.equal(verify({sourceRoot, targetRoot: target}).valid, true);
+});
+
+test("refuses plugin-only migration when a managed skill drifted", t => {
+  const codexHome = makeCodexHome(t);
+  const target = path.join(codexHome, "skills");
+  install({sourceRoot, targetRoot: target});
+  fs.appendFileSync(path.join(target, "project-harness", "SKILL.md"), "drift\n");
+
+  assert.throws(
+    () => migrateToPluginDistribution({sourceRoot, targetRoot: target}),
+    /refusing to migrate drifted skills: project-harness/
+  );
+  assert.equal(fs.existsSync(path.join(target, "project-harness")), true);
 });

@@ -42,7 +42,7 @@ node "$HOME/.agents/leon-engineering/runtime/harness-run.mjs" --project /absolut
 
 Codex 的 patch→verify 仍使用现有 `functions.exec` 顺序调用：先执行 `apply_patch`，确认补丁成功后才调用 `harness-run.mjs` 运行 verifier；补丁失败不得启动 verifier。该集成不新增工具 schema，也不把任意命令塞入观察层。
 
-完整 stdout/stderr 以 `0600` 留在 `.ai/harness/logs/<task-id>/`，路径穿越和符号链接会被拒绝，日志不会自动删除。总输出不超过 8 KiB 时完整返回；更大输出只返回不超过 6 KiB 的去重回执（2 KiB 头、1.5 KiB 尾、最多 2.5 KiB 错误上下文）。回执含 observation ID、状态、退出码、信号、耗时、完整/返回字节数、SHA-256、截断状态和日志引用；疑似秘密永不进入回执或回查，主归档失败则落到持久本地 fallback。`observation_recorded` / `observation_recalled` 指标不保存命令、日志或输出。
+完整 stdout/stderr 以 `0600` 留在 `.ai/harness/logs/<task-id>/`，路径穿越和符号链接会被拒绝，日志不会自动删除。普通调用最多返回 4 KiB，显式 `wideReceipt: true` 最多 8 KiB；超限时保留头、尾、错误上下文、状态、退出码、超时原因、SHA-256和日志引用。疑似秘密永不进入回执或回查，主归档失败则落到持久本地 fallback。`observation_recorded` / `observation_recalled` 指标不保存命令、日志或输出。
 
 对用户指定的陌生项目，可从源仓库运行以下只读命令：
 
@@ -89,12 +89,19 @@ node "$HOME/.agents/leon-engineering/runtime/iteration-delivery.mjs" --cleanup -
 要查看该项目已记录的交付指标，运行只读评估；它不会创建文件、执行账本内命令或扫描其他项目：
 
 ```bash
-node scripts/harness-evaluate.mjs --project /absolute/project --format json
-node scripts/harness-evaluate.mjs --project /absolute/project --format markdown
+node scripts/harness-evaluate.mjs --project /absolute/project --all --format json
+node scripts/harness-evaluate.mjs --project /absolute/project --all --format markdown
 node scripts/harness-evaluate.mjs --project /absolute/project --task-id task-id --format markdown
+node scripts/harness-evaluate.mjs --project /absolute/project --rebuild-index
 ```
 
-`--task-id` 只读取指定普通 JSON 任务文件，不扫描兄弟任务记录；目标损坏或为符号链接时失败。不带参数的全量模式保持严格，任何坏记录都会失败。两种模式都不运行记录中的命令。报告中的一次通过率、平均值只针对已有结果；验证耗时覆盖率不足时，不得把它解释为项目实际速度。
+`--task-id` 只读取指定普通 JSON 任务文件；`--all` 读取轻量索引并各读取一次 events/metrics。未索引或损坏证据返回部分报告、`complete: false` 和退出码 2。`--rebuild-index` 是显式写操作，逐文件超时且不下载 dataless 内容。不指定范围会失败。
+
+最小充分验收由只读规划器生成。未知路径、契约、schema、依赖、CI、安全和桌面变更只能升级，不能手工降级：
+
+```bash
+node "$HOME/.agents/leon-engineering/runtime/verification-plan.mjs" --project /absolute/project --risk-tier local-only --change-kind internal --changed-file services/example.py
+```
 
 对已经初始化 Harness 的依赖任务、中断恢复或显式重试，先预览项目内任务计划；它不创建控制文件、不运行任务命令：
 

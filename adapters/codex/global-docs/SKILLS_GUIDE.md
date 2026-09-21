@@ -1,5 +1,7 @@
 # 全局工程工作流：技能治理
 
+0.19.0 将能力拆为两层：`leon-engineering` 保留 Hook/runtime 与九个高频工程 workflow；`leon-engineering-workflows` 承载十个推理方法及 `logging-observability`、`skill-health`，默认不安装。不得同时从插件和 `~/.codex/skills` 暴露同一批受管 skills；旧全局副本只能经校验迁移器移除，并保留可回滚备份。
+
 现有技能按触发条件分工，而不是为每个项目复制一套流程：
 
 | 技能 | 何时使用 |

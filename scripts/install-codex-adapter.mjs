@@ -8,6 +8,7 @@ import {defaultHarnessRuntimeRoot, installHarnessRuntime, verifyHarnessRuntime} 
 import {REASONING_SKILL_NAMES} from "./reasoning-skills.mjs";
 
 const MANIFEST_NAME = ".leon-engineering.json";
+const DISTRIBUTION_MANIFEST_NAME = ".leon-engineering-distribution.json";
 const GLOBAL_MANIFEST_NAME = ".leon-engineering-global.json";
 const GLOBAL_HOOKS_NAME = "hooks.json";
 const RUNTIME_ROOT_PLACEHOLDER = "__LEON_ENGINEERING_RUNTIME_ROOT__";
@@ -15,20 +16,25 @@ const SOURCE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const GLOBAL_POLICY_START = "<!-- leon-engineering:global-framework:start -->";
 const GLOBAL_POLICY_END = "<!-- leon-engineering:global-framework:end -->";
 
-export const SKILL_NAMES = [
+export const CORE_SKILL_NAMES = Object.freeze([
   "agent-routing",
   "bugfix-evidence",
   "feature-loop",
   "iteration-delivery",
-  "logging-observability",
   "project-adapter",
   "project-bootstrap",
   "project-constraints",
   "project-harness",
-  "review-ship",
+  "review-ship"
+]);
+
+export const EXTENDED_SKILL_NAMES = Object.freeze([
+  "logging-observability",
   "skill-health",
   ...REASONING_SKILL_NAMES
-];
+]);
+
+export const SKILL_NAMES = Object.freeze([...CORE_SKILL_NAMES, ...EXTENDED_SKILL_NAMES]);
 
 export const GLOBAL_DOCUMENT_NAMES = [
   "GETTING_STARTED.md",
@@ -74,7 +80,8 @@ function listSkillFiles(directory, name, source) {
 }
 
 function canonicalSkillFiles(sourceRoot, name) {
-  return listSkillFiles(path.join(sourceRoot, "skills", name), name, true);
+  const family = CORE_SKILL_NAMES.includes(name) ? "leon-engineering-core" : "leon-engineering-workflows";
+  return listSkillFiles(path.join(sourceRoot, "plugins", family, "skills", name), name, true);
 }
 
 function skillChecksum(files) {
@@ -94,6 +101,10 @@ function textChecksum(content) {
 
 function manifestPath(targetRoot) {
   return path.join(targetRoot, MANIFEST_NAME);
+}
+
+function distributionManifestPath(targetRoot) {
+  return path.join(targetRoot, DISTRIBUTION_MANIFEST_NAME);
 }
 
 function globalManifestPath(codexHome) {
@@ -655,6 +666,125 @@ export function rollback({targetRoot, logResult = true}) {
   if (logResult) log("rolled_back", {skillCount: Object.keys(manifest.skills).length});
 }
 
+function readDistributionManifest(targetRoot) {
+  const file = distributionManifestPath(targetRoot);
+  if (!fs.existsSync(file)) return null;
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (error) {
+    throw new Error(`invalid distribution manifest: ${error.message}`);
+  }
+  if (
+    manifest?.schemaVersion !== 1
+    || manifest.adapter !== "leon-engineering"
+    || manifest.distribution !== "plugin-only"
+    || typeof manifest.backupRoot !== "string"
+    || !path.isAbsolute(manifest.backupRoot)
+    || !manifest.retiredSkills
+    || typeof manifest.retiredSkills !== "object"
+    || Array.isArray(manifest.retiredSkills)
+  ) throw new Error("invalid distribution manifest");
+  for (const [name, checksum] of Object.entries(manifest.retiredSkills)) {
+    if (!SKILL_NAMES.includes(name) || !/^[0-9a-f]{64}$/.test(checksum)) {
+      throw new Error("invalid distribution manifest");
+    }
+  }
+  const expectedParent = path.join(path.dirname(targetRoot), ".leon-engineering-backups");
+  if (path.dirname(manifest.backupRoot) !== expectedParent) throw new Error("invalid distribution backup root");
+  return manifest;
+}
+
+export function migrateToPluginDistribution({sourceRoot = SOURCE_ROOT, targetRoot, logResult = true}) {
+  if (!targetRoot) throw new Error("targetRoot is required");
+  if (readDistributionManifest(targetRoot)) throw new Error("plugin-only distribution already active");
+  const existing = readManifest(targetRoot);
+  if (!existing) throw new Error("adapter manifest not found");
+  const verification = verify({sourceRoot, targetRoot, logResult: false});
+  if (!verification.valid) {
+    throw new Error(`refusing to migrate drifted skills: ${verification.drift.join(", ")}`);
+  }
+
+  const backupParent = path.join(path.dirname(targetRoot), ".leon-engineering-backups");
+  const backupRoot = path.join(backupParent, crypto.randomUUID());
+  fs.mkdirSync(backupRoot, {recursive: true, mode: 0o700});
+  const retiredSkills = {};
+  try {
+    for (const [name, checksum] of Object.entries(existing.skills)) {
+      const source = path.join(targetRoot, name);
+      const destination = path.join(backupRoot, name);
+      fs.cpSync(source, destination, {recursive: true, errorOnExist: true});
+      const backupChecksum = skillChecksum(listSkillFiles(destination, name, false));
+      if (backupChecksum !== checksum) throw new Error(`backup checksum mismatch: ${name}`);
+      retiredSkills[name] = checksum;
+    }
+    for (const name of Object.keys(retiredSkills)) {
+      fs.rmSync(path.join(targetRoot, name), {recursive: true});
+    }
+    const manifest = {
+      schemaVersion: 1,
+      adapter: "leon-engineering",
+      distribution: "plugin-only",
+      frameworkVersion: frameworkVersion(sourceRoot),
+      sourceCommit: sourceCommit(sourceRoot),
+      backupRoot,
+      retiredSkills
+    };
+    writeAtomically(distributionManifestPath(targetRoot), `${JSON.stringify(manifest, null, 2)}\n`);
+    if (logResult) log("plugin_distribution_migrated", {skillCount: Object.keys(retiredSkills).length});
+    return {retiredSkills: Object.keys(retiredSkills), manifest};
+  } catch (error) {
+    for (const name of Object.keys(retiredSkills)) {
+      const destination = path.join(targetRoot, name);
+      if (!fs.existsSync(destination) && fs.existsSync(path.join(backupRoot, name))) {
+        fs.cpSync(path.join(backupRoot, name), destination, {recursive: true});
+      }
+    }
+    fs.rmSync(backupRoot, {recursive: true, force: true});
+    throw error;
+  }
+}
+
+export function verifyPluginDistribution({targetRoot, logResult = true}) {
+  if (!targetRoot) throw new Error("targetRoot is required");
+  const manifest = readDistributionManifest(targetRoot);
+  if (!manifest) throw new Error("distribution manifest not found");
+  const drift = [];
+  for (const [name, checksum] of Object.entries(manifest.retiredSkills)) {
+    if (fs.existsSync(path.join(targetRoot, name))) drift.push(`restored:${name}`);
+    try {
+      const backup = path.join(manifest.backupRoot, name);
+      const actual = skillChecksum(listSkillFiles(backup, name, false));
+      if (actual !== checksum) drift.push(`backup:${name}`);
+    } catch {
+      drift.push(`backup:${name}`);
+    }
+  }
+  if (logResult) log("plugin_distribution_verified", {valid: drift.length === 0, driftCount: drift.length});
+  return {valid: drift.length === 0, drift};
+}
+
+export function rollbackPluginDistribution({targetRoot, logResult = true}) {
+  if (!targetRoot) throw new Error("targetRoot is required");
+  const manifest = readDistributionManifest(targetRoot);
+  if (!manifest) throw new Error("distribution manifest not found");
+  const verification = verifyPluginDistribution({targetRoot, logResult: false});
+  if (!verification.valid) throw new Error(`refusing to rollback drifted distribution: ${verification.drift.join(", ")}`);
+  for (const name of Object.keys(manifest.retiredSkills)) {
+    const destination = path.join(targetRoot, name);
+    if (fs.existsSync(destination)) throw new Error(`refusing to overwrite restored skill: ${name}`);
+    fs.cpSync(path.join(manifest.backupRoot, name), destination, {recursive: true});
+  }
+  fs.rmSync(distributionManifestPath(targetRoot));
+  fs.rmSync(manifest.backupRoot, {recursive: true});
+  try {
+    fs.rmdirSync(path.dirname(manifest.backupRoot));
+  } catch (error) {
+    if (error.code !== "ENOTEMPTY" && error.code !== "ENOENT") throw error;
+  }
+  if (logResult) log("plugin_distribution_rolled_back", {skillCount: Object.keys(manifest.retiredSkills).length});
+}
+
 function main(args) {
   const targetIndex = args.indexOf("--target");
   if (targetIndex >= 0 && !args[targetIndex + 1]) throw new Error("--target requires a directory");
@@ -728,7 +858,21 @@ function main(args) {
     rollback({targetRoot});
     return;
   }
-  throw new Error("use --dry-run, --install, --verify, --rollback, --install-global, --verify-global, or --rollback-global");
+  if (args.includes("--migrate-plugin-only")) {
+    console.log(JSON.stringify(migrateToPluginDistribution({targetRoot}), null, 2));
+    return;
+  }
+  if (args.includes("--verify-plugin-only")) {
+    const result = verifyPluginDistribution({targetRoot});
+    console.log(JSON.stringify(result, null, 2));
+    if (!result.valid) process.exitCode = 1;
+    return;
+  }
+  if (args.includes("--rollback-plugin-only")) {
+    rollbackPluginDistribution({targetRoot});
+    return;
+  }
+  throw new Error("use --dry-run, --install, --verify, --rollback, --migrate-plugin-only, --verify-plugin-only, --rollback-plugin-only, --install-global, --verify-global, or --rollback-global");
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

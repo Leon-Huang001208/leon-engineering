@@ -120,10 +120,10 @@ test("returns small binary output losslessly as base64", async t => {
   assert.equal(result.truncated, false);
 });
 
-test("returns an exactly 8KiB binary stream completely despite base64 expansion", async t => {
+test("returns an exactly 8KiB binary stream completely only with an explicit wide receipt", async t => {
   const fixture = makeExecutionFixture(t, "process.stdout.write(Buffer.alloc(8 * 1024, 255));\n");
 
-  const result = await runObserved({projectRoot: fixture.project, taskId: "observed-task", verifierId: fixture.verifierId});
+  const result = await runObserved({projectRoot: fixture.project, taskId: "observed-task", verifierId: fixture.verifierId, wideReceipt: true});
 
   assert.equal(result.output.encoding, "base64");
   assert.equal(Buffer.from(result.output.stdout, "base64").length, 8 * 1024);
@@ -131,7 +131,7 @@ test("returns an exactly 8KiB binary stream completely despite base64 expansion"
   assert.equal(result.truncated, false);
 });
 
-test("archives a 1MiB stream and returns a deduplicated receipt no larger than 6KiB", async t => {
+test("archives a 1MiB stream and returns a deduplicated receipt no larger than 4KiB", async t => {
   const fixture = makeExecutionFixture(t, [
     "const output = Buffer.alloc(1024 * 1024, 65);",
     "Buffer.from('HEAD\\n').copy(output, 0);",
@@ -145,7 +145,7 @@ test("archives a 1MiB stream and returns a deduplicated receipt no larger than 6
   assert.equal(result.fullBytes, 1024 * 1024);
   assert.equal(result.truncated, true);
   assert.equal(result.output.encoding, "receipt");
-  assert.ok(Buffer.byteLength(result.output.text) <= 6 * 1024);
+  assert.ok(Buffer.byteLength(result.output.text) <= 4 * 1024);
   assert.match(result.output.text, /HARNESS_OBSERVATION v1/);
   assert.match(result.output.text, new RegExp(result.observationId));
   assert.match(result.output.text, /status=passed/);

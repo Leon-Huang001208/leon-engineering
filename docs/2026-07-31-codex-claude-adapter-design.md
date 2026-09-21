@@ -15,7 +15,9 @@ It does not migrate legacy Claude commands, legacy global skills or agents, cred
 
 ## Architecture
 
-`/Users/leon/Developer/claude-engineering/skills/*/` remains the sole human-maintained Skill source. Each skill body is in `SKILL.md`; companion contracts and references are installed with it so no installed skill points to a missing local resource.
+> 0.19.0 supersedes the source layout below: canonical skills now live under `plugins/leon-engineering-core/skills/` and `plugins/leon-engineering-workflows/skills/`; see [Token 与最小充分验收 v0.19.0](2026-09-21-token-harness-v0190.md).
+
+Historically, `/Users/leon/Developer/claude-engineering/skills/*/` was the sole human-maintained Skill source. Each skill body is in `SKILL.md`; companion contracts and references are installed with it so no installed skill points to a missing local resource.
 
 ```text
 canonical Skill directories in leon-engineering/skills

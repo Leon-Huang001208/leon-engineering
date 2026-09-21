@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
-import {SKILL_NAMES} from "../scripts/install-codex-adapter.mjs";
+import {CORE_SKILL_NAMES, EXTENDED_SKILL_NAMES, SKILL_NAMES} from "../scripts/install-codex-adapter.mjs";
 import {buildReconciliation, buildPluginAdditions} from "../scripts/sync-cc-switch-skills.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -42,7 +42,8 @@ const agents = {
 };
 
 function readSkill(name) {
-  return fs.readFileSync(path.join(root, "skills", name, "SKILL.md"), "utf8");
+  const family = CORE_SKILL_NAMES.includes(name) ? "leon-engineering-core" : "leon-engineering-workflows";
+  return fs.readFileSync(path.join(root, "plugins", family, "skills", name, "SKILL.md"), "utf8");
 }
 
 function readAgent(name) {
@@ -90,7 +91,7 @@ function frontmatter(source) {
 
 test("ships the focused workflow skills", () => {
   assert.deepEqual(
-    fs.readdirSync(path.join(root, "skills")).sort(),
+    [...CORE_SKILL_NAMES, ...EXTENDED_SKILL_NAMES].sort(),
     Object.keys(skills).sort()
   );
 
@@ -142,7 +143,7 @@ test("documents one focused pilot scenario for every new workflow and agent", ()
 
 test("documents Codex role templates with explicit boundaries", () => {
   const source = fs.readFileSync(
-    path.join(root, "skills", "agent-routing", "references", "codex-role-templates.md"),
+    path.join(root, "plugins", "leon-engineering-core", "skills", "agent-routing", "references", "codex-role-templates.md"),
     "utf8"
   );
   for (const name of Object.keys(agents)) assert.match(source, new RegExp(`## ${name}\\b`));
@@ -152,6 +153,35 @@ test("documents Codex role templates with explicit boundaries", () => {
 
 test("keeps the Codex adapter aligned with the focused skill catalog", () => {
   assert.deepEqual([...SKILL_NAMES].sort(), Object.keys(skills).sort());
+});
+
+test("splits the plugin catalog into a compatible core and opt-in workflows extension", () => {
+  const core = JSON.parse(fs.readFileSync(path.join(root, ".claude-plugin", "plugin.json"), "utf8"));
+  const workflows = JSON.parse(fs.readFileSync(
+    path.join(root, "plugins", "leon-engineering-workflows", ".claude-plugin", "plugin.json"),
+    "utf8"
+  ));
+  const marketplace = JSON.parse(fs.readFileSync(path.join(root, ".claude-plugin", "marketplace.json"), "utf8"));
+
+  assert.equal(core.name, "leon-engineering");
+  assert.equal(core.version, "0.19.0");
+  assert.deepEqual(core.skills, ["./plugins/leon-engineering-core/skills/"]);
+  assert.equal(workflows.name, "leon-engineering-workflows");
+  assert.equal(workflows.version, "0.19.0");
+  assert.deepEqual(workflows.skills, ["./skills/"]);
+  assert.deepEqual(
+    fs.readdirSync(path.join(root, "plugins", "leon-engineering-core", "skills")).sort(),
+    [...CORE_SKILL_NAMES].sort()
+  );
+  assert.deepEqual(
+    fs.readdirSync(path.join(root, "plugins", "leon-engineering-workflows", "skills")).sort(),
+    [...EXTENDED_SKILL_NAMES].sort()
+  );
+  assert.deepEqual(marketplace.plugins.map(plugin => plugin.name), [
+    "leon-engineering",
+    "leon-engineering-workflows"
+  ]);
+  assert.equal(marketplace.plugins[1].source, "./plugins/leon-engineering-workflows");
 });
 
 test("defines a stable project profile schema", () => {
@@ -317,18 +347,23 @@ test("requires automatic Harness start and a cross-host delivery hard gate", () 
 });
 
 test("documents observed verifier execution without changing the Codex tool schema", () => {
-  const harness = fs.readFileSync(path.join(root, "skills", "project-harness", "SKILL.md"), "utf8");
+  const harness = readSkill("project-harness");
   const commands = fs.readFileSync(path.join(root, "adapters", "codex", "global-docs", "COMMANDS_GUIDE.md"), "utf8");
   const harnessDoc = fs.readFileSync(path.join(root, "docs", "harness-v1.md"), "utf8");
 
   for (const content of [harness, commands, harnessDoc]) {
     assert.match(content, /harness-run\.mjs/);
     assert.match(content, /verifier ID/i);
+    assert.match(content, /4\s*KiB/i);
     assert.match(content, /8\s*KiB/i);
-    assert.match(content, /6\s*KiB/i);
     assert.match(content, /observation_recorded/);
     assert.match(content, /observation_recalled/);
   }
+  assert.match(harness, /task-index\.jsonl/);
+  assert.match(harness, /--all/);
+  assert.match(harness, /--rebuild-index/);
+  assert.match(commands, /verification-plan\.mjs/);
+  assert.match(harnessDoc, /verification-plan\.mjs/);
   assert.match(harness, /runObserved\(spec\)/);
   assert.match(harness, /readObservation\(query\)/);
   assert.match(commands, /functions\.exec/);

@@ -2,7 +2,15 @@ import fs from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {buildProfile} from "./profile-project.mjs";
-import {HARNESS_DIRECTORY, readHarnessEvents, readHarnessTask} from "./harness-project.mjs";
+import {
+  HARNESS_DIRECTORY,
+  TASK_INDEX_FILENAME,
+  buildTaskIndexRecord,
+  readAllHarnessEvents,
+  readHarnessEvents,
+  readHarnessTask,
+  readHarnessTaskIndex
+} from "./harness-project.mjs";
 
 const OUTCOME_STATUSES = new Set(["completed", "blocked", "rework", "invalidated"]);
 const VERIFICATION_STATUSES = new Set(["passed", "failed", "not_run"]);
@@ -199,7 +207,7 @@ function summarizeObservations(metrics) {
 function summarize(records, eventsByTask, metrics) {
   const terminal = records.filter(record => record.outcomes.length > 0).map(record => ({...record, outcome: record.outcomes.at(-1)}));
   const completedPassed = terminal.filter(record => record.outcome.status === "completed" && record.outcome.verification.status === "passed");
-  const firstPass = completedPassed.filter(record => record.outcomes.length === 1 && record.outcome.reworkCount === 0);
+  const firstPass = completedPassed.filter(record => (record.outcomeCount ?? record.outcomes.length) === 1 && record.outcome.reworkCount === 0);
   const durations = terminal.map(record => record.outcome.verificationDurationSeconds).filter(value => value !== undefined);
   const blockerCategories = {};
   for (const record of terminal) {
@@ -223,17 +231,115 @@ function summarize(records, eventsByTask, metrics) {
   };
 }
 
-export function evaluateHarness({projectRoot, taskId}) {
+function recordFromIndex(entry) {
+  const outcome = entry.outcome ? {
+    status: entry.outcome.status,
+    clarificationRounds: entry.outcome.clarificationRounds,
+    reworkCount: entry.outcome.reworkCount,
+    verification: {command: "indexed-summary", status: entry.outcome.verificationStatus},
+    ...(entry.outcome.verificationDurationSeconds !== undefined ? {verificationDurationSeconds: entry.outcome.verificationDurationSeconds} : {}),
+    ...(entry.outcome.blockerCategory ? {blockerCategory: entry.outcome.blockerCategory} : {}),
+    ...(entry.outcome.invalidReason ? {invalidReason: entry.outcome.invalidReason} : {})
+  } : null;
+  return {id: entry.taskId, outcomeCount: entry.outcomeCount, outcomes: outcome ? [outcome] : []};
+}
+
+function listedTaskIds(tasks) {
+  return fs.readdirSync(tasks, {withFileTypes: true})
+    .filter(entry => entry.isFile() && !entry.isSymbolicLink() && path.extname(entry.name) === ".json")
+    .map(entry => entry.name.slice(0, -5))
+    .sort();
+}
+
+export function evaluateHarness({projectRoot, taskId, all = false}) {
   const root = buildProfile({projectRoot}).projectRoot;
   const directory = existingSafeDirectory(root, HARNESS_DIRECTORY);
   if (!directory) throw new Error("missing task harness");
   const tasks = existingSafeDirectory(root, path.posix.join(HARNESS_DIRECTORY, "tasks"));
   if (!tasks) throw new Error("missing task harness");
-  const records = taskId === undefined
-    ? readTaskRecords(tasks)
-    : [readTargetTaskRecord(root, taskId)];
-  const eventsByTask = new Map(records.map(record => [record.id, readHarnessEvents({projectRoot: root, taskId: record.id})]));
-  return {schemaVersion: 1, projectRoot: root, summary: summarize(records, eventsByTask, readMetrics(directory, taskId))};
+  if (taskId !== undefined) {
+    const records = [readTargetTaskRecord(root, taskId)];
+    const eventsByTask = new Map([[taskId, readHarnessEvents({projectRoot: root, taskId})]]);
+    return {
+      schemaVersion: 1,
+      projectRoot: root,
+      health: {complete: true, invalidIndexEntries: 0, unindexedTasks: [], timedOutRecords: []},
+      summary: summarize(records, eventsByTask, readMetrics(directory, taskId))
+    };
+  }
+  if (!all) throw new Error("use --task-id or --all");
+  const index = readHarnessTaskIndex({projectRoot: root});
+  const ids = listedTaskIds(tasks);
+  const unindexedTasks = ids.filter(id => !index.records.has(id));
+  const records = [...index.records.values()].map(recordFromIndex);
+  const eventsByTask = readAllHarnessEvents({projectRoot: root, taskIds: records.map(record => record.id)});
+  const health = {
+    complete: index.invalidIndexEntries === 0 && unindexedTasks.length === 0,
+    invalidIndexEntries: index.invalidIndexEntries,
+    unindexedTasks,
+    timedOutRecords: []
+  };
+  return {schemaVersion: 1, projectRoot: root, health, summary: summarize(records, eventsByTask, readMetrics(directory))};
+}
+
+async function readTaskForIndex(file, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const content = await fs.promises.readFile(file, {encoding: "utf8", signal: controller.signal});
+    const task = JSON.parse(content);
+    const id = path.basename(file, ".json");
+    if (!task || typeof task !== "object" || Array.isArray(task) || task.id !== id || !Array.isArray(task.outcomes)) {
+      return {status: "invalid", id};
+    }
+    task.outcomes.forEach(assertOutcome);
+    return {status: "ok", id, record: buildTaskIndexRecord(task)};
+  } catch (error) {
+    const id = path.basename(file, ".json");
+    return {status: error?.name === "AbortError" ? "timeout" : "invalid", id};
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function rebuildHarnessIndex({projectRoot, concurrency = 8, perFileTimeoutMs = 500, totalTimeoutMs = 10000}) {
+  const root = buildProfile({projectRoot}).projectRoot;
+  const directory = existingSafeDirectory(root, HARNESS_DIRECTORY);
+  const tasks = directory && existingSafeDirectory(root, path.posix.join(HARNESS_DIRECTORY, "tasks"));
+  if (!directory || !tasks) throw new Error("missing task harness");
+  const entries = fs.readdirSync(tasks, {withFileTypes: true}).sort((left, right) => left.name.localeCompare(right.name));
+  const files = entries.filter(entry => entry.isFile() && !entry.isSymbolicLink() && path.extname(entry.name) === ".json")
+    .map(entry => path.join(tasks, entry.name));
+  const invalidRecords = entries.filter(entry => entry.isSymbolicLink() || !entry.isFile() || path.extname(entry.name) !== ".json")
+    .map(entry => entry.name);
+  const timedOutRecords = [];
+  const records = [];
+  const deadline = Date.now() + totalTimeoutMs;
+  let cursor = 0;
+  async function worker() {
+    while (cursor < files.length) {
+      const index = cursor++;
+      const file = files[index];
+      const id = path.basename(file, ".json");
+      if (Date.now() >= deadline) {
+        timedOutRecords.push(id);
+        continue;
+      }
+      const result = await readTaskForIndex(file, Math.min(perFileTimeoutMs, Math.max(1, deadline - Date.now())));
+      if (result.status === "ok") records.push(result.record);
+      else if (result.status === "timeout") timedOutRecords.push(result.id);
+      else invalidRecords.push(result.id);
+    }
+  }
+  await Promise.all(Array.from({length: Math.min(concurrency, Math.max(1, files.length))}, worker));
+  records.sort((left, right) => left.taskId.localeCompare(right.taskId));
+  invalidRecords.sort();
+  timedOutRecords.sort();
+  const destination = path.join(directory, TASK_INDEX_FILENAME);
+  const temporary = path.join(directory, `.${TASK_INDEX_FILENAME}.${process.pid}.tmp`);
+  fs.writeFileSync(temporary, records.map(record => JSON.stringify(record)).join("\n") + (records.length ? "\n" : ""), {mode: 0o600});
+  fs.renameSync(temporary, destination);
+  return {indexedTaskCount: records.length, invalidRecords, timedOutRecords, complete: invalidRecords.length === 0 && timedOutRecords.length === 0};
 }
 
 function formatPercentage(value) {
@@ -255,6 +361,7 @@ export function formatEvaluation(result, format = "json") {
   return [
     "# Harness 交付评估",
     "",
+    `- 索引完整：${result.health?.complete === false ? "否" : "是"}；无效索引 ${result.health?.invalidIndexEntries ?? 0}；未索引任务 ${(result.health?.unindexedTasks ?? []).length}；超时记录 ${(result.health?.timedOutRecords ?? []).length}。`,
     `- 任务：${summary.taskCount} 个；已有结果：${summary.terminalTaskCount} 个。`,
     `- 完成且验证通过：${summary.completedPassedCount} 个。`,
     `- 一次通过率：${formatPercentage(summary.firstPassRate)}（${summary.firstPassCompletedCount}/${summary.terminalTaskCount}；唯一结果为完成、验证通过且返工为 0）。`,
@@ -280,37 +387,49 @@ function parseArgs(args) {
       if (!value || value.startsWith("--")) throw new Error(`${argument} requires a value`);
       options[argument.slice(2)] = value;
       index += 1;
+    } else if (argument === "--all") {
+      options.all = true;
+    } else if (argument === "--rebuild-index") {
+      options.rebuildIndex = true;
     } else {
       throw new Error(`unknown option: ${argument}`);
     }
   }
   if (!options.project) throw new Error("--project requires a value");
   if (!new Set(["json", "markdown"]).has(options.format)) throw new Error("invalid format");
+  const scopes = Number(Boolean(options["task-id"])) + Number(Boolean(options.all)) + Number(Boolean(options.rebuildIndex));
+  if (scopes !== 1) throw new Error("use --task-id or --all or --rebuild-index");
   return options;
 }
 
 function formatUsage() {
   return [
-    "用法：harness-evaluate.mjs --project <项目目录> [--task-id <任务 ID>] [--format json|markdown]",
+    "用法：harness-evaluate.mjs --project <项目目录> (--task-id <任务 ID> | --all | --rebuild-index) [--format json|markdown]",
     "",
     "只读汇总已记录的 Harness 任务证据；不会执行账本中的验证命令或写入项目。"
   ].join("\n");
 }
 
-function main(args) {
+async function main(args) {
   const options = parseArgs(args);
   if (options.help) {
     process.stdout.write(`${formatUsage()}\n`);
     return;
   }
-  process.stdout.write(formatEvaluation(evaluateHarness({projectRoot: options.project, taskId: options["task-id"]}), options.format));
+  if (options.rebuildIndex) {
+    const result = await rebuildHarnessIndex({projectRoot: options.project});
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    if (!result.complete) process.exitCode = 2;
+    return;
+  }
+  const result = evaluateHarness({projectRoot: options.project, taskId: options["task-id"], all: options.all});
+  process.stdout.write(formatEvaluation(result, options.format));
+  if (result.health?.complete === false) process.exitCode = 2;
 }
 
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))) {
-  try {
-    main(process.argv.slice(2));
-  } catch (error) {
+  main(process.argv.slice(2)).catch(error => {
     process.stderr.write(`harness evaluation failed: ${error.message}\n`);
     process.exitCode = 1;
-  }
+  });
 }

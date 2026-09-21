@@ -27,6 +27,7 @@ test("installs a verified Harness runtime that can preview a real project", t =>
   const installed = installHarnessRuntime({sourceRoot, runtimeRoot});
   assert.ok(HARNESS_RUNTIME_FILES.includes("harness-execution.mjs"));
   assert.ok(HARNESS_RUNTIME_FILES.includes("harness-run.mjs"));
+  assert.ok(HARNESS_RUNTIME_FILES.includes("verification-plan.mjs"));
   assert.equal(installed.files.length, HARNESS_RUNTIME_FILES.length);
   assert.deepEqual(verifyHarnessRuntime({sourceRoot, runtimeRoot}), {valid: true, drift: []});
   for (const name of HARNESS_RUNTIME_FILES) assert.equal(fs.existsSync(path.join(runtimeRoot, name)), true);
