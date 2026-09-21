@@ -211,3 +211,13 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - 新增跨文档回归测试，禁止该旧表述，并要求 Harness 文档同时写明完整交付档的 `--delivery-required` 与 `--require-delivery` 契约。
 - 修正文档而不改变运行时代码、四档路由、权限、依赖或交付控制器行为。
 - 该版本只交付可机械验证的路由和监测能力，不声称真实 Token 已下降。实际 A/B 必须在 Codex 宿主重启后的前三个新任务中与既有基线比较。
+
+## 插件拆分与最小充分验收 v0.19.0
+
+**日期：**2026-09-21
+
+- 保留 `leon-engineering` 旧 ID作为核心插件；新增默认不安装的 `leon-engineering-workflows`，把十二个低频 skills 移出常驻目录。旧全局21个副本只有清单和哈希完全匹配时才迁移，并保留可验证回滚备份。
+- Harness 新任务追加不含正文、命令和路径的 `task-index.jsonl`。`--task-id` 严格读取目标；`--all` 读索引并单次分组 events/metrics；`--rebuild-index` 对坏记录和 dataless 超时给出不完整报告，不静默跳过。
+- `verification-plan.mjs` 只生成最小相关测试闭包，不执行命令；公开契约、schema、数据库、依赖、CI、安全、桌面和未知路径自动升级。
+- verifier 普通回执上限改为4 KiB，显式宽回执为8 KiB；错误、退出码、超时原因、哈希与本地全文回查继续保留。
+- 该记录描述源码与测试契约；真实安装、宿主重启、ResearchWorkbench迁移和 Token A/B 必须在后续交付证据中分别确认。

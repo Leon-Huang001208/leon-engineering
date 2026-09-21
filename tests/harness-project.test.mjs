@@ -81,6 +81,17 @@ test("persists an explicit harness once and appends only declared outcome eviden
   assert.equal(fs.statSync(files.verifiers).mode & 0o777, 0o600);
   assert.equal(JSON.parse(fs.readFileSync(files.task, "utf8")).status, "ready");
   assert.equal(JSON.parse(fs.readFileSync(files.metrics, "utf8")).event, "task_created");
+  const createdIndex = fs.readFileSync(files.index, "utf8").trim().split("\n").map(JSON.parse);
+  assert.equal(createdIndex.length, 1);
+  assert.deepEqual(createdIndex[0], {
+    schemaVersion: 1,
+    taskId: "default-greeting",
+    outcomeCount: 0,
+    terminalStatus: null,
+    verificationStatus: "not_run",
+    updatedAt: createdIndex[0].updatedAt
+  });
+  assert.match(createdIndex[0].updatedAt, /^\d{4}-\d{2}-\d{2}T/);
   assert.throws(() => writeHarness({projectRoot: project, harness}), /existing harness or task/);
 
   const outcome = recordOutcome({
@@ -105,6 +116,17 @@ test("persists an explicit harness once and appends only declared outcome eviden
   const task = JSON.parse(fs.readFileSync(files.task, "utf8"));
   assert.equal(task.status, "completed");
   assert.equal(task.outcomes.length, 1);
+  const completedIndex = fs.readFileSync(files.index, "utf8").trim().split("\n").map(JSON.parse).at(-1);
+  assert.equal(completedIndex.outcomeCount, 1);
+  assert.equal(completedIndex.terminalStatus, "completed");
+  assert.equal(completedIndex.verificationStatus, "passed");
+  assert.deepEqual(completedIndex.outcome, {
+    status: "completed",
+    clarificationRounds: 1,
+    reworkCount: 0,
+    verificationStatus: "passed",
+    verificationDurationSeconds: 12
+  });
   const events = fs.readFileSync(files.metrics, "utf8").trim().split("\n").map(JSON.parse);
   assert.deepEqual(events.map(event => event.event), ["task_created", "task_outcome"]);
 
@@ -210,6 +232,34 @@ test("records only whitelisted Harness event metadata and never stores task text
   }), /invalid harness event name/);
   const events = fs.readFileSync(path.join(project, ".ai", "harness", "events.jsonl"), "utf8");
   assert.doesNotMatch(events, /不要泄露|私有验收|\.env/);
+});
+
+test("refuses outcome writes through a symbolic-link task index", t => {
+  const project = makeFixture(t);
+  const harness = buildHarness({
+    projectRoot: project,
+    task: {id: "index-safety", goal: "protect index", acceptanceCriteria: ["external file unchanged"]}
+  });
+  const files = writeHarness({projectRoot: project, harness});
+  const external = path.join(project, "external-index.jsonl");
+  fs.writeFileSync(external, "sentinel\n");
+  fs.rmSync(files.index);
+  fs.symlinkSync(external, files.index);
+
+  assert.throws(() => recordOutcome({
+    projectRoot: project,
+    taskId: "index-safety",
+    outcome: {
+      status: "completed",
+      clarificationRounds: 0,
+      reworkCount: 0,
+      verificationCommand: "node --test",
+      verificationStatus: "passed",
+      verificationDurationSeconds: 1
+    }
+  }), /invalid harness file/);
+  assert.equal(fs.readFileSync(external, "utf8"), "sentinel\n");
+  assert.equal(JSON.parse(fs.readFileSync(files.task, "utf8")).status, "ready");
 });
 
 test("records reasoning method selection and completion without prompt or chain-of-thought fields", t => {

@@ -9,6 +9,7 @@ export const AGENT_MAP_FILENAME = "agent-map.md";
 export const METRICS_FILENAME = "metrics.jsonl";
 export const EVENTS_FILENAME = "events.jsonl";
 export const VERIFIERS_FILENAME = "verifiers.json";
+export const TASK_INDEX_FILENAME = "task-index.jsonl";
 export const SESSION_DIRECTORY = "sessions";
 const BLOCKER_CATEGORIES = new Set(["environment", "dependency", "permission", "requirements", "test", "external", "unknown"]);
 const EVENT_NAMES = new Set(["task_started", "tool_completed", "policy_decision", "skill_selected", "agent_selected", "verification_completed", "task_finished", "reasoning_method_selected", "reasoning_method_completed"]);
@@ -165,6 +166,68 @@ function taskFile(directory, taskId) {
   return path.join(directory, "tasks", `${taskId}.json`);
 }
 
+function taskIndexFile(directory) {
+  return path.join(directory, TASK_INDEX_FILENAME);
+}
+
+export function buildTaskIndexRecord(task) {
+  const outcomes = Array.isArray(task.outcomes) ? task.outcomes : [];
+  const outcome = outcomes.at(-1);
+  return {
+    schemaVersion: 1,
+    taskId: task.id,
+    outcomeCount: outcomes.length,
+    terminalStatus: outcome?.status ?? null,
+    verificationStatus: outcome?.verification?.status ?? task.verification?.status ?? "not_run",
+    updatedAt: new Date().toISOString(),
+    ...(outcome ? {outcome: {
+      status: outcome.status,
+      clarificationRounds: outcome.clarificationRounds,
+      reworkCount: outcome.reworkCount,
+      verificationStatus: outcome.verification.status,
+      ...(outcome.verificationDurationSeconds !== undefined ? {verificationDurationSeconds: outcome.verificationDurationSeconds} : {}),
+      ...(outcome.blockerCategory ? {blockerCategory: outcome.blockerCategory} : {}),
+      ...(outcome.invalidReason ? {invalidReason: outcome.invalidReason} : {})
+    }} : {})
+  };
+}
+
+function appendTaskIndex(directory, task) {
+  const file = taskIndexFile(directory);
+  fs.appendFileSync(file, `${JSON.stringify(buildTaskIndexRecord(task))}\n`, {mode: 0o600});
+  return file;
+}
+
+export function readHarnessTaskIndex({projectRoot}) {
+  const root = buildProfile({projectRoot}).projectRoot;
+  const {directory} = existingHarnessFiles(root);
+  const file = taskIndexFile(directory);
+  if (!fs.existsSync(file)) return {records: new Map(), invalidIndexEntries: 0, file};
+  const stat = fs.lstatSync(file);
+  if (stat.isSymbolicLink() || !stat.isFile()) throw new Error("invalid harness task index");
+  const records = new Map();
+  let invalidIndexEntries = 0;
+  for (const line of fs.readFileSync(file, "utf8").split("\n").filter(Boolean)) {
+    try {
+      const record = JSON.parse(line);
+      if (
+        record?.schemaVersion !== 1
+        || typeof record.taskId !== "string"
+        || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(record.taskId)
+        || !Number.isInteger(record.outcomeCount)
+        || record.outcomeCount < 0
+        || ![null, "completed", "blocked", "rework", "invalidated"].includes(record.terminalStatus)
+        || !["passed", "failed", "not_run"].includes(record.verificationStatus)
+        || typeof record.updatedAt !== "string"
+      ) throw new Error("invalid");
+      records.set(record.taskId, record);
+    } catch {
+      invalidIndexEntries += 1;
+    }
+  }
+  return {records, invalidIndexEntries, file};
+}
+
 function metricEvent(event, taskId, details = {}) {
   return {timestamp: new Date().toISOString(), event, taskId, ...details};
 }
@@ -232,7 +295,8 @@ export function writeHarness({projectRoot, harness}) {
   const metrics = path.join(directory, METRICS_FILENAME);
   const events = path.join(directory, EVENTS_FILENAME);
   const verifiers = path.join(directory, VERIFIERS_FILENAME);
-  if (fs.existsSync(map) || fs.existsSync(metrics) || fs.existsSync(events) || fs.existsSync(verifiers) || fs.existsSync(task)) {
+  const index = taskIndexFile(directory);
+  if (fs.existsSync(map) || fs.existsSync(metrics) || fs.existsSync(events) || fs.existsSync(verifiers) || fs.existsSync(index) || fs.existsSync(task)) {
     throw new Error("existing harness or task");
   }
   if (!isWithin(tasks, task)) throw new Error("unsafe task destination");
@@ -241,7 +305,8 @@ export function writeHarness({projectRoot, harness}) {
   writeAtomically(metrics, `${JSON.stringify(metricEvent("task_created", harness.task.id, {status: harness.task.status}))}\n`);
   writeAtomically(events, "");
   writeAtomically(verifiers, `${JSON.stringify(verifierManifest(harness), null, 2)}\n`);
-  return {directory, map, task, metrics, events, verifiers};
+  writeAtomically(index, `${JSON.stringify(buildTaskIndexRecord(harness.task))}\n`);
+  return {directory, map, task, metrics, events, verifiers, index};
 }
 
 function existingHarnessFiles(root) {
@@ -251,11 +316,12 @@ function existingHarnessFiles(root) {
   const map = path.join(directory, AGENT_MAP_FILENAME);
   const metrics = path.join(directory, METRICS_FILENAME);
   const events = path.join(directory, EVENTS_FILENAME);
+  const index = taskIndexFile(directory);
   if (!tasks || !fs.existsSync(map) || !fs.existsSync(metrics)) throw new Error("missing task harness");
-  for (const file of [map, metrics, ...(fs.existsSync(events) ? [events] : [])]) {
+  for (const file of [map, metrics, ...(fs.existsSync(events) ? [events] : []), ...(fs.existsSync(index) ? [index] : [])]) {
     if (fs.lstatSync(file).isSymbolicLink() || !fs.statSync(file).isFile()) throw new Error("invalid harness file");
   }
-  return {directory, tasks, metrics, events};
+  return {directory, tasks, metrics, events, index};
 }
 
 export function addHarnessTask({projectRoot, task}) {
@@ -268,7 +334,8 @@ export function addHarnessTask({projectRoot, task}) {
   const record = {...normalizedTask, status: "ready", verification: {status: "not_run"}};
   writeAtomically(destination, `${JSON.stringify(record, null, 2)}\n`);
   fs.appendFileSync(metrics, `${JSON.stringify(metricEvent("task_created", normalizedTask.id, {status: record.status}))}\n`, {mode: 0o600});
-  return {directory, task: destination, metrics};
+  const index = appendTaskIndex(directory, record);
+  return {directory, task: destination, metrics, index};
 }
 
 export function readHarnessTask({projectRoot, taskId}) {
@@ -304,10 +371,9 @@ export function appendHarnessEvent({projectRoot, taskId, event}) {
   return recorded;
 }
 
-export function readHarnessEvents({projectRoot, taskId}) {
+export function readAllHarnessEvents({projectRoot, taskIds}) {
   const root = buildProfile({projectRoot}).projectRoot;
-  assertTaskId(taskId);
-  readHarnessTask({projectRoot: root, taskId});
+  const selected = taskIds === undefined ? null : new Set(taskIds.map(assertTaskId));
   const {events} = existingHarnessFiles(root);
   let eventStat;
   try {
@@ -318,7 +384,8 @@ export function readHarnessEvents({projectRoot, taskId}) {
   }
   if (eventStat.isSymbolicLink() || !eventStat.isFile()) throw new Error("invalid harness file");
   const lines = fs.readFileSync(events, "utf8").split("\n").filter(Boolean);
-  return lines.flatMap(line => {
+  const grouped = new Map();
+  for (const line of lines) {
     let recorded;
     try {
       recorded = JSON.parse(line);
@@ -328,7 +395,8 @@ export function readHarnessEvents({projectRoot, taskId}) {
     if (!recorded || typeof recorded !== "object" || Array.isArray(recorded) || typeof recorded.timestamp !== "string" || typeof recorded.taskId !== "string") {
       throw new Error("invalid harness event stream");
     }
-    if (recorded.taskId !== taskId) return [];
+    assertTaskId(recorded.taskId);
+    if (selected && !selected.has(recorded.taskId)) continue;
     const event = {...recorded};
     delete event.timestamp;
     delete event.taskId;
@@ -336,8 +404,18 @@ export function readHarnessEvents({projectRoot, taskId}) {
     if (JSON.stringify(Object.keys(event).sort()) !== JSON.stringify(Object.keys(normalized).sort())) {
       throw new Error("invalid harness event stream");
     }
-    return [recorded];
-  });
+    const items = grouped.get(recorded.taskId) ?? [];
+    items.push(recorded);
+    grouped.set(recorded.taskId, items);
+  }
+  return grouped;
+}
+
+export function readHarnessEvents({projectRoot, taskId}) {
+  const root = buildProfile({projectRoot}).projectRoot;
+  assertTaskId(taskId);
+  readHarnessTask({projectRoot: root, taskId});
+  return readAllHarnessEvents({projectRoot: root, taskIds: [taskId]}).get(taskId) ?? [];
 }
 
 function assertSessionId(sessionId) {
@@ -496,6 +574,7 @@ export function recordOutcome({projectRoot, taskId, outcome, host = "unknown"}) 
   taskRecord.verification = record.verification;
   taskRecord.outcomes = [...(Array.isArray(taskRecord.outcomes) ? taskRecord.outcomes : []), record];
   writeAtomically(task, `${JSON.stringify(taskRecord, null, 2)}\n`);
+  appendTaskIndex(directory, taskRecord);
   fs.appendFileSync(metrics, `${JSON.stringify(metricEvent("task_outcome", taskId, record))}\n`, {mode: 0o600});
   appendHarnessEvent({projectRoot: root, taskId, event: {event: "verification_completed", host: assertHost(host), verificationStatus: record.verification.status}});
   if (record.status === "completed" || record.status === "blocked") {

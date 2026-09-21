@@ -7,8 +7,8 @@ import {readHarnessTask, VERIFIERS_FILENAME} from "./harness-project.mjs";
 
 const HARNESS_RELATIVE = path.posix.join(".ai", "harness");
 const LOGS_RELATIVE = path.posix.join(HARNESS_RELATIVE, "logs");
-const MAX_INLINE_BYTES = 8 * 1024;
-const MAX_RECEIPT_BYTES = 6 * 1024;
+const DEFAULT_VISIBLE_BYTES = 4 * 1024;
+const WIDE_VISIBLE_BYTES = 8 * 1024;
 const SECRET_PATTERN = /(?:api[_-]?key|access[_-]?token|auth[_-]?token|password|passwd|client[_-]?secret|private[_-]?key)\s*[:=]\s*[^\s]+|\bBearer\s+[A-Za-z0-9._~+\/-]{8,}|\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|\bgh[pousr]_[A-Za-z0-9]{20,}\b|\bsk-[A-Za-z0-9_-]{20,}\b/i;
 
 function isWithin(root, candidate) {
@@ -247,13 +247,13 @@ function receiptHeader(metadata, logRef) {
   ].join("\n");
 }
 
-function buildReceipt(metadata, stdout, stderr, logRef) {
+function buildReceipt(metadata, stdout, stderr, logRef, maxReceiptBytes) {
   const header = receiptHeader(metadata, logRef);
   if (metadata.secretSuppressed) return `${header}\ncontent=secret_suppressed`;
   const combined = [stdout.length ? `stdout:\n${stdout}` : "", stderr.length ? `stderr:\n${stderr}` : ""].filter(Boolean).join("\n");
   const separators = "\n--- head ---\n\n--- error context ---\n\n--- tail ---\n";
   const fixedBytes = Buffer.byteLength(header) + Buffer.byteLength(separators);
-  const available = Math.max(0, MAX_RECEIPT_BYTES - fixedBytes);
+  const available = Math.max(0, maxReceiptBytes - fixedBytes);
   const headBudget = Math.min(2 * 1024, Math.floor(available * 0.45));
   const tailBudget = Math.min(1536, Math.floor(available * 0.3));
   const errorBudget = Math.min(2560, Math.max(0, available - headBudget - tailBudget));
@@ -261,15 +261,15 @@ function buildReceipt(metadata, stdout, stderr, logRef) {
   const tail = utf8Suffix(combined, tailBudget);
   const errors = errorContext(combined, head, tail, errorBudget);
   const receipt = `${header}\n--- head ---\n${head}\n--- error context ---\n${errors}\n--- tail ---\n${tail}`;
-  if (Buffer.byteLength(receipt) <= MAX_RECEIPT_BYTES) return receipt;
-  return utf8Prefix(receipt, MAX_RECEIPT_BYTES);
+  if (Buffer.byteLength(receipt) <= maxReceiptBytes) return receipt;
+  return utf8Prefix(receipt, maxReceiptBytes);
 }
 
-function modelOutput(metadata, stdoutBuffer, stderrBuffer, logRef) {
+function modelOutput(metadata, stdoutBuffer, stderrBuffer, logRef, visibleLimit) {
   const stdout = decodeUtf8(stdoutBuffer);
   const stderr = decodeUtf8(stderrBuffer);
-  if (metadata.secretSuppressed || metadata.fullBytes > MAX_INLINE_BYTES) {
-    const text = buildReceipt(metadata, stdout ?? "[binary stdout]", stderr ?? "[binary stderr]", logRef);
+  if (metadata.secretSuppressed || metadata.fullBytes > visibleLimit) {
+    const text = buildReceipt(metadata, stdout ?? "[binary stdout]", stderr ?? "[binary stderr]", logRef, visibleLimit);
     return {output: {encoding: "receipt", text}, returnedBytes: Buffer.byteLength(text)};
   }
   if (stdout !== null && stderr !== null) {
@@ -280,17 +280,17 @@ function modelOutput(metadata, stdoutBuffer, stderrBuffer, logRef) {
   return {output: encoded, returnedBytes};
 }
 
-function finalizeModelOutput(metadata, stdout, stderr, logRef) {
+function finalizeModelOutput(metadata, stdout, stderr, logRef, visibleLimit = DEFAULT_VISIBLE_BYTES) {
   let returnedBytes = metadata.returnedBytes ?? 0;
   let visible;
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    visible = modelOutput({...metadata, returnedBytes}, stdout, stderr, logRef);
+    visible = modelOutput({...metadata, returnedBytes}, stdout, stderr, logRef, visibleLimit);
     if (visible.returnedBytes === returnedBytes) {
       return {metadata: {...metadata, returnedBytes}, visible};
     }
     returnedBytes = visible.returnedBytes;
   }
-  visible = modelOutput({...metadata, returnedBytes}, stdout, stderr, logRef);
+  visible = modelOutput({...metadata, returnedBytes}, stdout, stderr, logRef, visibleLimit);
   return {metadata: {...metadata, returnedBytes: visible.returnedBytes}, visible};
 }
 
@@ -360,6 +360,8 @@ export async function runObserved(spec, dependencies = {}) {
     throw new Error("invalid timeout");
   }
   if (spec.signal !== undefined && !(spec.signal instanceof AbortSignal)) throw new Error("invalid cancellation signal");
+  if (spec.wideReceipt !== undefined && typeof spec.wideReceipt !== "boolean") throw new Error("invalid wide receipt flag");
+  const visibleLimit = spec.wideReceipt ? WIDE_VISIBLE_BYTES : DEFAULT_VISIBLE_BYTES;
   const observationId = `observation-${crypto.randomBytes(12).toString("hex")}`;
   const started = process.hrtime.bigint();
   const executed = await executeVerifier(verifier, cwd, {timeoutMs: spec.timeoutMs, signal: spec.signal});
@@ -380,14 +382,14 @@ export async function runObserved(spec, dependencies = {}) {
     stderrBytes: executed.stderr.length,
     fullBytes: full.length,
     sha256: crypto.createHash("sha256").update(full).digest("hex"),
-    truncated: full.length > MAX_INLINE_BYTES,
+    truncated: full.length > visibleLimit,
     secretSuppressed: SECRET_PATTERN.test(full.toString("utf8")),
     archiveFailed: false,
     archiveLocation: "primary",
     recallCount: 0
   };
   if (metadata.secretSuppressed) metadata.truncated = true;
-  let finalized = finalizeModelOutput(metadata, executed.stdout, executed.stderr, logRef);
+  let finalized = finalizeModelOutput(metadata, executed.stdout, executed.stderr, logRef, visibleLimit);
   metadata = finalized.metadata;
   let visible = finalized.visible;
   let archiveFiles;
@@ -402,7 +404,7 @@ export async function runObserved(spec, dependencies = {}) {
     metadata.archiveFailed = true;
     metadata.archiveLocation = "fallback";
     logRef = path.join(fallbackRoot, relativeDirectory, `${observationId}.json`);
-    finalized = finalizeModelOutput(metadata, executed.stdout, executed.stderr, logRef);
+    finalized = finalizeModelOutput(metadata, executed.stdout, executed.stderr, logRef, visibleLimit);
     metadata = finalized.metadata;
     visible = finalized.visible;
     archiveFiles = archiveObservation({
@@ -438,6 +440,8 @@ export function readObservation(query) {
   const root = resolveProjectRoot(query.projectRoot);
   const taskId = assertId(query.taskId, "task id", /^[a-z0-9][a-z0-9-]{0,79}$/);
   const observationId = assertId(query.observationId, "observation id", /^observation-[a-f0-9]{24}$/);
+  if (query.wideReceipt !== undefined && typeof query.wideReceipt !== "boolean") throw new Error("invalid wide receipt flag");
+  const visibleLimit = query.wideReceipt ? WIDE_VISIBLE_BYTES : DEFAULT_VISIBLE_BYTES;
   readHarnessTask({projectRoot: root, taskId});
   let files;
   try {
@@ -470,7 +474,7 @@ export function readObservation(query) {
   const logRef = metadata.archiveLocation === "fallback"
     ? files.metadataFile
     : path.posix.join(LOGS_RELATIVE, taskId, `${observationId}.json`);
-  const finalized = finalizeModelOutput(metadata, stdout, stderr, logRef);
+  const finalized = finalizeModelOutput(metadata, stdout, stderr, logRef, visibleLimit);
   metadata = finalized.metadata;
   const visible = finalized.visible;
   appendObservationMetric(root, {

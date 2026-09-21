@@ -1,0 +1,16 @@
+{
+  "name": "leon-engineering-workflows",
+  "version": "0.19.0",
+  "description": "Optional reasoning and specialist engineering workflows",
+  "author": {"name": "Leon"},
+  "license": "UNLICENSED",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Leon Engineering Workflows",
+    "shortDescription": "Optional reasoning and specialist engineering workflows",
+    "longDescription": "Opt-in reasoning methods, observability guidance, and skill governance workflows for leon-engineering.",
+    "developerName": "Leon",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Reasoning"]
+  }
+}

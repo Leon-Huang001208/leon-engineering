@@ -34,7 +34,7 @@ node scripts/harness-run.mjs --project /absolute/project --task-id task-id --ver
 node scripts/harness-run.mjs --project /absolute/project --task-id task-id --read-observation observation-0123456789abcdef01234567
 ```
 
-观察层只运行 `.ai/harness/verifiers.json` 中已登记且标记为非交互的 verifier；未知命令仍由原生 `exec_command` 执行。完整 stdout/stderr 写入本地日志。总输出不超过 8 KiB 时完整返回；更大输出返回不超过 6 KiB 的去重回执，内容预算为 2 KiB 头、1.5 KiB 尾和最多 2.5 KiB 错误上下文。回执包含版本、observation ID、状态、退出码、信号、耗时、完整/返回字节数、SHA-256、截断状态与日志引用。疑似秘密不进入模型可见回执或 `readObservation` 回查，原文只留本地；主归档失败时持久 fallback 仍保存原始字节。
+观察层只运行 `.ai/harness/verifiers.json` 中已登记且标记为非交互的 verifier；未知命令仍由原生 `exec_command` 执行。完整 stdout/stderr 写入本地日志。普通调用最多返回 4 KiB，显式宽回执最多 8 KiB；超限时保留头、尾、错误上下文、状态、退出码、超时原因、SHA-256和日志引用。疑似秘密不进入模型可见回执或 `readObservation` 回查，原文只留本地；主归档失败时持久 fallback 仍保存原始字节。
 
 `metrics.jsonl` 增加 `observation_recorded` 与 `observation_recalled`，仅记录 verifier ID、状态、耗时、字节量、截断、归档失败标记与回查次数，不记录命令正文、日志引用、哈希或输出。评估器汇总 Observation 样本量、返回字节比、回查率、归档失败率，以及有重复样本的 verifier 结果一致率。
 
@@ -42,7 +42,7 @@ node scripts/harness-run.mjs --project /absolute/project --task-id task-id --rea
 
 ## 评估闭环
 
-`scripts/harness-evaluate.mjs --project /absolute/project --format markdown` 只读指定项目的全部任务记录；加入 `--task-id <id>` 时只打开该普通 JSON 任务文件，不枚举兄弟记录。目标损坏或为符号链接时失败；不带 task id 的全量模式遇到任一坏记录仍严格失败。两种模式都不运行账本命令，输出：
+`harness-evaluate.mjs` 必须显式选择 `--task-id <id>`、`--all` 或 `--rebuild-index`。单任务模式严格读取目标普通 JSON；全量模式读取追加式 `task-index.jsonl`，events 与 metrics 各读取一次。坏索引、未索引任务或超时记录返回部分报告、`complete: false` 与退出码 2，而不是静默跳过或无信息失败。索引重建是显式写操作，8 路并发、单文件 500 毫秒、总计 10 秒止损，不下载 dataless 文件。评估器不运行账本命令，输出：
 
 - 已有结果的任务数、完成且验证通过数；
 - 一次通过率：唯一结果为 `completed`、验证 `passed` 且返工次数为 0 的任务数，除以所有已有结果的任务数；
@@ -51,6 +51,8 @@ node scripts/harness-run.mjs --project /absolute/project --task-id task-id --rea
 - 已标准化的 blocked 阻塞分类计数。
 
 评估器不运行账本中的验证命令、不写 JSONL、不创建报告文件，也不扫描其他项目。旧任务记录可以被读取，但如果没有新字段，报告会显示覆盖率不足；这不是速度结论。先让真实任务把覆盖率提升到可用水平，再比较多个项目或考虑更重的编排层。
+
+`verification-plan.mjs` 读取项目 `.agents/verification-policy.json`，根据风险档、变更类型和显式变更路径生成最小充分的测试、lint、文档、CI与硬门闭包；它不执行计划。未知路径及公开契约、schema、数据库、依赖、CI、安全、桌面变化只能升级到完整交付，不能手工降级。
 
 ## 跨宿主使用
 

@@ -19,7 +19,7 @@ node "$HOME/.agents/leon-engineering/runtime/harness-runtime.mjs" --verify
 node "$HOME/.agents/leon-engineering/runtime/harness-session.mjs" --start --new-task --project /absolute/project --host codex --session-id opaque-task-key --task-id task-id --goal "Outcome" --acceptance "Observable result"
 ```
 
-会话入口创建 `.ai/harness/agent-map.md`、任务记录、`metrics.jsonl`、隐私受限的 `events.jsonl` 和会话上下文。会话文件使用 `host + session ID` 的不可逆摘要隔离 Claude 与 Codex；同宿主旧键会复制到新命名空间后恢复，旧文件保留，异宿主旧记录既不覆盖也不阻止当前宿主建立独立上下文。读取端兼容结构一致的 v1/v2 会话记录，并继续严格校验摘要键、宿主和任务记录；损坏或不匹配记录仍进入只读诊断模式。事件流只记录任务 ID、宿主、事件类别及白名单状态，不记录目标、验收、会话 ID、命令、路径、提示词、源代码或密钥。对未启用强制 Harness 的项目，仍保持原有的预览与明确写入边界。
+会话入口创建 `.ai/harness/agent-map.md`、任务记录、轻量 `task-index.jsonl`、`metrics.jsonl`、隐私受限的 `events.jsonl` 和会话上下文。会话文件使用 `host + session ID` 的不可逆摘要隔离 Claude 与 Codex；同宿主旧键会复制到新命名空间后恢复，旧文件保留，异宿主旧记录既不覆盖也不阻止当前宿主建立独立上下文。读取端兼容结构一致的 v1/v2 会话记录，并继续严格校验摘要键、宿主和任务记录；损坏或不匹配记录仍进入只读诊断模式。事件流只记录任务 ID、宿主、事件类别及白名单状态，不记录目标、验收、会话 ID、命令、路径、提示词、源代码或密钥。对未启用强制 Harness 的项目，仍保持原有的预览与明确写入边界。
 
 Agent Map 同时生成 `.ai/harness/verifiers.json`。每个已知非交互 verifier 都有稳定 verifier ID、命令、相对工作目录、来源和参数数组；只有该机器清单中的 ID 可由观察执行层运行。深模块公开 `runObserved(spec)` 与 `readObservation(query)`，薄 CLI 只接受 verifier ID 或 observation ID：
 
@@ -28,7 +28,7 @@ node "$HOME/.agents/leon-engineering/runtime/harness-run.mjs" --project /absolut
 node "$HOME/.agents/leon-engineering/runtime/harness-run.mjs" --project /absolute/project --task-id task-id --read-observation observation-0123456789abcdef01234567
 ```
 
-未登记命令继续使用宿主原生 `exec_command`，不得把命令动态写入 verifier 清单来绕过边界。观察层把完整 stdout/stderr 以 `0600` 保存在 `.ai/harness/logs/<task-id>/`，拒绝符号链接与路径穿越且不自动删除。总输出不超过 8 KiB 时完整返回；更大输出返回不超过 6 KiB 的去重短回执，最多包含 2 KiB 头、1.5 KiB 尾和 2.5 KiB 错误上下文，并携带版本、observation ID、状态、退出码、信号、耗时、完整/返回字节数、SHA-256、截断状态和日志引用。疑似秘密不进入模型可见回执或回查；原文只保存在本地。主归档失败时使用持久本地 fallback 保留证据。
+未登记命令继续使用宿主原生 `exec_command`，不得把命令动态写入 verifier 清单来绕过边界。观察层把完整 stdout/stderr 以 `0600` 保存在 `.ai/harness/logs/<task-id>/`，拒绝符号链接与路径穿越且不自动删除。普通调用最多返回 4 KiB；只有显式 `wideReceipt: true` 才放宽到 8 KiB。超过预算时返回含头、尾、错误上下文、SHA-256和日志引用的去重短回执；错误状态、退出码和超时原因不得省略。疑似秘密不进入模型可见回执或回查；原文只保存在本地。主归档失败时使用持久本地 fallback 保留证据。
 
 `metrics.jsonl` 的 `observation_recorded` 与 `observation_recalled` 只保存 verifier ID、状态、耗时、字节量、截断、归档失败标记和回查次数，不保存命令正文、日志引用、哈希或输出。评估器据此报告样本量、返回字节比、回查率、归档失败率及重复 verifier 的结果一致率。
 
@@ -54,10 +54,18 @@ node "$HOME/.agents/leon-engineering/runtime/harness-enforce.mjs" --project /abs
 要审阅指定项目已记录的交付证据，使用只读评估器。它不创建 Harness、不写报告文件，也不运行任务声明的命令：
 
 ```bash
-node "$HOME/.agents/leon-engineering/runtime/harness-evaluate.mjs" --project /absolute/project --format markdown
+node "$HOME/.agents/leon-engineering/runtime/harness-evaluate.mjs" --project /absolute/project --task-id task-id --format markdown
+node "$HOME/.agents/leon-engineering/runtime/harness-evaluate.mjs" --project /absolute/project --all --format markdown
+node "$HOME/.agents/leon-engineering/runtime/harness-evaluate.mjs" --project /absolute/project --rebuild-index
 ```
 
-报告指标时要包含样本量和验证耗时覆盖率。不得凭猜测回填历史时长或阻塞类别。陌生仓库先使用 `project-adapter`。不得把秘密、未执行结果、私密对话或项目事实写入全局策略。
+单任务模式严格读取目标记录；`--all` 只读 `task-index.jsonl`，未索引或损坏证据返回不完整报告而不伪造通过。索引重建是显式写操作，使用有界并发与超时，不为历史记录下载 dataless 文件。报告指标时要包含样本量和验证耗时覆盖率。不得凭猜测回填历史时长或阻塞类别。
+
+需要把风险、变更类型和路径映射为最小充分验收时，先生成只读计划；规划器不执行命令，未知路径自动升级：
+
+```bash
+node "$HOME/.agents/leon-engineering/runtime/verification-plan.mjs" --project /absolute/project --risk-tier local-only --change-kind internal --changed-file services/example.py
+```
 
 当一个已初始化 Harness 的项目有三个或更多相互依赖的任务、需要在中断后恢复，或需要对失败任务作一次明确重试时，使用 P2 控制平面。先为每项控制任务创建账本记录，并在项目内计划中声明不可省略的 `harnessTaskId`；再只读预览：
 

@@ -23,5 +23,6 @@
 - [Harness P2 任务控制平面实施计划](superpowers/plans/2026-08-03-harness-control-plane-p2.md)
 - [项目机械约束](project-constraints.md)
 - [P1 项目机械约束实施计划](superpowers/plans/2026-08-03-project-constraints-p1.md)
+- [Token、Harness 与最小充分验收 v0.19.0](2026-09-21-token-harness-v0190.md)
 
-`skills/*/SKILL.md` 是工作流正文的唯一维护源；`adapters/codex/global-policy.md` 和 `adapters/codex/global-docs/` 是受管 Codex 全局层的唯一维护源。安装副本不应手工编辑，应通过适配器更新并验证。
+`plugins/leon-engineering-core/skills/*/SKILL.md` 与 `plugins/leon-engineering-workflows/skills/*/SKILL.md` 是工作流正文的唯一维护源；`adapters/codex/global-policy.md` 和 `adapters/codex/global-docs/` 是受管 Codex 全局层的唯一维护源。安装副本不应手工编辑，应通过适配器更新并验证。

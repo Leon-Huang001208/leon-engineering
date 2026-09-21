@@ -18,7 +18,7 @@ function temporaryDirectory(t, prefix) {
 test("ships ten versioned reasoning skills with executable trigger examples", () => {
   assert.equal(REASONING_SKILL_NAMES.length, 10);
   for (const name of REASONING_SKILL_NAMES) {
-    const contract = JSON.parse(fs.readFileSync(path.join(sourceRoot, "skills", name, "contract.json"), "utf8"));
+    const contract = JSON.parse(fs.readFileSync(path.join(sourceRoot, "plugins", "leon-engineering-workflows", "skills", name, "contract.json"), "utf8"));
     assert.equal(contract.methodId, name);
     assert.match(contract.version, /^1\.0\.0$/);
     assert.equal(contract.permissions, "none");
