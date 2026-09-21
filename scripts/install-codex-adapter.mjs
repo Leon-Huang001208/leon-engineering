@@ -695,14 +695,25 @@ function readDistributionManifest(targetRoot) {
   return manifest;
 }
 
+function installedManifestDrift(targetRoot, manifest) {
+  return Object.entries(manifest.skills).flatMap(([name, expectedChecksum]) => {
+    try {
+      const installedChecksum = skillChecksum(listSkillFiles(path.join(targetRoot, name), name, false));
+      return installedChecksum === expectedChecksum ? [] : [name];
+    } catch {
+      return [name];
+    }
+  });
+}
+
 export function migrateToPluginDistribution({sourceRoot = SOURCE_ROOT, targetRoot, logResult = true}) {
   if (!targetRoot) throw new Error("targetRoot is required");
   if (readDistributionManifest(targetRoot)) throw new Error("plugin-only distribution already active");
   const existing = readManifest(targetRoot);
   if (!existing) throw new Error("adapter manifest not found");
-  const verification = verify({sourceRoot, targetRoot, logResult: false});
-  if (!verification.valid) {
-    throw new Error(`refusing to migrate drifted skills: ${verification.drift.join(", ")}`);
+  const drift = installedManifestDrift(targetRoot, existing);
+  if (drift.length > 0) {
+    throw new Error(`refusing to migrate drifted skills: ${drift.join(", ")}`);
   }
 
   const backupParent = path.join(path.dirname(targetRoot), ".leon-engineering-backups");
