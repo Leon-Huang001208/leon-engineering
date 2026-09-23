@@ -366,9 +366,6 @@ function preflightGlobalFramework(sourceRoot, codexHome, existingManifest) {
   ) {
     throw new Error("drifted global policy block");
   }
-  if (existingManifest?.hooks && !existingHooks.hadFile) {
-    throw new Error("missing managed global hooks");
-  }
   if (
     existingManifest?.hooks
     && existingHooks.hadFile
