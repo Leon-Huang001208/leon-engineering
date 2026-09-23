@@ -229,3 +229,12 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - 真实0.18.3→0.19.0激活发现，迁移器同时比较旧安装清单与0.19.0新正文，把正常版本差异误报为 `project-harness` 漂移并安全停止，未删除任何skill。
 - 0.19.1 将迁移资格收紧到正确边界：安装目录必须逐项匹配它自己的旧受管清单；当前版本源码变化不参与旧副本所有权判断。真实用户修改仍因旧清单哈希不符而拒绝迁移。
 - 新回归测试建立临时Git源码，在安装后改变规范skill并提交；迁移必须通过。另一个测试继续证明修改安装副本会 fail closed。
+
+## Codex 执行核心 v0.19.2
+
+**日期：**2026-09-23
+
+- 源码交付新增四项可独立验证能力：迁移感知的默认 Codex 健康检查、Git-common Harness 存储与显式迁移、未发布 prepared revision 的安全替换、脱敏且有界的 Token 审计。自动续跑政策要求批量只读检查、结构化短回执、无变化静默和现有进程/session/receipt 复用，且不得削弱权限、测试或硬门。
+- 源码验证已运行 `node --test tests/*.test.mjs`：198/198 通过、failed 0、skipped 0；`git diff --check` 退出码 0。远端 CI 尚未执行，不写成通过。
+- 全局安装是独立外部状态动作：只有展示并核对精确受管 diff 后才写入 Codex Hook/runtime/policy。磁盘安装成功仍只记为 `restart_required`。
+- 行为激活必须在完整重启 Codex 宿主后，以新任务验证迁移感知 health、Git-common Harness 和 Hook；重启前不宣称已激活。ResearchWorkbench 的 Token A/B 与真实开发任务验收属于后续 Phase 2/3，不以源码单测替代。

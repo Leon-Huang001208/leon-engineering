@@ -44,6 +44,14 @@ node "$HOME/.agents/leon-engineering/runtime/token-audit.mjs" --thread-id opaque
 
 默认 stdout 最多 4 KiB；完整报告只写到显式绝对路径并使用 `0600`。线程扫描拒绝符号链接。损坏或部分 JSONL 返回 `complete:false`、文件序号/行号和非零退出码，不能静默记为零。
 
+## 自动续跑与输出纪律
+
+- 相互独立的只读检查在同一工具边界批量提交；先定位再定点读取，不重复加载已确认的大文件或相同输出。
+- 已知高噪命令把完整 stdout/stderr 留在权限受限的本地日志，模型侧只收结构化摘要、计数、错误、退出码、SHA-256 与精确日志引用；普通回执 ≤4 KiB，显式宽回执 ≤8,000 字节。
+- 仅等待用户授权时不重复运行不能改变决策的诊断。同一阻塞先发一次简洁请求，再做一次无变化审计；达到受管阈值后写入真实 `blocked`，不得用自动续跑制造重复回合。
+- 状态未变化的 heartbeat 静默。重试继续使用现有进程、session、thread cursor、delivery/Harness receipt；不要启动同一工作的副本。
+- 以上规则只减少重复上下文和无效回合，不得隐藏错误、放宽权限、减少测试、跳过 CI/Harness/平台硬门或改变项目验收范围。
+
 ## 已登记 verifier 的观察执行
 
 Harness 初始化或刷新 Agent Map 时会写入机器可读的 verifier 清单和稳定 verifier ID。只对清单中已知、非交互的 verifier 使用受管执行入口；未知命令继续使用原生 `exec_command`：
