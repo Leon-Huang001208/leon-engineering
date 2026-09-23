@@ -2,11 +2,10 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
-import {buildProfile} from "./profile-project.mjs";
 import {readHarnessTask} from "./harness-project.mjs";
+import {resolveHarnessStorage} from "./harness-storage.mjs";
 
 export const CONTROL_FILENAME = "control-plane.json";
-const HARNESS_DIRECTORY = ".ai/harness";
 const TASK_ID = /^[a-z0-9][a-z0-9-]{0,79}$/;
 const COMMIT = /^[0-9a-f]{7,64}$/;
 const TRANSITIONS = {
@@ -23,6 +22,9 @@ function isWithin(root, candidate) {
 }
 
 function assertSafeExistingDirectory(root, relative) {
+  if (!fs.existsSync(root)) return null;
+  const rootStat = fs.lstatSync(root);
+  if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) throw new Error("invalid harness directory");
   const destination = path.resolve(root, relative);
   if (!isWithin(root, destination)) throw new Error("unsafe harness destination");
   let current = root;
@@ -158,11 +160,12 @@ function assertControl(control, root) {
 }
 
 function rootFor(projectRoot) {
-  return buildProfile({projectRoot}).projectRoot;
+  return resolveHarnessStorage({projectRoot}).projectRoot;
 }
 
-function controlPath(root) {
-  const directory = assertSafeExistingDirectory(root, HARNESS_DIRECTORY);
+function controlPath(projectRoot) {
+  const storage = resolveHarnessStorage({projectRoot});
+  const directory = assertSafeExistingDirectory(storage.directory, "");
   if (!directory) throw new Error("missing task harness");
   return {directory, control: path.join(directory, CONTROL_FILENAME)};
 }
@@ -213,7 +216,7 @@ export function previewControlPlane(control) {
 export function writeControlPlane({projectRoot, control}) {
   const root = rootFor(projectRoot);
   const normalized = assertControl(control, root);
-  const {directory, control: destination} = controlPath(root);
+  const {directory, control: destination} = controlPath(projectRoot);
   if (!fs.existsSync(path.join(directory, "agent-map.md")) || !fs.existsSync(path.join(directory, "metrics.jsonl"))) {
     throw new Error("missing task harness");
   }
@@ -226,7 +229,7 @@ export function writeControlPlane({projectRoot, control}) {
 
 export function readControlPlane({projectRoot}) {
   const root = rootFor(projectRoot);
-  const {control} = controlPath(root);
+  const {control} = controlPath(projectRoot);
   if (!fs.existsSync(control)) throw new Error("missing control plane");
   if (fs.lstatSync(control).isSymbolicLink() || !fs.statSync(control).isFile()) throw new Error("invalid control plane");
   let parsed;
@@ -239,9 +242,8 @@ export function readControlPlane({projectRoot}) {
 }
 
 function updateControl(projectRoot, updater) {
-  const root = rootFor(projectRoot);
-  const {control: destination} = controlPath(root);
-  const control = readControlPlane({projectRoot: root});
+  const {control: destination} = controlPath(projectRoot);
+  const control = readControlPlane({projectRoot});
   updater(control);
   writeAtomically(destination, `${JSON.stringify(control, null, 2)}\n`);
   return control;

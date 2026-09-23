@@ -25,6 +25,7 @@ test("installs a verified Harness runtime that can preview a real project", t =>
   fs.writeFileSync(path.join(project, "package.json"), JSON.stringify({scripts: {test: "node --test"}}));
 
   const installed = installHarnessRuntime({sourceRoot, runtimeRoot});
+  assert.ok(HARNESS_RUNTIME_FILES.includes("harness-storage.mjs"));
   assert.ok(HARNESS_RUNTIME_FILES.includes("harness-execution.mjs"));
   assert.ok(HARNESS_RUNTIME_FILES.includes("harness-run.mjs"));
   assert.ok(HARNESS_RUNTIME_FILES.includes("verification-plan.mjs"));
