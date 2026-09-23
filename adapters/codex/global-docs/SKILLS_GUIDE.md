@@ -34,6 +34,14 @@
 
 技能不代替项目规则。对任何项目先读取它自己的约束；文档化的可复用经验才能成为全局默认。
 
+全局 Skill 退役使用受管 `skill-portfolio.mjs`，不按名称或“零使用”直接删除。manifest 为每项声明 source、canonical 与预期树哈希；默认只读预览，只有整个批次的源、规范副本、备份目标和 receipt 都通过预检后，`--apply` 才把精确副本移动到 `0700` 备份并写 `0600` receipt。源在预览后变化、符号链接、不可读项、canonical 不同、备份冲突都会让整批零写入停止。回滚同样先验证备份、canonical 与原路径未被占用：
+
+```bash
+node "$HOME/.agents/leon-engineering/runtime/skill-portfolio.mjs" --manifest /absolute/actions.json
+node "$HOME/.agents/leon-engineering/runtime/skill-portfolio.mjs" --apply --manifest /absolute/actions.json
+node "$HOME/.agents/leon-engineering/runtime/skill-portfolio.mjs" --rollback --receipt /absolute/receipt.json
+```
+
 `project-adapter` 的输出是路径证据与候选命令，不是已执行的测试结果。它默认不写入项目；持久化档案需要针对该项目的明确授权。
 
 `project-harness` 对未启用强制协议的项目保持默认只读；对用户已经启用强制 Harness 的目标项目，Agent 必须自动开始或恢复任务，无需逐项要求用户运行命令。结果记录只接受已观察到的验证状态，不能把候选命令或未运行检查写成通过；`harness-enforce` 是跨宿主的只读交付硬门。对已初始化 Harness 的依赖任务、显式重试或中断恢复，P2 控制平面先预览任务 DAG；它只保存状态和已存在 worktree 的定位信息，不创建 worktree、不自动重试，也不运行 Git、测试、构建或任务命令。
