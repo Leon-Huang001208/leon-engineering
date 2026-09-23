@@ -100,6 +100,19 @@ test("detects global hook drift and refuses to roll it back", t => {
   assert.throws(() => rollbackGlobalFramework({sourceRoot, codexHome}), /drifted global framework/);
 });
 
+test("recreates a missing manifest-owned global hook file", t => {
+  const codexHome = makeCodexHome(t);
+  installGlobalFramework({sourceRoot, codexHome});
+  const hooksPath = path.join(codexHome, "hooks.json");
+  fs.rmSync(hooksPath);
+
+  installGlobalFramework({sourceRoot, codexHome});
+
+  assert.equal(verifyGlobalFramework({sourceRoot, codexHome}).valid, true);
+  const hooks = JSON.parse(fs.readFileSync(hooksPath, "utf8"));
+  assert.match(hooks.hooks.PreToolUse[0].hooks[0].command, /harness-hook\.mjs --phase pre --host codex/);
+});
+
 test("repairs a canonical managed hook subset without accepting foreign hook content", t => {
   const codexHome = makeCodexHome(t);
   installGlobalFramework({sourceRoot, codexHome});
