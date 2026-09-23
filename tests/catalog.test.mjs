@@ -161,13 +161,18 @@ test("splits the plugin catalog into a compatible core and opt-in workflows exte
     path.join(root, "plugins", "leon-engineering-workflows", ".claude-plugin", "plugin.json"),
     "utf8"
   ));
+  const codexWorkflows = JSON.parse(fs.readFileSync(
+    path.join(root, "plugins", "leon-engineering-workflows", ".codex-plugin", "plugin.json"),
+    "utf8"
+  ));
   const marketplace = JSON.parse(fs.readFileSync(path.join(root, ".claude-plugin", "marketplace.json"), "utf8"));
 
   assert.equal(core.name, "leon-engineering");
-  assert.equal(core.version, "0.19.1");
+  assert.equal(core.version, "0.19.2");
   assert.deepEqual(core.skills, ["./plugins/leon-engineering-core/skills/"]);
   assert.equal(workflows.name, "leon-engineering-workflows");
-  assert.equal(workflows.version, "0.19.1");
+  assert.equal(workflows.version, "0.19.2");
+  assert.equal(codexWorkflows.version, "0.19.2");
   assert.deepEqual(workflows.skills, ["./skills/"]);
   assert.deepEqual(
     fs.readdirSync(path.join(root, "plugins", "leon-engineering-core", "skills")).sort(),
@@ -182,6 +187,7 @@ test("splits the plugin catalog into a compatible core and opt-in workflows exte
     "leon-engineering-workflows"
   ]);
   assert.equal(marketplace.plugins[1].source, "./plugins/leon-engineering-workflows");
+  assert.ok(marketplace.plugins.every(plugin => plugin.version === "0.19.2"));
 });
 
 test("defines a stable project profile schema", () => {
@@ -229,6 +235,23 @@ test("routes work through four mechanical risk tiers without auto-publishing nar
   assert.equal((shared.match(/--require-delivery/g) ?? []).length, 1);
   assert.match(routing, /只有在.*明确速度收益.*时才派发代理/);
   assert.match(routing, /不得为了流程而向用户提问/);
+});
+
+test("governs automatic continuation and bounded receipts without weakening gates", () => {
+  const shared = readSharedPolicy();
+  const commands = fs.readFileSync(path.join(root, "adapters", "codex", "global-docs", "COMMANDS_GUIDE.md"), "utf8");
+  const agents = fs.readFileSync(path.join(root, "adapters", "codex", "global-docs", "AGENTS_GUIDE.md"), "utf8");
+  const combined = `${shared}\n${commands}\n${agents}`;
+
+  assert.match(shared, /独立只读检查.*同一工具边界.*批量/);
+  assert.match(shared, /结构化摘要.*计数.*SHA-256.*日志引用/);
+  assert.match(shared, /等待.*授权.*不重复.*诊断/);
+  assert.match(shared, /一次简洁请求.*一次无变化审计.*blocked/);
+  assert.match(shared, /heartbeat.*状态未变化.*静默/i);
+  assert.match(shared, /同一进程.*session.*receipt.*复用/i);
+  assert.match(combined, /4\s*KiB/);
+  assert.match(combined, /8,000\s*(?:字符|字节)/);
+  assert.match(shared, /不得.*权限.*测试.*硬门.*削弱/s);
 });
 
 test("caps model-visible tool receipts without weakening evidence gates", () => {

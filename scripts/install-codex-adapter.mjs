@@ -796,6 +796,58 @@ export function rollbackPluginDistribution({targetRoot, logResult = true}) {
   if (logResult) log("plugin_distribution_rolled_back", {skillCount: Object.keys(manifest.retiredSkills).length});
 }
 
+function boundedVerification(run, fallback) {
+  try {
+    const result = run();
+    return {
+      valid: result.valid === true,
+      drift: Array.isArray(result.drift) ? [...new Set(result.drift.map(String))] : [fallback]
+    };
+  } catch {
+    return {valid: false, drift: [fallback]};
+  }
+}
+
+export function verifyCurrentCodexState({
+  sourceRoot = SOURCE_ROOT,
+  targetRoot,
+  codexHome,
+  runtimeRoot = defaultHarnessRuntimeRoot(),
+  explicitTarget = false
+}) {
+  if (!targetRoot) throw new Error("targetRoot is required");
+  if (!codexHome) throw new Error("codexHome is required");
+  const distributionActive = fs.existsSync(distributionManifestPath(targetRoot));
+  const pluginDistribution = boundedVerification(
+    () => distributionActive
+      ? verifyPluginDistribution({targetRoot, logResult: false})
+      : explicitTarget
+        ? verify({sourceRoot, targetRoot, logResult: false})
+        : {valid: false, drift: ["distribution manifest"]},
+    "distribution manifest"
+  );
+  const globalFramework = boundedVerification(
+    () => verifyGlobalFramework({sourceRoot, codexHome}),
+    "framework manifest"
+  );
+  const runtime = boundedVerification(
+    () => verifyHarnessRuntime({sourceRoot, runtimeRoot}),
+    "runtime verification"
+  );
+  const drift = [...new Set([
+    ...pluginDistribution.drift.map(item => `plugin:${item}`),
+    ...globalFramework.drift.map(item => `global:${item}`),
+    ...runtime.drift.map(item => `runtime:${item}`)
+  ])];
+  return {
+    valid: pluginDistribution.valid && globalFramework.valid && runtime.valid,
+    drift,
+    pluginDistribution,
+    globalFramework,
+    runtime
+  };
+}
+
 function main(args) {
   const targetIndex = args.indexOf("--target");
   if (targetIndex >= 0 && !args[targetIndex + 1]) throw new Error("--target requires a directory");
@@ -807,12 +859,12 @@ function main(args) {
   if (runtimeRootIndex >= 0 && (!args[runtimeRootIndex + 1] || args[runtimeRootIndex + 1].startsWith("--"))) {
     throw new Error("--runtime-root requires a directory");
   }
-  const targetRoot = targetIndex >= 0
-    ? args[targetIndex + 1]
-    : path.join(os.homedir(), ".codex", "skills");
   const codexHome = codexHomeIndex >= 0
     ? args[codexHomeIndex + 1]
     : path.join(os.homedir(), ".codex");
+  const targetRoot = targetIndex >= 0
+    ? args[targetIndex + 1]
+    : path.join(codexHome, "skills");
   const runtimeRoot = runtimeRootIndex >= 0
     ? args[runtimeRootIndex + 1]
     : defaultHarnessRuntimeRoot();
@@ -860,7 +912,14 @@ function main(args) {
     return;
   }
   if (args.includes("--verify")) {
-    const result = verify({targetRoot});
+    const result = targetIndex >= 0
+      ? verify({targetRoot})
+      : verifyCurrentCodexState({
+        targetRoot,
+        codexHome,
+        runtimeRoot,
+        explicitTarget: false
+      });
     console.log(JSON.stringify(result, null, 2));
     if (!result.valid) process.exitCode = 1;
     return;

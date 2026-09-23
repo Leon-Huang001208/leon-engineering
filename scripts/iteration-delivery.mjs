@@ -270,9 +270,10 @@ export function startDelivery({projectRoot, taskId, slug, remote = "origin", wor
   return receipt;
 }
 
-export function prepareDelivery({projectRoot, taskId, integrationWorktreeRoot}) {
+export function prepareDelivery({projectRoot, taskId, integrationWorktreeRoot, replacePrepared = false}) {
   const repository = resolveRepository(projectRoot);
   assertTaskId(taskId);
+  if (typeof replacePrepared !== "boolean") throw new Error("invalid replace prepared flag");
   return withTaskLock(repository, "integration", () => {
     const receipt = readDeliveryReceipt({projectRoot: repository.repositoryRoot, taskId});
     if (receipt.status === "integration_conflict") {
@@ -289,14 +290,56 @@ export function prepareDelivery({projectRoot, taskId, integrationWorktreeRoot}) 
       appendLog(repository, taskId, "prepared_after_conflict", {integrationCommit: receipt.integrationCommit});
       return receipt;
     }
-    if (!new Set(["started", "remote_moved", "ci_passed"]).has(receipt.status)) {
+    const replacingPrepared = replacePrepared && receipt.status === "prepared";
+    if (replacePrepared && !replacingPrepared) {
+      throw new Error(`prepared replacement requires prepared status: ${receipt.status}`);
+    }
+    let replacementHistory = null;
+    if (replacingPrepared) {
+      assertCleanWorktree(receipt.integrationWorktree, "integration worktree");
+      assertCleanWorktree(receipt.featureWorktree, "feature worktree");
+      const featureCommit = output(git(receipt.featureWorktree, ["rev-parse", "HEAD"]));
+      if (featureCommit === receipt.featureCommit) throw new Error("prepared replacement has no new feature commits");
+      if (Array.isArray(receipt.ci?.runs) && receipt.ci.runs.length > 0) {
+        throw new Error("prepared replacement is not allowed after a CI run");
+      }
+      if (receipt.pullRequest) throw new Error("prepared replacement is not allowed after a pull request");
+      if (receipt.mode !== null || receipt.remoteCommit !== null) {
+        throw new Error("prepared replacement is not allowed after publication metadata");
+      }
+      if (!localBranchExists(repository.repositoryRoot, receipt.integrationBranch)) {
+        throw new Error("prepared integration branch is missing");
+      }
+      const recordedIntegration = output(git(repository.repositoryRoot, ["rev-parse", `refs/heads/${receipt.integrationBranch}`]));
+      if (recordedIntegration !== receipt.integrationCommit) throw new Error("prepared integration branch moved");
+      const remoteCommit = remoteBranchCommit(repository.repositoryRoot, receipt.remote, receipt.defaultBranch);
+      if (remoteCommit !== receipt.baseCommit) throw new Error("remote default branch moved after prepare");
+      const published = git(repository.repositoryRoot, [
+        "merge-base", "--is-ancestor", receipt.integrationCommit, remoteCommit
+      ], {allowFailure: true});
+      if (published.status === 0) throw new Error("prepared integration commit is already contained in the remote default branch");
+      replacementHistory = [
+        ...(Array.isArray(receipt.integrationHistory) ? receipt.integrationHistory : []),
+        {
+          branch: receipt.integrationBranch,
+          worktree: receipt.integrationWorktree,
+          commit: receipt.integrationCommit,
+          worktreeRemoved: true,
+          status: "superseded"
+        }
+      ];
+    }
+    if (!replacingPrepared && !new Set(["started", "remote_moved", "ci_passed"]).has(receipt.status)) {
       throw new Error(`delivery is not ready to prepare: ${receipt.status}`);
     }
     assertCleanWorktree(receipt.featureWorktree, "feature worktree");
     const featureCommit = output(git(receipt.featureWorktree, ["rev-parse", "HEAD"]));
     if (featureCommit === receipt.baseCommit) throw new Error("feature branch has no commits");
     const baseCommit = fetchBranch(repository.repositoryRoot, receipt.remote, receipt.defaultBranch);
-    const history = Array.isArray(receipt.integrationHistory) ? receipt.integrationHistory : [];
+    if (replacingPrepared && baseCommit !== receipt.baseCommit) {
+      throw new Error("remote default branch moved after prepare");
+    }
+    const history = replacementHistory ?? (Array.isArray(receipt.integrationHistory) ? receipt.integrationHistory : []);
     let mergeSource = receipt.featureBranch;
     let revision = history.length;
     if (receipt.status === "ci_passed") {
@@ -345,6 +388,9 @@ export function prepareDelivery({projectRoot, taskId, integrationWorktreeRoot}) 
       revision === 0 ? `${taskId}-integration` : `${taskId}-integration-r${revision}`
     );
     ensureUnusedPath(integrationWorktree);
+    if (replacingPrepared) {
+      git(repository.repositoryRoot, ["worktree", "remove", receipt.integrationWorktree]);
+    }
     git(repository.repositoryRoot, [
       "worktree", "add", "-b", integrationBranch, integrationWorktree,
       `refs/remotes/${receipt.remote}/${receipt.defaultBranch}`
@@ -645,14 +691,18 @@ function parseCli(args) {
   if (args.length === 1 && ["--help", "-h"].includes(args[0])) return {help: true};
   const actions = ["--start", "--prepare", "--publish", "--status", "--cleanup", "--rollback"].filter(item => args.includes(item));
   if (actions.length !== 1) throw new Error("use exactly one delivery action");
-  const options = {action: actions[0].slice(2), repair: args.includes("--repair")};
+  const options = {
+    action: actions[0].slice(2),
+    repair: args.includes("--repair"),
+    replacePrepared: args.includes("--replace-prepared")
+  };
   const valued = new Set([
     "--project", "--task-id", "--slug", "--remote", "--worktree-root",
     "--verification-command", "--verification-status", "--verification-duration-seconds"
   ]);
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
-    if (actions.includes(argument) || argument === "--repair") continue;
+    if (actions.includes(argument) || argument === "--repair" || argument === "--replace-prepared") continue;
     if (!valued.has(argument)) throw new Error(`unknown option: ${argument}`);
     const value = args[index + 1];
     if (!value || value.startsWith("--")) throw new Error(`${argument} requires a value`);
@@ -660,6 +710,9 @@ function parseCli(args) {
     index += 1;
   }
   if (!options.project || !options.task_id) throw new Error("--project and --task-id are required");
+  if (options.replacePrepared && options.action !== "prepare") {
+    throw new Error("--replace-prepared requires --prepare");
+  }
   return options;
 }
 
@@ -668,6 +721,7 @@ function usage() {
     "用法：iteration-delivery.mjs <action> --project <目录> --task-id <ID> [选项]",
     "",
     "动作：--start、--prepare、--publish、--status、--cleanup、--rollback。",
+    "仅当 prepared 尚未发布且审核修复产生新功能提交时，--prepare 可加 --replace-prepared。",
     "发布和回滚要求 --verification-command、--verification-status passed、--verification-duration-seconds。"
   ].join("\n");
 }
@@ -691,7 +745,11 @@ function main(args) {
   if (options.action === "start") {
     result = startDelivery({...common, slug: options.slug ?? options.task_id, remote: options.remote ?? "origin", worktreeRoot: options.worktree_root});
   } else if (options.action === "prepare") {
-    result = prepareDelivery({...common, integrationWorktreeRoot: options.worktree_root});
+    result = prepareDelivery({
+      ...common,
+      integrationWorktreeRoot: options.worktree_root,
+      replacePrepared: options.replacePrepared
+    });
   } else if (options.action === "publish") {
     result = publishDelivery({...common, verification: cliVerification(options), repair: options.repair});
   } else if (options.action === "status") {

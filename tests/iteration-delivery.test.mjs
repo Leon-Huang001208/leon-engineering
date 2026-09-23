@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import {execFileSync} from "node:child_process";
+import {execFileSync, spawnSync} from "node:child_process";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -41,6 +41,23 @@ function makeRepository(t) {
   execFileSync("git", ["--git-dir", remote, "symbolic-ref", "HEAD", "refs/heads/main"]);
   git(project, ["remote", "set-head", "origin", "-a"]);
   return {root, remote, project};
+}
+
+function receiptPath(project, taskId) {
+  const commonDirectory = path.resolve(project, git(project, ["rev-parse", "--git-common-dir"]));
+  return path.join(commonDirectory, "leon-engineering", "deliveries", `${taskId}.json`);
+}
+
+function assertReplacementRefusedWithoutStateChange(project, taskId, expected) {
+  const file = receiptPath(project, taskId);
+  const receiptBefore = fs.readFileSync(file, "utf8");
+  const worktreesBefore = git(project, ["worktree", "list", "--porcelain"]);
+  assert.throws(
+    () => prepareDelivery({projectRoot: project, taskId, replacePrepared: true}),
+    expected
+  );
+  assert.equal(fs.readFileSync(file, "utf8"), receiptBefore);
+  assert.equal(git(project, ["worktree", "list", "--porcelain"]), worktreesBefore);
 }
 
 test("delivers a verified branch to the remote default branch and cleans every worktree", t => {
@@ -209,6 +226,125 @@ test("rebuilds integration for new feature commits after a completed delivery", 
   assert.equal(fs.existsSync(prepared.integrationWorktree), false);
   assert.equal(git(rebuilt.integrationWorktree, ["show", "HEAD:feature.txt"]), "first");
   assert.equal(git(rebuilt.integrationWorktree, ["show", "HEAD:follow-up.txt"]), "second");
+});
+
+test("replaces an unshipped prepared revision after a review fix", t => {
+  const {project} = makeRepository(t);
+  const started = startDelivery({projectRoot: project, taskId: "task-replace", slug: "replace"});
+  fs.writeFileSync(path.join(started.featureWorktree, "feature.txt"), "first\n");
+  commit(started.featureWorktree, "feat: first candidate");
+  const prepared = prepareDelivery({projectRoot: project, taskId: "task-replace"});
+  fs.writeFileSync(path.join(started.featureWorktree, "review-fix.txt"), "reviewed\n");
+  commit(started.featureWorktree, "fix: address review");
+
+  const replaced = prepareDelivery({
+    projectRoot: project,
+    taskId: "task-replace",
+    replacePrepared: true
+  });
+
+  assert.equal(replaced.status, "prepared");
+  assert.equal(replaced.baseCommit, prepared.baseCommit);
+  assert.equal(replaced.integrationHistory.length, 1);
+  assert.deepEqual(replaced.integrationHistory[0], {
+    branch: prepared.integrationBranch,
+    worktree: prepared.integrationWorktree,
+    commit: prepared.integrationCommit,
+    worktreeRemoved: true,
+    status: "superseded"
+  });
+  assert.equal(fs.existsSync(prepared.integrationWorktree), false);
+  assert.match(replaced.integrationBranch, /-r1$/);
+  assert.equal(git(replaced.integrationWorktree, ["show", "HEAD:review-fix.txt"]), "reviewed");
+});
+
+test("prepared replacement fails closed when any safety condition is unmet", async t => {
+  async function preparedFixture(name) {
+    const fixture = makeRepository(t);
+    const started = startDelivery({projectRoot: fixture.project, taskId: name, slug: name});
+    fs.writeFileSync(path.join(started.featureWorktree, "feature.txt"), "first\n");
+    commit(started.featureWorktree, "feat: candidate");
+    const prepared = prepareDelivery({projectRoot: fixture.project, taskId: name});
+    return {...fixture, started, prepared};
+  }
+
+  await t.test("dirty integration worktree", async () => {
+    const {project, started, prepared} = await preparedFixture("replace-dirty");
+    fs.writeFileSync(path.join(started.featureWorktree, "review.txt"), "new\n");
+    commit(started.featureWorktree, "fix: review");
+    fs.writeFileSync(path.join(prepared.integrationWorktree, "untracked.txt"), "dirty\n");
+    assertReplacementRefusedWithoutStateChange(project, "replace-dirty", /integration worktree is dirty/);
+  });
+
+  await t.test("unchanged feature head", async () => {
+    const {project} = await preparedFixture("replace-unchanged");
+    assertReplacementRefusedWithoutStateChange(project, "replace-unchanged", /no new feature commits/);
+  });
+
+  await t.test("moved remote default", async () => {
+    const {root, remote, project, started} = await preparedFixture("replace-remote");
+    fs.writeFileSync(path.join(started.featureWorktree, "review.txt"), "new\n");
+    commit(started.featureWorktree, "fix: review");
+    const concurrent = path.join(root, "replace-concurrent");
+    execFileSync("git", ["clone", remote, concurrent]);
+    fs.writeFileSync(path.join(concurrent, "remote.txt"), "moved\n");
+    commit(concurrent, "feat: move remote");
+    git(concurrent, ["push", "origin", "main"]);
+    assertReplacementRefusedWithoutStateChange(project, "replace-remote", /remote default branch moved/);
+  });
+
+  await t.test("prepared commit already published", async () => {
+    const {project, started, prepared} = await preparedFixture("replace-published");
+    fs.writeFileSync(path.join(started.featureWorktree, "review.txt"), "new\n");
+    commit(started.featureWorktree, "fix: review");
+    git(project, ["push", "origin", `${prepared.integrationCommit}:refs/heads/main`]);
+    assertReplacementRefusedWithoutStateChange(project, "replace-published", /remote default branch moved|already contained/);
+  });
+
+  await t.test("recorded CI run", async () => {
+    const {project, started} = await preparedFixture("replace-ci");
+    fs.writeFileSync(path.join(started.featureWorktree, "review.txt"), "new\n");
+    commit(started.featureWorktree, "fix: review");
+    const file = receiptPath(project, "replace-ci");
+    const receipt = JSON.parse(fs.readFileSync(file, "utf8"));
+    receipt.ci.runs = [{id: 42, status: "queued"}];
+    fs.writeFileSync(file, `${JSON.stringify(receipt, null, 2)}\n`);
+    assertReplacementRefusedWithoutStateChange(project, "replace-ci", /CI run/);
+  });
+
+  await t.test("recorded pull request", async () => {
+    const {project, started} = await preparedFixture("replace-pr");
+    fs.writeFileSync(path.join(started.featureWorktree, "review.txt"), "new\n");
+    commit(started.featureWorktree, "fix: review");
+    const file = receiptPath(project, "replace-pr");
+    const receipt = JSON.parse(fs.readFileSync(file, "utf8"));
+    receipt.pullRequest = {number: 42, url: "https://example.invalid/pull/42"};
+    fs.writeFileSync(file, `${JSON.stringify(receipt, null, 2)}\n`);
+    assertReplacementRefusedWithoutStateChange(project, "replace-pr", /pull request/);
+  });
+});
+
+test("CLI accepts replace-prepared only with prepare", t => {
+  const {project} = makeRepository(t);
+  const started = startDelivery({projectRoot: project, taskId: "replace-cli", slug: "replace-cli"});
+  fs.writeFileSync(path.join(started.featureWorktree, "feature.txt"), "first\n");
+  commit(started.featureWorktree, "feat: candidate");
+  prepareDelivery({projectRoot: project, taskId: "replace-cli"});
+  fs.writeFileSync(path.join(started.featureWorktree, "review.txt"), "fixed\n");
+  commit(started.featureWorktree, "fix: review");
+  const script = path.resolve(import.meta.dirname, "..", "scripts", "iteration-delivery.mjs");
+
+  const replaced = spawnSync(process.execPath, [
+    script, "--prepare", "--replace-prepared", "--project", project, "--task-id", "replace-cli"
+  ], {encoding: "utf8"});
+  assert.equal(replaced.status, 0, replaced.stderr);
+  assert.equal(JSON.parse(replaced.stdout).integrationHistory[0].status, "superseded");
+
+  const rejected = spawnSync(process.execPath, [
+    script, "--status", "--replace-prepared", "--project", project, "--task-id", "replace-cli"
+  ], {encoding: "utf8"});
+  assert.equal(rejected.status, 1);
+  assert.match(rejected.stderr, /--replace-prepared requires --prepare/);
 });
 
 test("rejects a completed delivery without new feature commits", t => {

@@ -1,9 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
-import {buildProfile} from "./profile-project.mjs";
 import {
-  HARNESS_DIRECTORY,
   TASK_INDEX_FILENAME,
   buildTaskIndexRecord,
   readAllHarnessEvents,
@@ -11,6 +9,7 @@ import {
   readHarnessTask,
   readHarnessTaskIndex
 } from "./harness-project.mjs";
+import {resolveHarnessStorage} from "./harness-storage.mjs";
 
 const OUTCOME_STATUSES = new Set(["completed", "blocked", "rework", "invalidated"]);
 const VERIFICATION_STATUSES = new Set(["passed", "failed", "not_run"]);
@@ -21,6 +20,9 @@ function isWithin(root, candidate) {
 }
 
 function existingSafeDirectory(root, relative) {
+  if (!fs.existsSync(root)) return null;
+  const rootStat = fs.lstatSync(root);
+  if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) throw new Error("invalid harness directory");
   const destination = path.resolve(root, relative);
   if (!isWithin(root, destination)) throw new Error("unsafe harness destination");
   let current = root;
@@ -252,34 +254,35 @@ function listedTaskIds(tasks) {
 }
 
 export function evaluateHarness({projectRoot, taskId, all = false}) {
-  const root = buildProfile({projectRoot}).projectRoot;
-  const directory = existingSafeDirectory(root, HARNESS_DIRECTORY);
+  const storage = resolveHarnessStorage({projectRoot});
+  const root = storage.directory;
+  const directory = existingSafeDirectory(root, "");
   if (!directory) throw new Error("missing task harness");
-  const tasks = existingSafeDirectory(root, path.posix.join(HARNESS_DIRECTORY, "tasks"));
+  const tasks = existingSafeDirectory(root, "tasks");
   if (!tasks) throw new Error("missing task harness");
   if (taskId !== undefined) {
-    const records = [readTargetTaskRecord(root, taskId)];
-    const eventsByTask = new Map([[taskId, readHarnessEvents({projectRoot: root, taskId})]]);
+    const records = [readTargetTaskRecord(projectRoot, taskId)];
+    const eventsByTask = new Map([[taskId, readHarnessEvents({projectRoot, taskId})]]);
     return {
       schemaVersion: 1,
-      projectRoot: root,
+      projectRoot: storage.projectRoot,
       health: {complete: true, invalidIndexEntries: 0, unindexedTasks: [], timedOutRecords: []},
       summary: summarize(records, eventsByTask, readMetrics(directory, taskId))
     };
   }
   if (!all) throw new Error("use --task-id or --all");
-  const index = readHarnessTaskIndex({projectRoot: root});
+  const index = readHarnessTaskIndex({projectRoot});
   const ids = listedTaskIds(tasks);
   const unindexedTasks = ids.filter(id => !index.records.has(id));
   const records = [...index.records.values()].map(recordFromIndex);
-  const eventsByTask = readAllHarnessEvents({projectRoot: root, taskIds: records.map(record => record.id)});
+  const eventsByTask = readAllHarnessEvents({projectRoot, taskIds: records.map(record => record.id)});
   const health = {
     complete: index.invalidIndexEntries === 0 && unindexedTasks.length === 0,
     invalidIndexEntries: index.invalidIndexEntries,
     unindexedTasks,
     timedOutRecords: []
   };
-  return {schemaVersion: 1, projectRoot: root, health, summary: summarize(records, eventsByTask, readMetrics(directory))};
+  return {schemaVersion: 1, projectRoot: storage.projectRoot, health, summary: summarize(records, eventsByTask, readMetrics(directory))};
 }
 
 async function readTaskForIndex(file, timeoutMs) {
@@ -303,9 +306,9 @@ async function readTaskForIndex(file, timeoutMs) {
 }
 
 export async function rebuildHarnessIndex({projectRoot, concurrency = 8, perFileTimeoutMs = 500, totalTimeoutMs = 10000}) {
-  const root = buildProfile({projectRoot}).projectRoot;
-  const directory = existingSafeDirectory(root, HARNESS_DIRECTORY);
-  const tasks = directory && existingSafeDirectory(root, path.posix.join(HARNESS_DIRECTORY, "tasks"));
+  const root = resolveHarnessStorage({projectRoot}).directory;
+  const directory = existingSafeDirectory(root, "");
+  const tasks = directory && existingSafeDirectory(root, "tasks");
   if (!directory || !tasks) throw new Error("missing task harness");
   const entries = fs.readdirSync(tasks, {withFileTypes: true}).sort((left, right) => left.name.localeCompare(right.name));
   const files = entries.filter(entry => entry.isFile() && !entry.isSymbolicLink() && path.extname(entry.name) === ".json")

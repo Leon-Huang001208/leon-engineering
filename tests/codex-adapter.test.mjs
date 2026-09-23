@@ -15,8 +15,10 @@ import {
   GLOBAL_DOCUMENT_NAMES,
   installGlobalFramework,
   verifyGlobalFramework,
-  rollbackGlobalFramework
+  rollbackGlobalFramework,
+  verifyCurrentCodexState
 } from "../scripts/install-codex-adapter.mjs";
+import {installHarnessRuntime} from "../scripts/harness-runtime.mjs";
 
 const sourceRoot = path.resolve(import.meta.dirname, "..");
 
@@ -193,6 +195,78 @@ test("installs and verifies the global framework through the command line", t =>
   assert.equal(verified.status, 0, verified.stderr);
   assert.match(verified.stdout, /"valid": true/);
   assert.equal(JSON.parse(fs.readFileSync(path.join(runtimeRoot, ".leon-engineering-harness-runtime.json"), "utf8")).sourceRoot, sourceRoot);
+});
+
+test("migration-aware default verification composes plugin, global, and runtime health", t => {
+  const codexHome = makeCodexHome(t);
+  const targetRoot = path.join(codexHome, "skills");
+  const runtimeRoot = path.join(codexHome, "runtime");
+  install({sourceRoot, targetRoot});
+  migrateToPluginDistribution({sourceRoot, targetRoot});
+  installGlobalFramework({sourceRoot, codexHome});
+  installHarnessRuntime({sourceRoot, runtimeRoot});
+
+  assert.deepEqual(verifyCurrentCodexState({
+    sourceRoot,
+    targetRoot,
+    codexHome,
+    runtimeRoot,
+    explicitTarget: false
+  }), {
+    valid: true,
+    drift: [],
+    pluginDistribution: {valid: true, drift: []},
+    globalFramework: {valid: true, drift: []},
+    runtime: {valid: true, drift: []}
+  });
+
+  fs.rmSync(path.join(codexHome, "hooks.json"));
+  const drifted = verifyCurrentCodexState({
+    sourceRoot,
+    targetRoot,
+    codexHome,
+    runtimeRoot,
+    explicitTarget: false
+  });
+  assert.equal(drifted.valid, false);
+  assert.equal(drifted.pluginDistribution.valid, true);
+  assert.equal(drifted.globalFramework.valid, false);
+  assert.equal(drifted.runtime.valid, true);
+  assert.deepEqual(drifted.drift, ["global:hooks"]);
+});
+
+test("default verify CLI reports composed current Codex health", t => {
+  const codexHome = makeCodexHome(t);
+  const targetRoot = path.join(codexHome, "skills");
+  const runtimeRoot = path.join(codexHome, "runtime");
+  const script = path.join(sourceRoot, "scripts", "install-codex-adapter.mjs");
+  install({sourceRoot, targetRoot});
+  migrateToPluginDistribution({sourceRoot, targetRoot});
+  installGlobalFramework({sourceRoot, codexHome});
+  installHarnessRuntime({sourceRoot, runtimeRoot});
+
+  const result = spawnSync(process.execPath, [
+    script, "--verify", "--codex-home", codexHome, "--runtime-root", runtimeRoot
+  ], {encoding: "utf8"});
+
+  assert.equal(result.status, 0, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.valid, true);
+  assert.deepEqual(report.drift, []);
+  assert.equal(report.pluginDistribution.valid, true);
+  assert.equal(report.globalFramework.valid, true);
+  assert.equal(report.runtime.valid, true);
+});
+
+test("explicit target verify CLI preserves the legacy skill result", t => {
+  const targetRoot = makeTarget(t);
+  const script = path.join(sourceRoot, "scripts", "install-codex-adapter.mjs");
+  install({sourceRoot, targetRoot});
+
+  const result = spawnSync(process.execPath, [script, "--verify", "--target", targetRoot], {encoding: "utf8"});
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), {valid: true, drift: []});
 });
 
 test("redacts user AGENTS.md text from successful global CLI installation output", t => {
