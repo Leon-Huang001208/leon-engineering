@@ -85,6 +85,25 @@ test("fails the full batch before moving a stale source", t => {
   assert.equal(fs.existsSync(backupRoot), false);
 });
 
+test("accepts a canonical root symlink while keeping the source tree regular", t => {
+  const root = makeRoot(t);
+  const source = path.join(root, "skills", "linked-canonical");
+  const canonicalTarget = path.join(root, "cc-switch", "linked-canonical");
+  const canonical = path.join(root, "codex", "linked-canonical");
+  writeSkill(source, "linked-canonical");
+  writeSkill(canonicalTarget, "linked-canonical");
+  fs.mkdirSync(path.dirname(canonical), {recursive: true});
+  fs.symlinkSync(canonicalTarget, canonical);
+  const {file} = writeManifest(root, [{
+    id: "linked-canonical",
+    source,
+    canonical,
+    expectedTreeHash: auditSkillTree(source).treeHash
+  }]);
+
+  assert.equal(previewSkillPortfolio({manifestPath: file}).valid, true);
+});
+
 test("rejects unsafe entries and backup collisions", async t => {
   await t.test("symbolic link", () => {
     const root = makeRoot(t);

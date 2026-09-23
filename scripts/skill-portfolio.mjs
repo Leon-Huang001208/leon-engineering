@@ -84,6 +84,12 @@ export function auditSkillTree(directory) {
   };
 }
 
+function auditCanonicalTree(directory) {
+  const canonical = assertAbsolute(directory, "canonical Skill");
+  const stat = fs.lstatSync(canonical);
+  return auditSkillTree(stat.isSymbolicLink() ? fs.realpathSync(canonical) : canonical);
+}
+
 function readJson(file, description) {
   const resolved = assertAbsolute(file, description);
   const stat = fs.lstatSync(resolved);
@@ -134,7 +140,7 @@ export function previewSkillPortfolio({manifestPath}) {
       conflicts.push(`${action.id}:invalid-source`);
     }
     try {
-      canonicalAudit = auditSkillTree(action.canonical);
+      canonicalAudit = auditCanonicalTree(action.canonical);
     } catch {
       conflicts.push(`${action.id}:invalid-canonical`);
     }
@@ -224,7 +230,7 @@ export function rollbackSkillPortfolio({receiptPath}) {
     if (fs.existsSync(action.source)) conflicts.push(`${action.id}:source-exists`);
     try {
       if (auditSkillTree(action.backup).treeHash !== action.treeHash) conflicts.push(`${action.id}:backup-hash`);
-      if (auditSkillTree(action.canonical).treeHash !== action.treeHash) conflicts.push(`${action.id}:canonical-hash`);
+      if (auditCanonicalTree(action.canonical).treeHash !== action.treeHash) conflicts.push(`${action.id}:canonical-hash`);
     } catch {
       conflicts.push(`${action.id}:invalid-tree`);
     }
