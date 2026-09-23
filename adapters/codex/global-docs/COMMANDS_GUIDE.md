@@ -33,6 +33,17 @@ claude plugin list
 
 技能安装与全局文档安装是独立操作。不要用全局框架命令代替目标项目的测试、lint、构建、浏览器检查或平台验证。实际运行过的命令和结果才可作为交付证据。
 
+## 脱敏 Token 审计
+
+Token 审计只接受一个显式 session JSONL，或一个显式 thread ID 加 session root。它流式统计会话/回合/模型/工具调用、input/cached/non-cached/output/reasoning、工具输出字节分位数、哈希化重复调用、稳定工具分类和每个源文件的 SHA-256；不会返回消息、Prompt、工具参数、命令、路径、输出正文或用户内容：
+
+```bash
+node "$HOME/.agents/leon-engineering/runtime/token-audit.mjs" --session-jsonl /absolute/session.jsonl
+node "$HOME/.agents/leon-engineering/runtime/token-audit.mjs" --thread-id opaque-thread-id --session-root /absolute/session-root --output /absolute/private-report.json
+```
+
+默认 stdout 最多 4 KiB；完整报告只写到显式绝对路径并使用 `0600`。线程扫描拒绝符号链接。损坏或部分 JSONL 返回 `complete:false`、文件序号/行号和非零退出码，不能静默记为零。
+
 ## 已登记 verifier 的观察执行
 
 Harness 初始化或刷新 Agent Map 时会写入机器可读的 verifier 清单和稳定 verifier ID。只对清单中已知、非交互的 verifier 使用受管执行入口；未知命令继续使用原生 `exec_command`：

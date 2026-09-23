@@ -10,6 +10,7 @@ const MANIFEST_NAME = ".leon-engineering-harness-runtime.json";
 export const HARNESS_RUNTIME_FILES = [
   "harness-runtime.mjs",
   "harness-storage.mjs",
+  "token-audit.mjs",
   "harness-project.mjs",
   "harness-execution.mjs",
   "harness-run.mjs",
