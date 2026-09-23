@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {buildProfile} from "./profile-project.mjs";
-import {resolveHarnessStorage} from "./harness-storage.mjs";
+import {resolveHarnessStorage, verifyHarnessMigration} from "./harness-storage.mjs";
 
 export const HARNESS_DIRECTORY = ".ai/harness";
 export const AGENT_MAP_FILENAME = "agent-map.md";
@@ -169,8 +169,9 @@ function safeHarnessDirectory(projectRoot, relative = "") {
 
 function existingHarnessDirectory(projectRoot, relative = "") {
   const storage = resolveHarnessStorage({projectRoot});
-  if (storage.kind === "git-common" && !fs.existsSync(storage.directory) && fs.existsSync(storage.legacyDirectory)) {
-    throw new Error("legacy Harness migration required");
+  if (storage.kind === "git-common" && fs.existsSync(storage.legacyDirectory)) {
+    const migration = verifyHarnessMigration({projectRoot});
+    if (!migration.valid) throw new Error("legacy Harness migration required");
   }
   return existingSafeDirectory(storageBoundary(storage), storageRelative(storage, relative));
 }

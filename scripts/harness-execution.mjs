@@ -34,7 +34,7 @@ function assertSafeExistingFile(root, relative, description) {
   return file;
 }
 
-function readVerifier(harnessRoot, projectRoot, verifierId) {
+function readVerifier(harnessRoot, workspaceRoot, verifierId) {
   const file = assertSafeExistingFile(harnessRoot, VERIFIERS_FILENAME, "verifier manifest");
   let manifest;
   try {
@@ -42,7 +42,8 @@ function readVerifier(harnessRoot, projectRoot, verifierId) {
   } catch {
     throw new Error("invalid verifier manifest");
   }
-  if (manifest?.schemaVersion !== 1 || manifest.projectRoot !== projectRoot || !Array.isArray(manifest.verifiers)) {
+  if (manifest?.schemaVersion !== 1 || typeof manifest.projectRoot !== "string" || !path.isAbsolute(manifest.projectRoot)
+    || !Array.isArray(manifest.verifiers)) {
     throw new Error("invalid verifier manifest");
   }
   const verifier = manifest.verifiers.find(item => item?.id === verifierId);
@@ -57,7 +58,7 @@ function readVerifier(harnessRoot, projectRoot, verifierId) {
     .update(`${verifier.command}\0${verifier.workingDirectory}\0${verifier.source}`)
     .digest("hex").slice(0, 12)}`;
   if (verifier.id !== expectedId || verifier.argv.join(" ") !== verifier.command) throw new Error("invalid verifier manifest");
-  assertSafeExistingFile(projectRoot, verifier.source, "verifier source");
+  assertSafeExistingFile(workspaceRoot, verifier.source, "verifier source");
   return verifier;
 }
 
@@ -345,12 +346,13 @@ export async function runObserved(spec, dependencies = {}) {
   if (!spec || typeof spec !== "object" || Array.isArray(spec)) throw new Error("observation spec is required");
   const storage = resolveHarnessStorage({projectRoot: spec.projectRoot});
   const root = storage.projectRoot;
+  const workspaceRoot = storage.workspaceRoot;
   const harnessRoot = storage.directory;
   const taskId = assertId(spec.taskId, "task id", /^[a-z0-9][a-z0-9-]{0,79}$/);
   const verifierId = assertId(spec.verifierId, "verifier id", /^verifier-[a-z0-9-]+-[a-f0-9]{12}$/);
   readHarnessTask({projectRoot: root, taskId});
-  const verifier = readVerifier(harnessRoot, root, verifierId);
-  const cwd = resolveWorkingDirectory(root, verifier.workingDirectory);
+  const verifier = readVerifier(harnessRoot, workspaceRoot, verifierId);
+  const cwd = resolveWorkingDirectory(workspaceRoot, verifier.workingDirectory);
   if (spec.timeoutMs !== undefined && (!Number.isInteger(spec.timeoutMs) || spec.timeoutMs < 1 || spec.timeoutMs > 3_600_000)) {
     throw new Error("invalid timeout");
   }

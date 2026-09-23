@@ -19,7 +19,7 @@ node "$HOME/.agents/leon-engineering/runtime/harness-runtime.mjs" --verify
 node "$HOME/.agents/leon-engineering/runtime/harness-session.mjs" --start --new-task --project /absolute/project --host codex --session-id opaque-task-key --task-id task-id --goal "Outcome" --acceptance "Observable result"
 ```
 
-会话入口在逻辑 Harness 目录创建 `agent-map.md`、任务记录、轻量 `task-index.jsonl`、`metrics.jsonl`、隐私受限的 `events.jsonl` 和会话上下文。Git 仓库的逻辑目录固定在 Git common dir 的 `leon-engineering/harness/`，主 checkout 与所有 linked worktree 共用；非 Git 项目继续使用 `.ai/harness/`。这样普通功能/集成 worktree 被安全移除后，结果记录、评估和交付硬门仍可从主 checkout 完成。会话文件使用 `host + session ID` 的不可逆摘要隔离 Claude 与 Codex；同宿主旧键会复制到新命名空间后恢复，旧文件保留，异宿主旧记录既不覆盖也不阻止当前宿主建立独立上下文。读取端兼容结构一致的 v1/v2 会话记录，并继续严格校验摘要键、宿主和任务记录；损坏或不匹配记录仍进入只读诊断模式。事件流只记录任务 ID、宿主、事件类别及白名单状态，不记录目标、验收、会话 ID、命令、路径、提示词、源代码或密钥。对未启用强制 Harness 的项目，仍保持原有的预览与明确写入边界。
+会话入口在逻辑 Harness 目录创建 `agent-map.md`、任务记录、轻量 `task-index.jsonl`、`metrics.jsonl`、隐私受限的 `events.jsonl` 和会话上下文。Git 仓库的逻辑目录固定在 Git common dir 的 `leon-engineering/harness/`，主 checkout 是稳定仓库身份，调用方当前 checkout/worktree 是 verifier 的实际执行根；非 Git 项目继续使用 `.ai/harness/`。这样普通功能/集成 worktree 被安全移除后，结果记录、评估和交付硬门仍可从主 checkout 完成。会话文件使用 `host + session ID` 的不可逆摘要隔离 Claude 与 Codex；同宿主旧键会复制到新命名空间后恢复，旧文件保留，异宿主旧记录既不覆盖也不阻止当前宿主建立独立上下文。读取端兼容结构一致的 v1/v2 会话记录，并继续严格校验摘要键、宿主和任务记录；损坏或不匹配记录仍进入只读诊断模式。事件流只记录任务 ID、宿主、事件类别及白名单状态，不记录目标、验收、会话 ID、命令、路径、提示词、源代码或密钥。对未启用强制 Harness 的项目，仍保持原有的预览与明确写入边界。
 
 Git 仓库升级前若已有项目内 `.ai/harness/`，运行时会拒绝建立第二份账本。先只读预览，再显式迁移；迁移逐文件哈希校验并保留旧目录，不自动删除：
 
@@ -28,7 +28,7 @@ node "$HOME/.agents/leon-engineering/runtime/harness-storage.mjs" --preview --pr
 node "$HOME/.agents/leon-engineering/runtime/harness-storage.mjs" --migrate --project /absolute/project
 ```
 
-符号链接、不可读记录、路径逃逸或内容不同的同名任务都会 fail closed。成功迁移写入版本化 manifest 与 rollback map，目录权限为 `0700`、文件权限为 `0600`。
+符号链接、不可读记录、路径逃逸或内容不同的同名任务都会 fail closed。成功迁移写入版本化 manifest 与 rollback map，目录权限为 `0700`、文件权限为 `0600`。旧目录仍存在期间，运行时持续校验 manifest 与旧源快照；无 manifest 的双账本或被改写的旧源不得继续使用。
 
 Agent Map 同时在逻辑 Harness 目录生成 `verifiers.json`。每个已知非交互 verifier 都有稳定 verifier ID、命令、相对工作目录、来源和参数数组；只有该机器清单中的 ID 可由观察执行层运行。深模块公开 `runObserved(spec)` 与 `readObservation(query)`，薄 CLI 只接受 verifier ID 或 observation ID：
 

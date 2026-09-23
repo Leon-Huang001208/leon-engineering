@@ -7,11 +7,13 @@ import assert from "node:assert/strict";
 import {
   resolveHarnessStorage,
   previewHarnessMigration,
-  migrateHarnessStorage
+  migrateHarnessStorage,
+  verifyHarnessMigration
 } from "../scripts/harness-storage.mjs";
 import {recordOutcome, readHarnessTask, startHarnessSession} from "../scripts/harness-project.mjs";
 import {evaluateHarness} from "../scripts/harness-evaluate.mjs";
 import {enforceHarnessTask} from "../scripts/harness-enforce.mjs";
+import {runObserved} from "../scripts/harness-execution.mjs";
 
 const sourceRoot = path.resolve(import.meta.dirname, "..");
 
@@ -30,7 +32,9 @@ function makeGitFixture(t) {
   git(repository, ["config", "user.name", "Test"]);
   git(repository, ["config", "user.email", "test@example.invalid"]);
   fs.writeFileSync(path.join(repository, "AGENTS.md"), "# fixture\n");
-  git(repository, ["add", "AGENTS.md"]);
+  fs.writeFileSync(path.join(repository, "package.json"), JSON.stringify({scripts: {test: "node verifier.mjs"}}));
+  fs.writeFileSync(path.join(repository, "verifier.mjs"), "process.stdout.write('verified\\n');\n");
+  git(repository, ["add", "AGENTS.md", "package.json", "verifier.mjs"]);
   git(repository, ["commit", "-qm", "fixture"]);
   git(repository, ["worktree", "add", "-q", "-b", "linked", worktree]);
   t.after(() => fs.rmSync(root, {recursive: true, force: true}));
@@ -45,6 +49,10 @@ test("resolves one Git-common Harness directory for main and linked worktrees", 
 
   assert.equal(mainStorage.kind, "git-common");
   assert.equal(linkedStorage.kind, "git-common");
+  assert.equal(mainStorage.projectRoot, fs.realpathSync(repository));
+  assert.equal(linkedStorage.projectRoot, fs.realpathSync(repository));
+  assert.equal(mainStorage.workspaceRoot, fs.realpathSync(repository));
+  assert.equal(linkedStorage.workspaceRoot, fs.realpathSync(worktree));
   assert.equal(mainStorage.directory, linkedStorage.directory);
   assert.equal(
     mainStorage.directory,
@@ -164,7 +172,7 @@ test("migration refuses symlinks, unreadable records, and conflicting destinatio
   });
 });
 
-test("Harness lifecycle survives normal linked-worktree removal", t => {
+test("Harness lifecycle and registered verifier survive normal linked-worktree removal", async t => {
   const {repository, worktree} = makeGitFixture(t);
   startHarnessSession({
     projectRoot: worktree,
@@ -178,6 +186,15 @@ test("Harness lifecycle survives normal linked-worktree removal", t => {
     }
   });
   git(repository, ["worktree", "remove", worktree]);
+
+  const storage = resolveHarnessStorage({projectRoot: repository});
+  const verifierManifest = JSON.parse(fs.readFileSync(path.join(storage.directory, "verifiers.json"), "utf8"));
+  const observed = await runObserved({
+    projectRoot: repository,
+    taskId: "linked-task",
+    verifierId: verifierManifest.verifiers[0].id
+  });
+  assert.equal(observed.status, "passed");
 
   recordOutcome({
     projectRoot: repository,
@@ -217,4 +234,38 @@ test("migration CLI previews before explicit apply", t => {
   assert.equal(migrated.status, 0, migrated.stderr);
   assert.equal(JSON.parse(migrated.stdout).migrated, true);
   assert.equal(fs.existsSync(path.join(storage.directory, "migration-manifest.json")), true);
+});
+
+test("runtime accepts only a verified dual-state migration", t => {
+  const {repository} = makeGitFixture(t);
+  const legacy = writeLegacyHarness(repository);
+  const storage = resolveHarnessStorage({projectRoot: repository});
+  fs.mkdirSync(path.join(storage.directory, "tasks"), {recursive: true});
+  fs.writeFileSync(path.join(storage.directory, "agent-map.md"), "# divergent\n");
+  fs.writeFileSync(path.join(storage.directory, "metrics.jsonl"), "");
+  fs.writeFileSync(path.join(storage.directory, "tasks", "task-one.json"), '{"id":"different"}\n');
+
+  assert.equal(verifyHarnessMigration({projectRoot: repository}).valid, false);
+  assert.throws(() => startHarnessSession({
+    projectRoot: repository,
+    host: "codex",
+    sessionId: "dual-state",
+    newTask: true,
+    task: {id: "new-task", goal: "Do not split state.", acceptanceCriteria: ["One ledger remains."]}
+  }), /legacy Harness migration required/);
+
+  fs.rmSync(storage.directory, {recursive: true});
+  migrateHarnessStorage({projectRoot: repository});
+  assert.deepEqual(verifyHarnessMigration({projectRoot: repository}), {valid: true, drift: []});
+  assert.equal(startHarnessSession({
+    projectRoot: repository,
+    host: "codex",
+    sessionId: "verified-migration",
+    newTask: true,
+    task: {id: "new-task", goal: "Use the verified destination.", acceptanceCriteria: ["The task starts."]}
+  }).taskId, "new-task");
+
+  fs.appendFileSync(path.join(legacy, "agent-map.md"), "changed\n");
+  assert.equal(verifyHarnessMigration({projectRoot: repository}).valid, false);
+  assert.throws(() => readHarnessTask({projectRoot: repository, taskId: "new-task"}), /legacy Harness migration required/);
 });

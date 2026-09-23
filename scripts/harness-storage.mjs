@@ -36,6 +36,7 @@ export function resolveHarnessStorage({projectRoot}) {
     const directory = path.join(root, HARNESS_RELATIVE_DIRECTORY);
     return {
       projectRoot: root,
+      workspaceRoot: root,
       repositoryRoot: null,
       commonDirectory: null,
       directory,
@@ -43,14 +44,20 @@ export function resolveHarnessStorage({projectRoot}) {
       kind: "project-local"
     };
   }
-  const repositoryRoot = fs.realpathSync(repository.stdout.trim());
-  const commonDirectory = resolvedCommonDirectory(repositoryRoot, common.stdout.trim());
+  const workspaceRoot = fs.realpathSync(repository.stdout.trim());
+  const commonDirectory = resolvedCommonDirectory(workspaceRoot, common.stdout.trim());
+  const repositoryRoot = path.basename(commonDirectory) === ".git"
+    ? fs.realpathSync(path.dirname(commonDirectory))
+    : workspaceRoot;
+  const workspaceLegacy = path.join(workspaceRoot, HARNESS_RELATIVE_DIRECTORY);
+  const repositoryLegacy = path.join(repositoryRoot, HARNESS_RELATIVE_DIRECTORY);
   return {
     projectRoot: repositoryRoot,
+    workspaceRoot,
     repositoryRoot,
     commonDirectory,
     directory: path.join(commonDirectory, "leon-engineering", "harness"),
-    legacyDirectory: path.join(repositoryRoot, HARNESS_RELATIVE_DIRECTORY),
+    legacyDirectory: fs.existsSync(workspaceLegacy) ? workspaceLegacy : repositoryLegacy,
     kind: "git-common"
   };
 }
@@ -169,6 +176,43 @@ export function previewHarnessMigration({projectRoot}) {
     conflicts,
     treeHash: aggregateTreeHash(scanned.files)
   };
+}
+
+export function verifyHarnessMigration({projectRoot}) {
+  const storage = resolveHarnessStorage({projectRoot});
+  if (storage.kind !== "git-common" || !fs.existsSync(storage.legacyDirectory)) {
+    return {valid: true, drift: []};
+  }
+  const drift = [];
+  const manifestFile = path.join(storage.directory, "migration-manifest.json");
+  let manifest;
+  try {
+    const stat = fs.lstatSync(manifestFile);
+    if (stat.isSymbolicLink() || !stat.isFile()) throw new Error("invalid");
+    manifest = JSON.parse(fs.readFileSync(manifestFile, "utf8"));
+  } catch {
+    return {valid: false, drift: ["manifest"]};
+  }
+  if (
+    manifest?.schemaVersion !== 1
+    || manifest.source !== storage.legacyDirectory
+    || manifest.destination !== storage.directory
+    || !Array.isArray(manifest.files)
+    || !Number.isInteger(manifest.fileCount)
+    || !Number.isInteger(manifest.bytes)
+    || !/^[0-9a-f]{64}$/.test(manifest.treeHash ?? "")
+  ) {
+    return {valid: false, drift: ["manifest"]};
+  }
+  const scanned = enumerateRegularFiles(storage.legacyDirectory);
+  if (scanned.conflicts.length > 0) drift.push(...scanned.conflicts);
+  if (scanned.files.length !== manifest.fileCount) drift.push("file-count");
+  if (scanned.files.reduce((total, file) => total + file.bytes, 0) !== manifest.bytes) drift.push("bytes");
+  if (aggregateTreeHash(scanned.files) !== manifest.treeHash) drift.push("tree-hash");
+  const manifestFiles = JSON.stringify(manifest.files);
+  const scannedFiles = JSON.stringify(scanned.files.map(file => ({path: file.relative, bytes: file.bytes, sha256: file.sha256})));
+  if (manifestFiles !== scannedFiles) drift.push("files");
+  return {valid: drift.length === 0, drift: [...new Set(drift)].sort()};
 }
 
 function ensurePrivateDirectory(directory) {

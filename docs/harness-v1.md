@@ -4,7 +4,7 @@ Harness v1 解决“新会话忘记上下文、完成标准不稳定、无法衡
 
 ## 结构
 
-对用户明确选择的项目和任务，`scripts/harness-project.mjs` 可生成一套逻辑 Harness 目录。Git 仓库把该目录放在 Git common dir 的 `leon-engineering/harness/` 下，因此主 checkout 和所有 linked worktree 共用同一账本，删除普通功能或集成 worktree 不会删除任务证据。非 Git 项目继续使用项目内 `.ai/harness/`。两类目录均使用 `0700`，其中的账本、索引、日志和清单使用 `0600`。
+对用户明确选择的项目和任务，`scripts/harness-project.mjs` 可生成一套逻辑 Harness 目录。Git 仓库把该目录放在 Git common dir 的 `leon-engineering/harness/` 下，并用主 checkout 作为稳定仓库身份、当前 checkout/worktree 作为 verifier 的实际执行根；因此所有 linked worktree 共用同一账本，删除普通功能或集成 worktree 不会删除任务证据。非 Git 项目继续使用项目内 `.ai/harness/`。两类目录均使用 `0700`，其中的账本、索引、日志和清单使用 `0600`。
 
 逻辑目录包含：
 
@@ -24,7 +24,7 @@ node scripts/harness-storage.mjs --preview --project /absolute/project
 node scripts/harness-storage.mjs --migrate --project /absolute/project
 ```
 
-预览不写文件。迁移拒绝符号链接、不可读记录、路径逃逸和内容不同的同名任务；只有 staging 副本的逐文件 SHA-256 与汇总哈希全部复核后才切换到 Git-common 目录，并写入版本化 manifest 与 rollback map。旧目录不会自动删除。
+预览不写文件。迁移拒绝符号链接、不可读记录、路径逃逸和内容不同的同名任务；只有 staging 副本的逐文件 SHA-256 与汇总哈希全部复核后才切换到 Git-common 目录，并写入版本化 manifest 与 rollback map。旧目录不会自动删除；只要旧目录仍存在，运行时就校验其 manifest 与源快照，拒绝无 manifest 的双账本或迁移后被改写的旧源，避免静默分叉。
 
 完整交付档任务可在任务记录中声明 `delivery.required: true`。该字段由 `harness-session --delivery-required` 或项目命令的同名参数创建，用于要求最终硬门读取 Git common dir 中的交付 receipt；其他档位不声明该字段。
 
