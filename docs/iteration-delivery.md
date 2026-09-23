@@ -29,6 +29,12 @@
 
 合并冲突时保留集成 worktree。解决冲突并提交后再次运行 `prepare`，控制器确认无未解决冲突且 worktree 干净，再进入 `prepared`。
 
+审核若在 `prepared` 后、发布前要求功能分支增加修复提交，使用 `--prepare --replace-prepared`。该操作不是普通重跑：receipt 必须仍为 `prepared`，功能和集成 worktree 必须干净，功能 HEAD 必须不同于已记录提交，远端默认分支必须仍等于 receipt 基线，旧集成提交不得已进入远端，并且 receipt 不得已有 CI run、PR、mode 或 remote commit。控制器在全部检查通过后才把旧 branch/worktree/commit 以 `superseded` 写入 `integrationHistory`、非强制移除旧集成 worktree，并创建下一编号 revision；任何条件失败都保留原 receipt 与 worktree。新 revision 必须重新运行合并结果验证。
+
+```bash
+node "$HOME/.agents/leon-engineering/runtime/iteration-delivery.mjs" --prepare --replace-prepared --project /absolute/project --task-id task-id
+```
+
 CI 失败最多允许三次 `publish --repair`。三次仍失败时，只有直接推送模式、远端默认分支 tip 仍与本任务 receipt 完全一致，并且回滚结果已经验证通过，`rollback` 才能推送 revert。其他情况保留分支和 worktree，交给用户处理。任何阶段都不 force-push、不强删脏 worktree、不强删尚未进入默认分支的提交。
 
 ## 状态与硬门

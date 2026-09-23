@@ -20,6 +20,8 @@ Do not publish an explicit `no-push`, local-only, draft, research, review, or re
 
 If the remote default branch advances before publication, call `prepare` again. The controller preserves the stale integration commit in ancestry, rebuilds from the new remote base, and requires merged-result verification again. If a merge conflicts, resolve and commit it in the preserved integration worktree, then call `prepare` again before verification and publication.
 
+若审核发生在 `prepare` 之后、发布之前，并且功能分支新增了修复提交，使用 `--prepare --replace-prepared` 取代旧 prepared revision，不要先发布旧结果。控制器只在 receipt 仍为 `prepared`、功能与集成 worktree 均干净、功能 HEAD 已变化、远端默认分支仍等于原基线、旧集成提交未进入远端、且没有 CI run、PR 或发布元数据时允许替换。所有检查完成前不移动 receipt 或 worktree；成功后把旧 branch/worktree/commit 以 `status: "superseded"` 写入 `integrationHistory`，非强制移除旧集成 worktree，并要求对新 revision 重新验证。任一条件失败都保留旧 prepared 状态。
+
 CI failures may receive at most three evidence-based repair commits through `publish --repair`. After the third failure, use `rollback` only when the remote default tip is still exclusively owned by this delivery and the reverted result has passed verification. Otherwise preserve the branch and worktree and report the blocker.
 
 Run `cleanup` only after CI is `passed` or explicitly `not_configured`. Cleanup refuses dirty worktrees, confirms the integration commit is in the remote default branch, removes managed worktrees, and deletes local and remote task branches. Never force-push, force-remove a dirty worktree, or force-delete an unmerged branch.

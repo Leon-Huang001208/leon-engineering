@@ -4,16 +4,27 @@ Harness v1 解决“新会话忘记上下文、完成标准不稳定、无法衡
 
 ## 结构
 
-对用户明确选择的项目和任务，`scripts/harness-project.mjs` 可生成：
+对用户明确选择的项目和任务，`scripts/harness-project.mjs` 可生成一套逻辑 Harness 目录。Git 仓库把该目录放在 Git common dir 的 `leon-engineering/harness/` 下，并用主 checkout 作为稳定仓库身份、当前 checkout/worktree 作为 verifier 的实际执行根；因此所有 linked worktree 共用同一账本，删除普通功能或集成 worktree 不会删除任务证据。非 Git 项目继续使用项目内 `.ai/harness/`。两类目录均使用 `0700`，其中的账本、索引、日志和清单使用 `0600`。
+
+逻辑目录包含：
 
 - `.ai/harness/agent-map.md`：从受限项目画像得出的指令、候选验证命令和 CI 入口；项目指令优先。
 - `.ai/harness/tasks/<task-id>.json`：目标、验收标准、当前状态和已记录的结果。
 - `.ai/harness/metrics.jsonl`：任务创建与结果事件，用于统计澄清轮次、返工次数、验证状态、实测验证耗时和阻塞分类。
 - `.ai/harness/events.jsonl`：只追加的跨宿主执行事件；只含任务 ID、宿主、事件类别和白名单状态，绝不含提示词、命令、路径、源代码、密钥或会话 ID。
 - `.ai/harness/verifiers.json`：Agent Map 的机器可读 verifier 清单；每项包含稳定 verifier ID、命令、相对工作目录、来源、参数数组和非交互标记。
-- `.ai/harness/logs/<task-id>/`：`0600` 的完整 stdout/stderr 和 observation 元数据；拒绝符号链接与路径穿越，不自动删除。
+- `logs/<task-id>/`：`0600` 的完整 stdout/stderr 和 observation 元数据；拒绝符号链接与路径穿越，不自动删除。
 
 默认命令只输出预览。`--write-harness` 是项目内写入的明确边界；已有 Harness 或同名任务不会被覆盖。`--record-outcome` 只保存执行者已经获得的证据，绝不执行命令、读取环境变量或访问网络。每条新结果都必须附带执行者实际测得的 `verificationDurationSeconds`；`blocked` 结果还必须附带标准化 `blockerCategory`。这些字段不是脚本估算出来的，也不能从聊天内容回填。
+
+升级前若 Git 仓库已有项目内 `.ai/harness/`，运行时会拒绝创建第二套账本并提示迁移。先只读预览，再显式复制和逐文件校验；迁移成功仍保留旧目录，便于人工回滚：
+
+```bash
+node scripts/harness-storage.mjs --preview --project /absolute/project
+node scripts/harness-storage.mjs --migrate --project /absolute/project
+```
+
+预览不写文件。迁移拒绝符号链接、不可读记录、路径逃逸和内容不同的同名任务；只有 staging 副本的逐文件 SHA-256 与汇总哈希全部复核后才切换到 Git-common 目录，并写入版本化 manifest 与 rollback map。旧目录不会自动删除；只要旧目录仍存在，运行时就校验其 manifest 与源快照，拒绝无 manifest 的双账本或迁移后被改写的旧源，避免静默分叉。
 
 完整交付档任务可在任务记录中声明 `delivery.required: true`。该字段由 `harness-session --delivery-required` 或项目命令的同名参数创建，用于要求最终硬门读取 Git common dir 中的交付 receipt；其他档位不声明该字段。
 
@@ -34,7 +45,7 @@ node scripts/harness-run.mjs --project /absolute/project --task-id task-id --ver
 node scripts/harness-run.mjs --project /absolute/project --task-id task-id --read-observation observation-0123456789abcdef01234567
 ```
 
-观察层只运行 `.ai/harness/verifiers.json` 中已登记且标记为非交互的 verifier；未知命令仍由原生 `exec_command` 执行。完整 stdout/stderr 写入本地日志。普通调用最多返回 4 KiB，显式宽回执最多 8 KiB；超限时保留头、尾、错误上下文、状态、退出码、超时原因、SHA-256和日志引用。疑似秘密不进入模型可见回执或 `readObservation` 回查，原文只留本地；主归档失败时持久 fallback 仍保存原始字节。
+观察层只运行逻辑 Harness 目录 `verifiers.json` 中已登记且标记为非交互的 verifier；未知命令仍由原生 `exec_command` 执行。完整 stdout/stderr 写入本地日志。普通调用最多返回 4 KiB，显式宽回执最多 8 KiB；超限时保留头、尾、错误上下文、状态、退出码、超时原因、SHA-256和日志引用。疑似秘密不进入模型可见回执或 `readObservation` 回查，原文只留本地；主归档失败时持久 fallback 仍保存原始字节。
 
 `metrics.jsonl` 增加 `observation_recorded` 与 `observation_recalled`，仅记录 verifier ID、状态、耗时、字节量、截断、归档失败标记与回查次数，不记录命令正文、日志引用、哈希或输出。评估器汇总 Observation 样本量、返回字节比、回查率、归档失败率，以及有重复样本的 verifier 结果一致率。
 
@@ -60,7 +71,7 @@ node scripts/harness-run.mjs --project /absolute/project --task-id task-id --rea
 
 ## P2：受控恢复与依赖状态
 
-当任务之间存在明确依赖、需要中断后恢复或需要记录一次显式重试时，使用 [Harness P2 控制平面](harness-control-plane.md)。它在同一项目的 `.ai/harness/control-plane.json` 里保存 DAG、任务状态、尝试次数、事件和已存在 worktree 的定位信息。每个控制任务以 `harnessTaskId` 显式绑定账本任务：写入控制平面前记录必须已经存在，转换为 `completed` 前其最新账本结果必须为 `completed/passed`。因此编排状态不会被误当成验证事实。
+当任务之间存在明确依赖、需要中断后恢复或需要记录一次显式重试时，使用 [Harness P2 控制平面](harness-control-plane.md)。它在同一逻辑 Harness 目录的 `control-plane.json` 里保存 DAG、任务状态、尝试次数、事件和已存在 worktree 的定位信息。每个控制任务以 `harnessTaskId` 显式绑定账本任务：写入控制平面前记录必须已经存在，转换为 `completed` 前其最新账本结果必须为 `completed/passed`。因此编排状态不会被误当成验证事实。
 
 P2 不是任务看板服务、DAG 自动执行器或常驻工作队列。它自身不创建、切换或删除 worktree，不运行 Git、测试、构建或任务命令，也不因失败自动重试；实现任务的 Git 闭环由独立的 `iteration-delivery` 控制器负责。
 

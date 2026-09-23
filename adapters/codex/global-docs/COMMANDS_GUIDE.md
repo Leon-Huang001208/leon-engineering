@@ -6,11 +6,13 @@
 
 ```bash
 node scripts/install-codex-adapter.mjs --install-global --codex-home "$HOME/.codex"
+node scripts/install-codex-adapter.mjs --verify --codex-home "$HOME/.codex"
 node scripts/install-codex-adapter.mjs --verify-global --codex-home "$HOME/.codex"
 node scripts/install-codex-adapter.mjs --rollback-global --codex-home "$HOME/.codex"
+node scripts/install-codex-adapter.mjs --verify --target /absolute/legacy-skill-directory
 ```
 
-`--install-global` 会先拒绝与用户文件冲突的文档或未受管策略区块。`--verify-global` 只读检查策略和六份文档。`--rollback-global` 只在内容未漂移时移除该框架拥有的文档和标记区块；它不会修改技能、插件、模型、MCP、凭据或项目。
+不带 `--target` 的 `--verify` 是当前健康检查：插件分发、全局框架和 Harness runtime 分节返回并合成一个去重 drift 清单；插件化迁移后不会再要求已退役的直接 Skill 目录。显式 `--target` 保留旧版直接 Skill 校验。两种验证均为只读，绝不顺带修复。`--install-global` 会先拒绝与用户文件冲突的文档或未受管策略区块。`--verify-global` 只读检查策略、六份文档和 runtime。`--rollback-global` 只在内容未漂移时移除该框架拥有的文档和标记区块；它不会修改技能、插件、模型、MCP、凭据或项目。
 
 Codex 会在本地宿主进程启动时载入全局 Hook。`--install-global` 成功只证明磁盘上的配置和 runtime 已更新；必须完整重启 Codex 本地宿主进程后，新 Hook 才会激活。重启前即使新建任务也可能继续使用宿主缓存；新建任务不会刷新宿主 Hook，不能把它当作刷新边界。安装器的 JSON 输出会返回 `activation.status=restart_required` 和 `activation.scope=codex_host_process`。
 
@@ -30,6 +32,25 @@ claude plugin list
 ```
 
 技能安装与全局文档安装是独立操作。不要用全局框架命令代替目标项目的测试、lint、构建、浏览器检查或平台验证。实际运行过的命令和结果才可作为交付证据。
+
+## 脱敏 Token 审计
+
+Token 审计只接受一个显式 session JSONL，或一个显式 thread ID 加 session root。它流式统计会话/回合/模型/工具调用、input/cached/non-cached/output/reasoning、工具输出字节分位数、哈希化重复调用、稳定工具分类和每个源文件的 SHA-256；不会返回消息、Prompt、工具参数、命令、路径、输出正文或用户内容：
+
+```bash
+node "$HOME/.agents/leon-engineering/runtime/token-audit.mjs" --session-jsonl /absolute/session.jsonl
+node "$HOME/.agents/leon-engineering/runtime/token-audit.mjs" --thread-id opaque-thread-id --session-root /absolute/session-root --output /absolute/private-report.json
+```
+
+默认 stdout 最多 4 KiB；完整报告只写到显式绝对路径并使用 `0600`。线程扫描拒绝符号链接。损坏或部分 JSONL 返回 `complete:false`、文件序号/行号和非零退出码，不能静默记为零。
+
+## 自动续跑与输出纪律
+
+- 相互独立的只读检查在同一工具边界批量提交；先定位再定点读取，不重复加载已确认的大文件或相同输出。
+- 已知高噪命令把完整 stdout/stderr 留在权限受限的本地日志，模型侧只收结构化摘要、计数、错误、退出码、SHA-256 与精确日志引用；普通回执 ≤4 KiB，显式宽回执 ≤8,000 字节。
+- 仅等待用户授权时不重复运行不能改变决策的诊断。同一阻塞先发一次简洁请求，再做一次无变化审计；达到受管阈值后写入真实 `blocked`，不得用自动续跑制造重复回合。
+- 状态未变化的 heartbeat 静默。重试继续使用现有进程、session、thread cursor、delivery/Harness receipt；不要启动同一工作的副本。
+- 以上规则只减少重复上下文和无效回合，不得隐藏错误、放宽权限、减少测试、跳过 CI/Harness/平台硬门或改变项目验收范围。
 
 ## 已登记 verifier 的观察执行
 

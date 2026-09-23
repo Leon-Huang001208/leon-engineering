@@ -19,16 +19,25 @@ node "$HOME/.agents/leon-engineering/runtime/harness-runtime.mjs" --verify
 node "$HOME/.agents/leon-engineering/runtime/harness-session.mjs" --start --new-task --project /absolute/project --host codex --session-id opaque-task-key --task-id task-id --goal "Outcome" --acceptance "Observable result"
 ```
 
-会话入口创建 `.ai/harness/agent-map.md`、任务记录、轻量 `task-index.jsonl`、`metrics.jsonl`、隐私受限的 `events.jsonl` 和会话上下文。会话文件使用 `host + session ID` 的不可逆摘要隔离 Claude 与 Codex；同宿主旧键会复制到新命名空间后恢复，旧文件保留，异宿主旧记录既不覆盖也不阻止当前宿主建立独立上下文。读取端兼容结构一致的 v1/v2 会话记录，并继续严格校验摘要键、宿主和任务记录；损坏或不匹配记录仍进入只读诊断模式。事件流只记录任务 ID、宿主、事件类别及白名单状态，不记录目标、验收、会话 ID、命令、路径、提示词、源代码或密钥。对未启用强制 Harness 的项目，仍保持原有的预览与明确写入边界。
+会话入口在逻辑 Harness 目录创建 `agent-map.md`、任务记录、轻量 `task-index.jsonl`、`metrics.jsonl`、隐私受限的 `events.jsonl` 和会话上下文。Git 仓库的逻辑目录固定在 Git common dir 的 `leon-engineering/harness/`，主 checkout 是稳定仓库身份，调用方当前 checkout/worktree 是 verifier 的实际执行根；非 Git 项目继续使用 `.ai/harness/`。这样普通功能/集成 worktree 被安全移除后，结果记录、评估和交付硬门仍可从主 checkout 完成。会话文件使用 `host + session ID` 的不可逆摘要隔离 Claude 与 Codex；同宿主旧键会复制到新命名空间后恢复，旧文件保留，异宿主旧记录既不覆盖也不阻止当前宿主建立独立上下文。读取端兼容结构一致的 v1/v2 会话记录，并继续严格校验摘要键、宿主和任务记录；损坏或不匹配记录仍进入只读诊断模式。事件流只记录任务 ID、宿主、事件类别及白名单状态，不记录目标、验收、会话 ID、命令、路径、提示词、源代码或密钥。对未启用强制 Harness 的项目，仍保持原有的预览与明确写入边界。
 
-Agent Map 同时生成 `.ai/harness/verifiers.json`。每个已知非交互 verifier 都有稳定 verifier ID、命令、相对工作目录、来源和参数数组；只有该机器清单中的 ID 可由观察执行层运行。深模块公开 `runObserved(spec)` 与 `readObservation(query)`，薄 CLI 只接受 verifier ID 或 observation ID：
+Git 仓库升级前若已有项目内 `.ai/harness/`，运行时会拒绝建立第二份账本。先只读预览，再显式迁移；迁移逐文件哈希校验并保留旧目录，不自动删除：
+
+```bash
+node "$HOME/.agents/leon-engineering/runtime/harness-storage.mjs" --preview --project /absolute/project
+node "$HOME/.agents/leon-engineering/runtime/harness-storage.mjs" --migrate --project /absolute/project
+```
+
+符号链接、不可读记录、路径逃逸或内容不同的同名任务都会 fail closed。成功迁移写入版本化 manifest 与 rollback map，目录权限为 `0700`、文件权限为 `0600`。旧目录仍存在期间，运行时持续校验 manifest 与旧源快照；无 manifest 的双账本或被改写的旧源不得继续使用。
+
+Agent Map 同时在逻辑 Harness 目录生成 `verifiers.json`。每个已知非交互 verifier 都有稳定 verifier ID、命令、相对工作目录、来源和参数数组；只有该机器清单中的 ID 可由观察执行层运行。深模块公开 `runObserved(spec)` 与 `readObservation(query)`，薄 CLI 只接受 verifier ID 或 observation ID：
 
 ```bash
 node "$HOME/.agents/leon-engineering/runtime/harness-run.mjs" --project /absolute/project --task-id task-id --verifier-id verifier-test-0123456789ab
 node "$HOME/.agents/leon-engineering/runtime/harness-run.mjs" --project /absolute/project --task-id task-id --read-observation observation-0123456789abcdef01234567
 ```
 
-未登记命令继续使用宿主原生 `exec_command`，不得把命令动态写入 verifier 清单来绕过边界。观察层把完整 stdout/stderr 以 `0600` 保存在 `.ai/harness/logs/<task-id>/`，拒绝符号链接与路径穿越且不自动删除。普通调用最多返回 4 KiB；只有显式 `wideReceipt: true` 才放宽到 8 KiB。超过预算时返回含头、尾、错误上下文、SHA-256和日志引用的去重短回执；错误状态、退出码和超时原因不得省略。疑似秘密不进入模型可见回执或回查；原文只保存在本地。主归档失败时使用持久本地 fallback 保留证据。
+未登记命令继续使用宿主原生 `exec_command`，不得把命令动态写入 verifier 清单来绕过边界。观察层把完整 stdout/stderr 以 `0600` 保存在逻辑目录的 `logs/<task-id>/`，拒绝符号链接与路径穿越且不自动删除。普通调用最多返回 4 KiB；只有显式 `wideReceipt: true` 才放宽到 8 KiB。超过预算时返回含头、尾、错误上下文、SHA-256和日志引用的去重短回执；错误状态、退出码和超时原因不得省略。疑似秘密不进入模型可见回执或回查；原文只保存在本地。主归档失败时使用持久本地 fallback 保留证据。
 
 `metrics.jsonl` 的 `observation_recorded` 与 `observation_recalled` 只保存 verifier ID、状态、耗时、字节量、截断、归档失败标记和回查次数，不保存命令正文、日志引用、哈希或输出。评估器据此报告样本量、返回字节比、回查率、归档失败率及重复 verifier 的结果一致率。
 
@@ -73,7 +82,7 @@ node "$HOME/.agents/leon-engineering/runtime/verification-plan.mjs" --project /a
 node "$HOME/.agents/leon-engineering/runtime/harness-control.mjs" --project /absolute/project --task-plan /absolute/project/control-plan.json
 ```
 
-只有该项目的写入已获授权时，才可加入 `--write-control-plane`。它把 DAG、状态、尝试次数、事件和执行者已经创建的 worktree 定位信息保存为 `.ai/harness/control-plane.json`。后续转换、重试和登记均是独立的显式命令；`--retry` 绝不自动执行。
+只有该项目的写入已获授权时，才可加入 `--write-control-plane`。它把 DAG、状态、尝试次数、事件和执行者已经创建的 worktree 定位信息保存为逻辑 Harness 目录的 `control-plane.json`。后续转换、重试和登记均是独立的显式命令；`--retry` 绝不自动执行。
 
 ```bash
 node "$HOME/.agents/leon-engineering/runtime/harness-control.mjs" --project /absolute/project --transition --task-id implement --status in_progress --reason "执行者开始处理"
@@ -91,4 +100,4 @@ node "$HOME/.agents/leon-engineering/runtime/harness-control.mjs" --project /abs
 node "$HOME/.agents/leon-engineering/runtime/harness-project.mjs" --project /absolute/project --refresh-agent-map
 ```
 
-该操作仅重写 `.ai/harness/agent-map.md` 并追加 `agent_map_refreshed` 事件；不得删除、替换或伪造任务结果和指标账本。
+该操作仅重写逻辑 Harness 目录的 `agent-map.md` 并追加 `agent_map_refreshed` 事件；不得删除、替换或伪造任务结果和指标账本。

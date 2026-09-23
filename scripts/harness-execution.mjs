@@ -4,22 +4,15 @@ import os from "node:os";
 import path from "node:path";
 import {spawn} from "node:child_process";
 import {readHarnessTask, VERIFIERS_FILENAME} from "./harness-project.mjs";
+import {resolveHarnessStorage} from "./harness-storage.mjs";
 
-const HARNESS_RELATIVE = path.posix.join(".ai", "harness");
-const LOGS_RELATIVE = path.posix.join(HARNESS_RELATIVE, "logs");
+const LOGS_RELATIVE = "logs";
 const DEFAULT_VISIBLE_BYTES = 4 * 1024;
 const WIDE_VISIBLE_BYTES = 8 * 1024;
 const SECRET_PATTERN = /(?:api[_-]?key|access[_-]?token|auth[_-]?token|password|passwd|client[_-]?secret|private[_-]?key)\s*[:=]\s*[^\s]+|\bBearer\s+[A-Za-z0-9._~+\/-]{8,}|\b(?:AKIA|ASIA)[A-Z0-9]{16}\b|\bgh[pousr]_[A-Za-z0-9]{20,}\b|\bsk-[A-Za-z0-9_-]{20,}\b/i;
 
 function isWithin(root, candidate) {
   return candidate === root || candidate.startsWith(`${root}${path.sep}`);
-}
-
-function resolveProjectRoot(projectRoot) {
-  if (typeof projectRoot !== "string" || projectRoot.length === 0) throw new Error("project root is required");
-  const root = fs.realpathSync(projectRoot);
-  if (!fs.statSync(root).isDirectory()) throw new Error("invalid project root");
-  return root;
 }
 
 function assertId(value, field, pattern) {
@@ -41,15 +34,16 @@ function assertSafeExistingFile(root, relative, description) {
   return file;
 }
 
-function readVerifier(root, verifierId) {
-  const file = assertSafeExistingFile(root, path.posix.join(HARNESS_RELATIVE, VERIFIERS_FILENAME), "verifier manifest");
+function readVerifier(harnessRoot, workspaceRoot, verifierId) {
+  const file = assertSafeExistingFile(harnessRoot, VERIFIERS_FILENAME, "verifier manifest");
   let manifest;
   try {
     manifest = JSON.parse(fs.readFileSync(file, "utf8"));
   } catch {
     throw new Error("invalid verifier manifest");
   }
-  if (manifest?.schemaVersion !== 1 || manifest.projectRoot !== root || !Array.isArray(manifest.verifiers)) {
+  if (manifest?.schemaVersion !== 1 || typeof manifest.projectRoot !== "string" || !path.isAbsolute(manifest.projectRoot)
+    || !Array.isArray(manifest.verifiers)) {
     throw new Error("invalid verifier manifest");
   }
   const verifier = manifest.verifiers.find(item => item?.id === verifierId);
@@ -64,7 +58,7 @@ function readVerifier(root, verifierId) {
     .update(`${verifier.command}\0${verifier.workingDirectory}\0${verifier.source}`)
     .digest("hex").slice(0, 12)}`;
   if (verifier.id !== expectedId || verifier.argv.join(" ") !== verifier.command) throw new Error("invalid verifier manifest");
-  assertSafeExistingFile(root, verifier.source, "verifier source");
+  assertSafeExistingFile(workspaceRoot, verifier.source, "verifier source");
   return verifier;
 }
 
@@ -181,7 +175,7 @@ function isUnsafeArchiveError(error) {
 }
 
 function appendObservationMetric(root, metric) {
-  const file = assertSafeExistingFile(root, path.posix.join(HARNESS_RELATIVE, "metrics.jsonl"), "harness metrics");
+  const file = assertSafeExistingFile(root, "metrics.jsonl", "harness metrics");
   fs.appendFileSync(file, `${JSON.stringify({timestamp: new Date().toISOString(), ...metric})}\n`, {mode: 0o600});
 }
 
@@ -350,12 +344,15 @@ function fallbackObservationFiles(root, taskId, observationId) {
 
 export async function runObserved(spec, dependencies = {}) {
   if (!spec || typeof spec !== "object" || Array.isArray(spec)) throw new Error("observation spec is required");
-  const root = resolveProjectRoot(spec.projectRoot);
+  const storage = resolveHarnessStorage({projectRoot: spec.projectRoot});
+  const root = storage.projectRoot;
+  const workspaceRoot = storage.workspaceRoot;
+  const harnessRoot = storage.directory;
   const taskId = assertId(spec.taskId, "task id", /^[a-z0-9][a-z0-9-]{0,79}$/);
   const verifierId = assertId(spec.verifierId, "verifier id", /^verifier-[a-z0-9-]+-[a-f0-9]{12}$/);
   readHarnessTask({projectRoot: root, taskId});
-  const verifier = readVerifier(root, verifierId);
-  const cwd = resolveWorkingDirectory(root, verifier.workingDirectory);
+  const verifier = readVerifier(harnessRoot, workspaceRoot, verifierId);
+  const cwd = resolveWorkingDirectory(workspaceRoot, verifier.workingDirectory);
   if (spec.timeoutMs !== undefined && (!Number.isInteger(spec.timeoutMs) || spec.timeoutMs < 1 || spec.timeoutMs > 3_600_000)) {
     throw new Error("invalid timeout");
   }
@@ -395,7 +392,7 @@ export async function runObserved(spec, dependencies = {}) {
   let archiveFiles;
   try {
     archiveFiles = (dependencies.archiveWriter ?? archiveObservation)({
-      root, taskId, observationId, stdout: executed.stdout, stderr: executed.stderr, metadata
+      root: harnessRoot, taskId, observationId, stdout: executed.stdout, stderr: executed.stderr, metadata
     });
   } catch (error) {
     if (isUnsafeArchiveError(error)) throw error;
@@ -416,7 +413,7 @@ export async function runObserved(spec, dependencies = {}) {
       metadata
     });
   }
-  appendObservationMetric(root, {
+  appendObservationMetric(harnessRoot, {
     event: "observation_recorded",
     taskId,
     verifierId,
@@ -437,7 +434,9 @@ export async function runObserved(spec, dependencies = {}) {
 
 export function readObservation(query) {
   if (!query || typeof query !== "object" || Array.isArray(query)) throw new Error("observation query is required");
-  const root = resolveProjectRoot(query.projectRoot);
+  const storage = resolveHarnessStorage({projectRoot: query.projectRoot});
+  const root = storage.projectRoot;
+  const harnessRoot = storage.directory;
   const taskId = assertId(query.taskId, "task id", /^[a-z0-9][a-z0-9-]{0,79}$/);
   const observationId = assertId(query.observationId, "observation id", /^observation-[a-f0-9]{24}$/);
   if (query.wideReceipt !== undefined && typeof query.wideReceipt !== "boolean") throw new Error("invalid wide receipt flag");
@@ -445,7 +444,7 @@ export function readObservation(query) {
   readHarnessTask({projectRoot: root, taskId});
   let files;
   try {
-    files = observationFiles(root, taskId, observationId);
+    files = observationFiles(harnessRoot, taskId, observationId);
   } catch (error) {
     if (!/missing observation/.test(error.message)) throw error;
     try {
@@ -477,7 +476,7 @@ export function readObservation(query) {
   const finalized = finalizeModelOutput(metadata, stdout, stderr, logRef, visibleLimit);
   metadata = finalized.metadata;
   const visible = finalized.visible;
-  appendObservationMetric(root, {
+  appendObservationMetric(harnessRoot, {
     event: "observation_recalled",
     taskId,
     verifierId: metadata.verifierId,
