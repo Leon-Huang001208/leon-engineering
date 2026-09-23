@@ -28,6 +28,7 @@ test("installs a verified Harness runtime that can preview a real project", t =>
   assert.ok(HARNESS_RUNTIME_FILES.includes("harness-storage.mjs"));
   assert.ok(HARNESS_RUNTIME_FILES.includes("token-audit.mjs"));
   assert.ok(HARNESS_RUNTIME_FILES.includes("skill-portfolio.mjs"));
+  assert.ok(HARNESS_RUNTIME_FILES.includes("codex-profile.mjs"));
   assert.ok(HARNESS_RUNTIME_FILES.includes("harness-execution.mjs"));
   assert.ok(HARNESS_RUNTIME_FILES.includes("harness-run.mjs"));
   assert.ok(HARNESS_RUNTIME_FILES.includes("verification-plan.mjs"));
