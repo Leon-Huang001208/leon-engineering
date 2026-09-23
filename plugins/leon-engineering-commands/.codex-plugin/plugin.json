@@ -1,0 +1,16 @@
+{
+  "name": "leon-engineering-commands",
+  "version": "0.19.3",
+  "description": "Optional migrated source-command wrappers",
+  "author": {"name": "Leon"},
+  "license": "UNLICENSED",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Leon Engineering Commands",
+    "shortDescription": "Optional low-frequency command wrappers",
+    "longDescription": "Migrated source-command wrappers kept outside default global Skill discovery.",
+    "developerName": "Leon",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write", "Reasoning"]
+  }
+}

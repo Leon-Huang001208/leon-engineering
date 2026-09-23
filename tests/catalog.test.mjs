@@ -184,10 +184,51 @@ test("splits the plugin catalog into a compatible core and opt-in workflows exte
   );
   assert.deepEqual(marketplace.plugins.map(plugin => plugin.name), [
     "leon-engineering",
-    "leon-engineering-workflows"
+    "leon-engineering-workflows",
+    "leon-engineering-commands"
   ]);
   assert.equal(marketplace.plugins[1].source, "./plugins/leon-engineering-workflows");
-  assert.ok(marketplace.plugins.every(plugin => plugin.version === "0.19.2"));
+  assert.ok(marketplace.plugins.slice(0, 2).every(plugin => plugin.version === "0.19.2"));
+});
+
+test("packages mapped source commands in a default-disabled optional plugin", () => {
+  const pluginRoot = path.join(root, "plugins", "leon-engineering-commands");
+  const codex = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".codex-plugin", "plugin.json"), "utf8"));
+  const claude = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".claude-plugin", "plugin.json"), "utf8"));
+  const commandMap = JSON.parse(fs.readFileSync(path.join(pluginRoot, "command-map.json"), "utf8"));
+  const marketplace = JSON.parse(fs.readFileSync(path.join(root, ".claude-plugin", "marketplace.json"), "utf8"));
+  const directories = fs.readdirSync(path.join(pluginRoot, "skills"), {withFileTypes: true})
+    .filter(entry => entry.isDirectory()).map(entry => entry.name).sort();
+
+  assert.equal(codex.name, "leon-engineering-commands");
+  assert.equal(claude.name, "leon-engineering-commands");
+  assert.equal(codex.version, "0.19.3");
+  assert.equal(claude.version, "0.19.3");
+  assert.deepEqual(codex.skills, "./skills/");
+  assert.deepEqual(claude.skills, ["./skills/"]);
+  assert.equal(commandMap.schemaVersion, 1);
+  assert.deepEqual(commandMap.commands.map(item => item.name).sort(), directories);
+  assert.equal(commandMap.commands.length, 42);
+  assert.ok(commandMap.commands.every(item => ["self-contained", "agent"].includes(item.kind) && typeof item.target === "string" && item.target.length > 0));
+  assert.deepEqual(commandMap.quarantined, [
+    {name: "source-command-hello", reason: "retired-placeholder"},
+    {name: "source-command-jira", reason: "missing-jira-integration-capability"}
+  ]);
+  assert.equal(directories.includes("source-command-hello"), false);
+  assert.equal(directories.includes("source-command-jira"), false);
+  for (const name of directories) {
+    const source = fs.readFileSync(path.join(pluginRoot, "skills", name, "SKILL.md"), "utf8");
+    const metadata = frontmatter(source);
+    assert.equal(metadata.name.replace(/^"|"$/g, ""), name);
+    assert.match(metadata.description, /\S/);
+  }
+  const entry = marketplace.plugins.find(plugin => plugin.name === "leon-engineering-commands");
+  assert.deepEqual(entry, {
+    name: "leon-engineering-commands",
+    source: "./plugins/leon-engineering-commands",
+    description: "Optional migrated source-command wrappers",
+    version: "0.19.3"
+  });
 });
 
 test("defines a stable project profile schema", () => {

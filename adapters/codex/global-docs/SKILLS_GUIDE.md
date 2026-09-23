@@ -42,6 +42,8 @@ node "$HOME/.agents/leon-engineering/runtime/skill-portfolio.mjs" --apply --mani
 node "$HOME/.agents/leon-engineering/runtime/skill-portfolio.mjs" --rollback --receipt /absolute/receipt.json
 ```
 
+项目专属或陈旧 Skill 可用 manifest 的 `kind: "quarantine"` 省略 canonical，但仍必须固定完整源树哈希并保留同样的私有备份/回滚门。复制到项目时只使用受测 sanitizer：排除环境/配置、锁、日志、输出、缓存、Chroma/SQLite、二进制索引和数据表，并在写入前拒绝 included 文本中的 literal secret。项目副本验证完成后，才可隔离全局源。
+
 `project-adapter` 的输出是路径证据与候选命令，不是已执行的测试结果。它默认不写入项目；持久化档案需要针对该项目的明确授权。
 
 `project-harness` 对未启用强制协议的项目保持默认只读；对用户已经启用强制 Harness 的目标项目，Agent 必须自动开始或恢复任务，无需逐项要求用户运行命令。结果记录只接受已观察到的验证状态，不能把候选命令或未运行检查写成通过；`harness-enforce` 是跨宿主的只读交付硬门。对已初始化 Harness 的依赖任务、显式重试或中断恢复，P2 控制平面先预览任务 DAG；它只保存状态和已存在 worktree 的定位信息，不创建 worktree、不自动重试，也不运行 Git、测试、构建或任务命令。

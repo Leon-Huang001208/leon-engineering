@@ -13,6 +13,12 @@
       "source": "./plugins/leon-engineering-workflows",
       "description": "Optional reasoning and specialist engineering workflows",
       "version": "0.19.2"
+    },
+    {
+      "name": "leon-engineering-commands",
+      "source": "./plugins/leon-engineering-commands",
+      "description": "Optional migrated source-command wrappers",
+      "version": "0.19.3"
     }
   ]
 }
