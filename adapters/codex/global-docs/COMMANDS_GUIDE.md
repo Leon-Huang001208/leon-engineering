@@ -16,7 +16,7 @@ node scripts/install-codex-adapter.mjs --verify --target /absolute/legacy-skill-
 
 Codex 会在本地宿主进程启动时载入全局 Hook。`--install-global` 成功只证明磁盘上的配置和 runtime 已更新；必须完整重启 Codex 本地宿主进程后，新 Hook 才会激活。重启前即使新建任务也可能继续使用宿主缓存；新建任务不会刷新宿主 Hook，不能把它当作刷新边界。安装器的 JSON 输出会返回 `activation.status=restart_required` 和 `activation.scope=codex_host_process`。
 
-受管 `hooks.json` 若只剩规范模板中完全一致的事件子集，安装器可补回缺失的受管事件；任何额外事件、matcher 或命令仍按外来漂移拒绝覆盖。
+受管 manifest 仍完整但 `hooks.json` 整体缺失时，安装器可重建规范 Hook；文件存在且只剩规范模板中完全一致的事件子集时，也可补回缺失的受管事件。任何额外事件、matcher 或命令仍按外来漂移拒绝覆盖。
 
 Harness 初始化故障时，Hook 只允许受控的只读诊断命令，并在拒绝原因中返回 `stage`、`code`、runtime/manifest 路径和恢复命令。先执行其中的 runtime 校验；校验失败后只能从权威框架源重新安装，不得直接维护安装副本：
 
