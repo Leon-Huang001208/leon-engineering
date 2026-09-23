@@ -90,6 +90,94 @@ function auditCanonicalTree(directory) {
   return auditSkillTree(stat.isSymbolicLink() ? fs.realpathSync(canonical) : canonical);
 }
 
+const SANITIZED_EXCLUDED_SEGMENTS = new Set([
+  ".env", ".pytest_cache", "__pycache__", "chroma_db", "data", "logs", "log", "output", "outputs", "test_output"
+]);
+const SANITIZED_EXCLUDED_FILES = new Set(["config.yaml", "config.yml", "update-state.json"]);
+const SANITIZED_EXCLUDED_EXTENSIONS = new Set([".bin", ".lock", ".log", ".pyc", ".sqlite3", ".xlsx"]);
+const LITERAL_SECRET = /\b(?:api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|password|private[_-]?key)\b\s*[:=]\s*["'](?!example|placeholder|your_|<)[^"']{8,}["']/i;
+
+function shouldExcludeSanitized(relative) {
+  const portable = relative.split(path.sep).join("/");
+  const segments = portable.split("/");
+  const basename = segments.at(-1);
+  return segments.some(segment => SANITIZED_EXCLUDED_SEGMENTS.has(segment))
+    || SANITIZED_EXCLUDED_FILES.has(basename)
+    || SANITIZED_EXCLUDED_EXTENSIONS.has(path.extname(basename));
+}
+
+export function copySanitizedSkill({source, destination}) {
+  const sourceRoot = assertAbsolute(source, "source Skill");
+  const destinationRoot = assertAbsolute(destination, "destination Skill");
+  if (fs.existsSync(destinationRoot)) throw new Error("destination Skill already exists");
+  const rootStat = fs.lstatSync(sourceRoot);
+  if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) throw new Error("invalid source Skill");
+  const included = [];
+  const excluded = [];
+
+  function visit(relativeDirectory) {
+    const directory = path.join(sourceRoot, relativeDirectory);
+    for (const entry of fs.readdirSync(directory, {withFileTypes: true}).sort((left, right) => left.name.localeCompare(right.name))) {
+      const relative = path.join(relativeDirectory, entry.name);
+      const portable = relative.split(path.sep).join("/");
+      const absolute = path.join(sourceRoot, relative);
+      const stat = fs.lstatSync(absolute);
+      if (stat.isSymbolicLink()) throw new Error(`source Skill contains a symbolic link: ${portable}`);
+      if (entry.isDirectory()) {
+        if (shouldExcludeSanitized(relative)) {
+          for (const nested of enumerateRelativeFiles(absolute, portable)) excluded.push(nested);
+        } else visit(relative);
+      } else if (entry.isFile()) {
+        if (shouldExcludeSanitized(relative)) {
+          excluded.push(portable);
+          continue;
+        }
+        const content = fs.readFileSync(absolute);
+        if (content.length <= 2_000_000 && LITERAL_SECRET.test(content.toString("utf8"))) {
+          throw new Error(`included source contains a literal secret: ${portable}`);
+        }
+        included.push({path: portable, source: absolute, mode: stat.mode & 0o777});
+      } else throw new Error(`source Skill contains an unsupported entry: ${portable}`);
+    }
+  }
+
+  function enumerateRelativeFiles(directory, prefix) {
+    const files = [];
+    for (const entry of fs.readdirSync(directory, {withFileTypes: true}).sort((left, right) => left.name.localeCompare(right.name))) {
+      const portable = `${prefix}/${entry.name}`;
+      const absolute = path.join(directory, entry.name);
+      const stat = fs.lstatSync(absolute);
+      if (stat.isSymbolicLink()) throw new Error(`source Skill contains a symbolic link: ${portable}`);
+      if (entry.isDirectory()) files.push(...enumerateRelativeFiles(absolute, portable));
+      else if (entry.isFile()) files.push(portable);
+      else throw new Error(`source Skill contains an unsupported entry: ${portable}`);
+    }
+    return files;
+  }
+
+  visit("");
+  if (!included.some(file => file.path === "SKILL.md")) throw new Error("sanitized Skill is missing SKILL.md");
+  try {
+    for (const file of included) {
+      const target = path.join(destinationRoot, file.path);
+      fs.mkdirSync(path.dirname(target), {recursive: true});
+      fs.copyFileSync(file.source, target, fs.constants.COPYFILE_EXCL);
+      fs.chmodSync(target, file.mode);
+    }
+    const audit = auditSkillTree(destinationRoot);
+    return {
+      treeHash: audit.treeHash,
+      fileCount: audit.fileCount,
+      bytes: audit.bytes,
+      included: included.map(file => file.path).sort(),
+      excluded: excluded.sort()
+    };
+  } catch (error) {
+    fs.rmSync(destinationRoot, {recursive: true, force: true});
+    throw error;
+  }
+}
+
 function readJson(file, description) {
   const resolved = assertAbsolute(file, description);
   const stat = fs.lstatSync(resolved);
@@ -110,16 +198,19 @@ function readManifest(manifestPath) {
   const receiptPath = assertAbsolute(value.receiptPath, "receipt path");
   const ids = new Set();
   const actions = value.actions.map(action => {
+    const kind = action?.kind ?? "exact-duplicate";
     if (!action || typeof action !== "object" || Array.isArray(action)
       || typeof action.id !== "string" || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(action.id)
-      || ids.has(action.id) || !/^[0-9a-f]{64}$/.test(action.expectedTreeHash ?? "")) {
+      || ids.has(action.id) || !new Set(["exact-duplicate", "quarantine"]).has(kind)
+      || !/^[0-9a-f]{64}$/.test(action.expectedTreeHash ?? "")) {
       throw new Error("invalid portfolio action");
     }
     ids.add(action.id);
     return {
       id: action.id,
+      kind,
       source: assertAbsolute(action.source, "action source"),
-      canonical: assertAbsolute(action.canonical, "canonical Skill"),
+      canonical: kind === "quarantine" ? null : assertAbsolute(action.canonical, "canonical Skill"),
       backup: path.join(backupRoot, action.id),
       expectedTreeHash: action.expectedTreeHash
     };
@@ -139,16 +230,19 @@ export function previewSkillPortfolio({manifestPath}) {
     } catch {
       conflicts.push(`${action.id}:invalid-source`);
     }
-    try {
-      canonicalAudit = auditCanonicalTree(action.canonical);
-    } catch {
-      conflicts.push(`${action.id}:invalid-canonical`);
+    if (action.canonical) {
+      try {
+        canonicalAudit = auditCanonicalTree(action.canonical);
+      } catch {
+        conflicts.push(`${action.id}:invalid-canonical`);
+      }
     }
     if (sourceAudit && sourceAudit.treeHash !== action.expectedTreeHash) conflicts.push(`${action.id}:source-hash`);
     if (canonicalAudit && canonicalAudit.treeHash !== action.expectedTreeHash) conflicts.push(`${action.id}:canonical-hash`);
     if (fs.existsSync(action.backup)) conflicts.push(`${action.id}:backup-exists`);
     actions.push({
       id: action.id,
+      kind: action.kind,
       treeHash: action.expectedTreeHash,
       fileCount: sourceAudit?.fileCount ?? 0,
       bytes: sourceAudit?.bytes ?? 0
@@ -188,6 +282,7 @@ export function applySkillPortfolio({manifestPath}) {
       appliedAt: new Date().toISOString(),
       actions: moved.map(action => ({
         id: action.id,
+        kind: action.kind,
         source: action.source,
         canonical: action.canonical,
         backup: action.backup,
@@ -211,11 +306,13 @@ function readReceipt(receiptPath) {
   }
   const actions = value.actions.map(action => {
     if (!action || typeof action !== "object" || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(action.id ?? "")
+      || !new Set(["exact-duplicate", "quarantine"]).has(action.kind ?? "exact-duplicate")
       || !/^[0-9a-f]{64}$/.test(action.treeHash ?? "")) throw new Error("invalid portfolio receipt");
     return {
       id: action.id,
+      kind: action.kind ?? "exact-duplicate",
       source: assertAbsolute(action.source, "receipt source"),
-      canonical: assertAbsolute(action.canonical, "receipt canonical"),
+      canonical: action.canonical === null ? null : assertAbsolute(action.canonical, "receipt canonical"),
       backup: assertAbsolute(action.backup, "receipt backup"),
       treeHash: action.treeHash
     };
@@ -230,7 +327,7 @@ export function rollbackSkillPortfolio({receiptPath}) {
     if (fs.existsSync(action.source)) conflicts.push(`${action.id}:source-exists`);
     try {
       if (auditSkillTree(action.backup).treeHash !== action.treeHash) conflicts.push(`${action.id}:backup-hash`);
-      if (auditCanonicalTree(action.canonical).treeHash !== action.treeHash) conflicts.push(`${action.id}:canonical-hash`);
+      if (action.canonical && auditCanonicalTree(action.canonical).treeHash !== action.treeHash) conflicts.push(`${action.id}:canonical-hash`);
     } catch {
       conflicts.push(`${action.id}:invalid-tree`);
     }

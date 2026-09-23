@@ -5,6 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   auditSkillTree,
+  copySanitizedSkill,
   previewSkillPortfolio,
   applySkillPortfolio,
   rollbackSkillPortfolio
@@ -158,4 +159,65 @@ test("rollback refuses a recreated source or drifted backup", t => {
   fs.rmdirSync(source);
   fs.appendFileSync(path.join(backupRoot, "duplicate", "SKILL.md"), "drift\n");
   assert.throws(() => rollbackSkillPortfolio({receiptPath}), /rollback preflight failed/);
+});
+
+test("copies a sanitized project Skill without credentials or runtime state", t => {
+  const root = makeRoot(t);
+  const source = path.join(root, "global", "project-skill");
+  const destination = path.join(root, "project", "project-skill");
+  writeSkill(source, "project-skill");
+  fs.mkdirSync(path.join(source, "scripts", "__pycache__"), {recursive: true});
+  fs.mkdirSync(path.join(source, "logs"), {recursive: true});
+  fs.mkdirSync(path.join(source, "output"), {recursive: true});
+  fs.mkdirSync(path.join(source, "data"), {recursive: true});
+  fs.writeFileSync(path.join(source, "scripts", "run.py"), "print('ok')\n");
+  fs.writeFileSync(path.join(source, "scripts", "__pycache__", "run.pyc"), "compiled");
+  fs.writeFileSync(path.join(source, "logs", "run.log"), "state");
+  fs.writeFileSync(path.join(source, "output", "result.json"), "{}");
+  fs.writeFileSync(path.join(source, "data", "sample.xlsx"), "binary");
+  fs.writeFileSync(path.join(source, ".env"), "SECRET_VALUE=PRIVATE_ENV_CANARY");
+  fs.writeFileSync(path.join(source, "config.yaml"), "token: PRIVATE_CONFIG_CANARY\n");
+  fs.writeFileSync(path.join(source, "runtime.lock"), "locked");
+
+  const result = copySanitizedSkill({source, destination});
+
+  assert.deepEqual(result.included, ["SKILL.md", "references/guide.md", "scripts/run.py"]);
+  assert.equal(result.excluded.length, 7);
+  assert.equal(fs.existsSync(path.join(destination, "scripts", "run.py")), true);
+  assert.equal(fs.existsSync(path.join(destination, ".env")), false);
+  assert.equal(fs.existsSync(path.join(destination, "config.yaml")), false);
+  const rendered = JSON.stringify(result) + fs.readFileSync(path.join(destination, "SKILL.md"), "utf8");
+  assert.doesNotMatch(rendered, /PRIVATE_ENV_CANARY|PRIVATE_CONFIG_CANARY/);
+});
+
+test("sanitized copy refuses a literal secret in an included source file", t => {
+  const root = makeRoot(t);
+  const source = path.join(root, "global", "secret-skill");
+  const destination = path.join(root, "project", "secret-skill");
+  writeSkill(source, "secret-skill");
+  fs.writeFileSync(path.join(source, "script.py"), 'API_KEY = "PRIVATE_LITERAL_SECRET_123456"\n');
+
+  assert.throws(() => copySanitizedSkill({source, destination}), /literal secret/);
+  assert.equal(fs.existsSync(destination), false);
+});
+
+test("quarantines a hash-pinned project Skill without claiming an exact canonical copy", t => {
+  const root = makeRoot(t);
+  const source = path.join(root, "skills", "project-only");
+  writeSkill(source, "project-only");
+  const audit = auditSkillTree(source);
+  const {file, backupRoot, receiptPath} = writeManifest(root, [{
+    id: "project-only",
+    kind: "quarantine",
+    source,
+    expectedTreeHash: audit.treeHash
+  }]);
+
+  assert.equal(previewSkillPortfolio({manifestPath: file}).valid, true);
+  const applied = applySkillPortfolio({manifestPath: file});
+  assert.equal(applied.actions[0].canonical, null);
+  assert.equal(fs.existsSync(source), false);
+  assert.equal(auditSkillTree(path.join(backupRoot, "project-only")).treeHash, audit.treeHash);
+  rollbackSkillPortfolio({receiptPath});
+  assert.equal(auditSkillTree(source).treeHash, audit.treeHash);
 });
