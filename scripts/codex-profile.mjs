@@ -126,11 +126,12 @@ function atomicWrite(file, content, mode = 0o600) {
   }
 }
 
-export function applyProfile({configPath, profilePath, backupPath, receiptPath}) {
+export function applyProfile({configPath, profilePath, backupPath, receiptPath}, dependencies = {}) {
   const configFile = absoluteFile(configPath, "config path");
   const profile = readProfile(profilePath);
   const backupFile = absoluteFile(backupPath, "backup path", {mustExist: false});
   const receiptFile = absoluteFile(receiptPath, "receipt path", {mustExist: false});
+  if (backupFile === receiptFile) throw new Error("backup and receipt paths must differ");
   if (fs.existsSync(backupFile)) throw new Error("backup already exists");
   if (fs.existsSync(receiptFile)) throw new Error("receipt already exists");
   const current = fs.readFileSync(configFile, "utf8");
@@ -138,19 +139,25 @@ export function applyProfile({configPath, profilePath, backupPath, receiptPath})
   if (rendered.changes.length === 0) throw new Error("profile produces no changes");
   ensurePrivateParent(backupFile);
   fs.writeFileSync(backupFile, current, {flag: "wx", mode: 0o600});
-  atomicWrite(configFile, rendered.content);
-  if (fs.readFileSync(configFile, "utf8") !== rendered.content) throw new Error("profile readback failed");
-  const receipt = {
-    schemaVersion: 1,
-    status: "applied",
-    originalSha256: sha256(current),
-    appliedSha256: sha256(rendered.content),
-    profileSha256: sha256(fs.readFileSync(profile.file)),
-    changes: rendered.changes,
-    appliedAt: new Date().toISOString()
-  };
-  atomicWrite(receiptFile, `${JSON.stringify(receipt, null, 2)}\n`);
-  return receipt;
+  try {
+    atomicWrite(configFile, rendered.content);
+    if (fs.readFileSync(configFile, "utf8") !== rendered.content) throw new Error("profile readback failed");
+    const receipt = {
+      schemaVersion: 1,
+      status: "applied",
+      originalSha256: sha256(current),
+      appliedSha256: sha256(rendered.content),
+      profileSha256: sha256(fs.readFileSync(profile.file)),
+      changes: rendered.changes,
+      appliedAt: new Date().toISOString()
+    };
+    dependencies.beforeReceipt?.(receipt);
+    atomicWrite(receiptFile, `${JSON.stringify(receipt, null, 2)}\n`);
+    return receipt;
+  } catch (error) {
+    atomicWrite(configFile, current);
+    throw error;
+  }
 }
 
 function readReceipt(receiptPath) {

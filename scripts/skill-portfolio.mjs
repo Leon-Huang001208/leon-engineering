@@ -262,7 +262,7 @@ export function previewSkillPortfolio({manifestPath}) {
   };
 }
 
-export function applySkillPortfolio({manifestPath}) {
+export function applySkillPortfolio({manifestPath}, dependencies = {}) {
   const manifest = readManifest(manifestPath);
   const preview = previewSkillPortfolio({manifestPath});
   if (!preview.valid) throw new Error(`portfolio preflight failed: ${preview.conflicts.join(", ")}`);
@@ -271,9 +271,10 @@ export function applySkillPortfolio({manifestPath}) {
   try {
     for (const action of manifest.actions) {
       fs.renameSync(action.source, action.backup);
+      moved.push(action);
+      dependencies.afterMove?.(action);
       const backupAudit = auditSkillTree(action.backup);
       if (backupAudit.treeHash !== action.expectedTreeHash) throw new Error(`backup verification failed: ${action.id}`);
-      moved.push(action);
     }
     const receipt = {
       schemaVersion: 1,

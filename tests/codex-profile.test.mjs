@@ -96,6 +96,28 @@ test("refuses stale apply and rollback state", t => {
   }), /current config drifted/);
 });
 
+test("rejects overlapping backup and receipt paths", t => {
+  const fixture = makeFixture(t);
+  assert.throws(() => applyProfile({
+    ...fixture,
+    backupPath: fixture.receiptPath,
+    receiptPath: fixture.receiptPath
+  }), /backup and receipt paths must differ/);
+  assert.equal(fs.readFileSync(fixture.configPath, "utf8"), fixture.original);
+  assert.equal(fs.existsSync(fixture.receiptPath), false);
+});
+
+test("restores the original config if receipt publication fails", t => {
+  const fixture = makeFixture(t);
+  assert.throws(
+    () => applyProfile(fixture, {beforeReceipt: () => { throw new Error("injected receipt failure"); }}),
+    /injected receipt failure/
+  );
+  assert.equal(fs.readFileSync(fixture.configPath, "utf8"), fixture.original);
+  assert.equal(fs.readFileSync(fixture.backupPath, "utf8"), fixture.original);
+  assert.equal(fs.existsSync(fixture.receiptPath), false);
+});
+
 test("validates the fixed Token A-B experiment evidence schema", () => {
   const sample = {
     schemaVersion: 1,

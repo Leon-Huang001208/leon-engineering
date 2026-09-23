@@ -6,13 +6,13 @@
       "name": "leon-engineering",
       "source": "./",
       "description": "Personal engineering workflow framework",
-      "version": "0.19.2"
+      "version": "0.19.3"
     },
     {
       "name": "leon-engineering-workflows",
       "source": "./plugins/leon-engineering-workflows",
       "description": "Optional reasoning and specialist engineering workflows",
-      "version": "0.19.2"
+      "version": "0.19.3"
     },
     {
       "name": "leon-engineering-commands",

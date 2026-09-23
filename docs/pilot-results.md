@@ -238,3 +238,14 @@ Restart Claude Code before using the updated plugin in an existing session. Code
 - 源码验证已运行 `node --test tests/*.test.mjs`：200/200 通过、failed 0、skipped 0；`git diff --check` 退出码 0。全局预演额外发现受管 manifest 存在但 `hooks.json` 整体缺失；安装器现只在该可证明所有权的窄条件下重建规范 Hook，外来或内容漂移的现存 Hook 仍 fail closed。远端 CI 尚未执行，不写成通过。
 - 全局安装是独立外部状态动作：只有展示并核对精确受管 diff 后才写入 Codex Hook/runtime/policy。磁盘安装成功仍只记为 `restart_required`。
 - 行为激活必须在完整重启 Codex 宿主后，以新任务验证迁移感知 health、Git-common Harness 和 Hook；重启前不宣称已激活。ResearchWorkbench 的 Token A/B 与真实开发任务验收属于后续 Phase 2/3，不以源码单测替代。
+
+## Codex Context Portfolio v0.19.3
+
+**日期：**2026-09-23
+
+- 25 个逐字节重复 Skill 已从全局发现移动到私有可回滚备份；9 个项目专属/陈旧 Skill 完成项目迁移或隔离；42 个低频 source-command wrapper 进入默认未启用的可选插件，`hello` 与缺少依赖的 Jira wrapper 不冒充可用。
+- ResearchWorkbench 项目副本发布于 `ad60a98e0e740335a75ab60968d53ba8f8be73ef`；本地 78 项门禁、文档治理、Python 索引、Project Constraints 通过，GitHub run `35820355882` 成功，受管 delivery/Harness cleanup 通过。
+- 静态 prompt 从 67,993 bytes / 184 Skill references 降到 53,617 / 93，即 -14,376 bytes (-21.14%) 和 -91 references。该结果只证明固定上下文下降，不是任务 Token A/B。
+- 新增 allowlisted `codex-profile.mjs`；lean-high 与 lean-medium 只完成精确 preview，未写入 `config.toml`。全局 0.19.3 安装和一次完整宿主重启后，才运行固定样本 A/B；重启前继续标记 `restart_required`，不宣称激活或晋级 profile。
+- 源码验证 `node --test tests/*.test.mjs` 为 219/219 通过、failed 0、skipped 0；`git diff --check` 退出码 0。自审发现并修复 post-move 校验失败与 profile receipt 发布失败的回滚路径，回归测试均经历 RED→GREEN。系统 Python plugin/Skill validator 因缺少 PyYAML 未运行，未安装依赖；JSON/frontmatter/catalog 测试覆盖本次插件结构。
+- 三个全局迁移批次均由哈希预检、`0700` backup 与 `0600` receipt 保护：25 个 exact duplicates、9 个项目/陈旧 Skill、44 个 source-command wrappers。所有 backup 保留，未清空 quarantine。

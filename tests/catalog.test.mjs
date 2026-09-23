@@ -168,11 +168,11 @@ test("splits the plugin catalog into a compatible core and opt-in workflows exte
   const marketplace = JSON.parse(fs.readFileSync(path.join(root, ".claude-plugin", "marketplace.json"), "utf8"));
 
   assert.equal(core.name, "leon-engineering");
-  assert.equal(core.version, "0.19.2");
+  assert.equal(core.version, "0.19.3");
   assert.deepEqual(core.skills, ["./plugins/leon-engineering-core/skills/"]);
   assert.equal(workflows.name, "leon-engineering-workflows");
-  assert.equal(workflows.version, "0.19.2");
-  assert.equal(codexWorkflows.version, "0.19.2");
+  assert.equal(workflows.version, "0.19.3");
+  assert.equal(codexWorkflows.version, "0.19.3");
   assert.deepEqual(workflows.skills, ["./skills/"]);
   assert.deepEqual(
     fs.readdirSync(path.join(root, "plugins", "leon-engineering-core", "skills")).sort(),
@@ -188,7 +188,7 @@ test("splits the plugin catalog into a compatible core and opt-in workflows exte
     "leon-engineering-commands"
   ]);
   assert.equal(marketplace.plugins[1].source, "./plugins/leon-engineering-workflows");
-  assert.ok(marketplace.plugins.slice(0, 2).every(plugin => plugin.version === "0.19.2"));
+  assert.ok(marketplace.plugins.every(plugin => plugin.version === "0.19.3"));
 });
 
 test("packages mapped source commands in a default-disabled optional plugin", () => {

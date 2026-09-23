@@ -221,3 +221,23 @@ test("quarantines a hash-pinned project Skill without claiming an exact canonica
   rollbackSkillPortfolio({receiptPath});
   assert.equal(auditSkillTree(source).treeHash, audit.treeHash);
 });
+
+test("restores the just-moved source when post-move verification fails", t => {
+  const root = makeRoot(t);
+  const source = path.join(root, "skills", "restore-on-failure");
+  const canonical = path.join(root, "plugin", "restore-on-failure");
+  writeSkill(source, "restore-on-failure");
+  writeSkill(canonical, "restore-on-failure");
+  const audit = auditSkillTree(source);
+  const {file, backupRoot, receiptPath} = writeManifest(root, [{
+    id: "restore-on-failure", source, canonical, expectedTreeHash: audit.treeHash
+  }]);
+
+  assert.throws(
+    () => applySkillPortfolio({manifestPath: file}, {afterMove: () => { throw new Error("injected verification failure"); }}),
+    /injected verification failure/
+  );
+  assert.equal(auditSkillTree(source).treeHash, audit.treeHash);
+  assert.equal(fs.existsSync(path.join(backupRoot, "restore-on-failure")), false);
+  assert.equal(fs.existsSync(receiptPath), false);
+});
