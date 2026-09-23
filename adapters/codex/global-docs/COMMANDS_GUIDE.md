@@ -6,11 +6,13 @@
 
 ```bash
 node scripts/install-codex-adapter.mjs --install-global --codex-home "$HOME/.codex"
+node scripts/install-codex-adapter.mjs --verify --codex-home "$HOME/.codex"
 node scripts/install-codex-adapter.mjs --verify-global --codex-home "$HOME/.codex"
 node scripts/install-codex-adapter.mjs --rollback-global --codex-home "$HOME/.codex"
+node scripts/install-codex-adapter.mjs --verify --target /absolute/legacy-skill-directory
 ```
 
-`--install-global` 会先拒绝与用户文件冲突的文档或未受管策略区块。`--verify-global` 只读检查策略和六份文档。`--rollback-global` 只在内容未漂移时移除该框架拥有的文档和标记区块；它不会修改技能、插件、模型、MCP、凭据或项目。
+不带 `--target` 的 `--verify` 是当前健康检查：插件分发、全局框架和 Harness runtime 分节返回并合成一个去重 drift 清单；插件化迁移后不会再要求已退役的直接 Skill 目录。显式 `--target` 保留旧版直接 Skill 校验。两种验证均为只读，绝不顺带修复。`--install-global` 会先拒绝与用户文件冲突的文档或未受管策略区块。`--verify-global` 只读检查策略、六份文档和 runtime。`--rollback-global` 只在内容未漂移时移除该框架拥有的文档和标记区块；它不会修改技能、插件、模型、MCP、凭据或项目。
 
 Codex 会在本地宿主进程启动时载入全局 Hook。`--install-global` 成功只证明磁盘上的配置和 runtime 已更新；必须完整重启 Codex 本地宿主进程后，新 Hook 才会激活。重启前即使新建任务也可能继续使用宿主缓存；新建任务不会刷新宿主 Hook，不能把它当作刷新边界。安装器的 JSON 输出会返回 `activation.status=restart_required` 和 `activation.scope=codex_host_process`。
 
