@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "batchId": "project-and-stale-skills-20260923",
+  "quarantined": [
+    {"name":"cls","reason":"migrated-sanitized-to-research-workbench","treeHash":"b22b58b643cdc68c0e671fc5a9b93871ef790ded79dec03fd52e3235dbd1c684"},
+    {"name":"cnstock","reason":"migrated-sanitized-to-research-workbench","treeHash":"1376e380d4311b2dcfc150b1c98cccce3f01a37edf366b240edb5a5cdce9913a"},
+    {"name":"data-connector-development","reason":"migrated-and-adapted-to-research-workbench","treeHash":"277a1d2ae72542d95c501ad1a693722a6a42a1758692f8a5dfd12032c5629379"},
+    {"name":"wind-find-finance-skill","reason":"research-workbench-copy-retained-global-state-not-copied","treeHash":"d454835c4eb01bc2881c6b0cff5efd20b88583908034bd65dbb166f328e26668"},
+    {"name":"wind-mcp-skill","reason":"research-workbench-copy-retained-global-state-not-copied","treeHash":"9a2b2edb4b1eaf17ac816aa0cb8725415a65842e7ba38249c588cefae75ca6dd"},
+    {"name":"multi-format-rag","reason":"embedded-databases-data-caches-and-provider-experiments","treeHash":"4941ba54737511be1823f7f7418caebbc1d2098dce92c48f34f91c198c37cf2d"},
+    {"name":"self-improving-agent","reason":"stale-platform-contract-and-broken-sibling-reference","treeHash":"55507ec4d32eea53062691fb879d339bfb28562ba4651660291239a7d73ff0d3"},
+    {"name":"skill-creator","reason":"superseded-by-system-skill-creator-and-broken-template-reference","treeHash":"53007521c990c74d3691955e4bc1fd13771bc3e0e4e43a645575b3109b2a59c0"},
+    {"name":"write-a-skill","reason":"superseded-by-system-skill-creator-and-missing-reference","treeHash":"aae61640a7edf8d7edbbe61f162f4a280907541f06f1818fc27efe8954805e7d"}
+  ],
+  "blocked": [
+    {"name":"zq","reason":"credential-rotation-required-before-research-workbench-provider-redesign"}
+  ]
+}
