@@ -1,0 +1,9 @@
+{
+  "name": "leon-engineering-commands",
+  "version": "0.19.3",
+  "description": "Optional migrated source-command wrappers",
+  "author": {"name": "Leon"},
+  "license": "UNLICENSED",
+  "skills": ["./skills/"],
+  "mcpServers": {}
+}
