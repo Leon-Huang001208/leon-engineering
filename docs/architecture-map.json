@@ -92,7 +92,9 @@
         "lib/verification",
         "schemas/verification-policy-v3.schema.json",
         "schemas/verification-plan-v3.schema.json",
-        "scripts/verification-plan.mjs"
+        "schemas/verification-receipt-v2.schema.json",
+        "scripts/verification-plan.mjs",
+        "scripts/validate-verification-receipt.mjs"
       ],
       "documentation": [
         "docs/2026-09-21-token-harness-v0190.md",
@@ -102,6 +104,7 @@
         "tests/verification-plan.test.mjs",
         "tests/verification-compat.test.mjs",
         "tests/verification-change-set.test.mjs",
+        "tests/verification-receipt.test.mjs",
         "tests/fixtures/verification"
       ],
       "documentationTriggers": [

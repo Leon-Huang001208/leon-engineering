@@ -73,6 +73,8 @@ Validation performs four independent checks:
 
 Evidence JSON validity is not execution proof. Receipts identify their source (`runner`, `ci`, `manual`) and reference regular evidence files. Harness or CI may produce receipts; the validator only checks them and never runs their commands.
 
+Canonical bound plan and receipt files live under the repository Git common directory, outside the working-tree changed set. Referenced project evidence must be finalized before the final Git-bound replan; otherwise its content change invalidates the prior change-set digest. Legacy RWB project-relative plan/receipt files remain readable through their compatibility envelope.
+
 ## Managed project runtime
 
 `lib/project/managed-runtime.mjs` owns a deterministic file manifest for the minimal verification runtime. Its CLI defaults to preview and supports explicit apply, verify, and rollback. The manifest records framework version, framework commit, protocol versions, managed relative paths, and SHA-256 values.

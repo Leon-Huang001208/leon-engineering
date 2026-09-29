@@ -25,6 +25,12 @@ node scripts/verification-plan.mjs \
   --change-kind internal \
   --changed-file services/example.py
 
+# 绑定计划/回执校验（canonical 产物保存在 Git common 私有目录）
+node scripts/validate-verification-receipt.mjs \
+  --project /absolute/project \
+  --plan /absolute/git-common/leon-engineering/verification/plan.json \
+  --receipt /absolute/git-common/leon-engineering/verification/receipt.json
+
 # 代码和文档 whitespace
 git diff --check
 ```
