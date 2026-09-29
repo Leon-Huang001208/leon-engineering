@@ -18,6 +18,7 @@
     {"path": "hooks", "owner": "hooks-agents"},
     {"path": "lib", "owner": "governance"},
     {"path": "plugins", "owner": "plugins"},
+    {"path": "schemas", "owner": "verification"},
     {"path": "scripts", "owner": "governance"},
     {"path": "tests", "owner": "governance"}
   ],
@@ -88,6 +89,9 @@
       "id": "verification",
       "responsibility": "Own read-only verification planning and the compatibility surface for project verification policies.",
       "sources": [
+        "lib/verification",
+        "schemas/verification-policy-v3.schema.json",
+        "schemas/verification-plan-v3.schema.json",
         "scripts/verification-plan.mjs"
       ],
       "documentation": [

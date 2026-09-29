@@ -5,7 +5,7 @@
 | 模块 | 源码 | 权威文档 | 主要固定合同 | 文档同步触发 |
 | --- | --- | --- | --- | --- |
 | Harness | `scripts/harness-*.mjs` | `harness-v1.md`、`harness-control-plane.md` | `harness-*.test.mjs` | 账本、状态、事件、观察、恢复或隐私边界变化 |
-| Verification | `scripts/verification-plan.mjs`，后续 `lib/verification/` | 本文、治理设计、`2026-09-21-token-harness-v0190.md` | `verification-plan.test.mjs`、兼容/回执合同 | policy/plan/receipt schema、风险、深度、平台或证据语义变化 |
+| Verification | `lib/verification/`、`schemas/verification-*.json`、`scripts/verification-plan.mjs` | 本文、治理设计、`2026-09-21-token-harness-v0190.md` | `verification-plan.test.mjs`、兼容/回执合同 | policy/plan/receipt schema、风险、深度、平台或证据语义变化 |
 | Project discovery | `profile-project.mjs`、profile schema | 全局项目框架设计 | `project-profile.test.mjs` | 发现事实、候选命令或 project root 安全变化 |
 | Project constraints | `project-constraints*.mjs` | `project-constraints.md` | `project-constraints*.test.mjs` | 约束 schema、安装或 CI 使用方式变化 |
 | Delivery | `iteration-delivery.mjs` | `iteration-delivery.md` | `iteration-delivery.test.mjs` | 分支、worktree、发布、CI、回滚或清理状态变化 |
