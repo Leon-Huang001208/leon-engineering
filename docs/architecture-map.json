@@ -95,7 +95,9 @@
         "docs/superpowers/specs/2026-09-29-engineering-foundation-governance-design.md"
       ],
       "tests": [
-        "tests/verification-plan.test.mjs"
+        "tests/verification-plan.test.mjs",
+        "tests/verification-compat.test.mjs",
+        "tests/fixtures/verification"
       ],
       "documentationTriggers": [
         "Risk, validation depth, platform, execution lane, policy, plan or receipt behavior changes."

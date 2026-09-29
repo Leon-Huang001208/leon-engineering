@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 3,
+  "riskOrder": ["docs-only", "local-only", "full-delivery"],
+  "levelOrder": ["L0", "L1", "L2", "L3", "L4"],
+  "platformOrder": ["generic", "linux", "macos", "windows", "cross-platform", "real-machine-required"],
+  "statusOrder": ["PASS", "FAIL", "SKIPPED", "NOT_REQUIRED", "NOT_RUN", "BLOCKED", "MANUAL_REQUIRED"],
+  "escalation": {
+    "highCouplingImpactThreshold": 2,
+    "targetLevel": "L3"
+  },
+  "catalogs": {
+    "tests": {
+      "web-test": {"level": "L1", "lane": "local", "gate": "merge", "platforms": ["generic"], "value": "node --test tests/web.test.mjs"},
+      "desktop-test": {"level": "L4", "lane": "local", "gate": "merge", "platforms": ["cross-platform"], "value": "node --test tests/desktop.test.mjs"},
+      "full-test": {"level": "L4", "lane": "local", "gate": "merge", "platforms": ["cross-platform"], "value": "node --test tests/full.test.mjs"}
+    },
+    "documentation": {
+      "docs-check": {"level": "L0", "lane": "local", "gate": "merge", "platforms": ["generic"], "value": "node scripts/check-docs.mjs"}
+    },
+    "ci": {
+      "project-ci": {"level": "L4", "lane": "ci", "gate": "merge", "platforms": ["generic"], "value": ".github/workflows/project.yml"},
+      "macos-ci": {"level": "L4", "lane": "ci", "gate": "merge", "platforms": ["macos"], "value": ".github/workflows/desktop.yml#macos"},
+      "windows-ci": {"level": "L4", "lane": "ci", "gate": "merge", "platforms": ["windows"], "value": ".github/workflows/desktop.yml#windows"}
+    },
+    "realMachine": {
+      "windows-installation": {"level": "L4", "lane": "real-machine", "gate": "release", "platforms": ["windows", "real-machine-required"], "value": "docs/desktop.md#windows-installation"}
+    }
+  },
+  "rules": [
+    {
+      "id": "web",
+      "risk": "local-only",
+      "minimumLevel": "L1",
+      "reason": "web_change",
+      "impact": ["web"],
+      "coupling": "low",
+      "match": {"files": [], "prefixes": ["app/research_web/"], "segments": [], "suffixes": []},
+      "platforms": ["generic"],
+      "tests": ["web-test"],
+      "documentation": ["docs-check"],
+      "ci": [],
+      "realMachine": []
+    },
+    {
+      "id": "desktop",
+      "risk": "full-delivery",
+      "minimumLevel": "L4",
+      "reason": "desktop_change",
+      "impact": ["desktop-platform"],
+      "coupling": "high",
+      "match": {"files": [], "prefixes": ["src-tauri/"], "segments": [], "suffixes": []},
+      "platforms": ["macos", "windows", "cross-platform", "real-machine-required"],
+      "tests": ["desktop-test"],
+      "documentation": ["docs-check"],
+      "ci": ["macos-ci", "windows-ci"],
+      "realMachine": ["windows-installation"]
+    }
+  ],
+  "fallback": {
+    "risk": "full-delivery",
+    "minimumLevel": "L4",
+    "reason": "unknown_path",
+    "impact": ["unknown-boundary"],
+    "coupling": "high",
+    "platforms": ["cross-platform"],
+    "tests": ["full-test"],
+    "documentation": ["docs-check"],
+    "ci": ["project-ci"],
+    "realMachine": []
+  }
+}
