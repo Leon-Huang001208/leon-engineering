@@ -22,8 +22,29 @@ export const HARNESS_RUNTIME_FILES = [
   "harness-hook.mjs",
   "harness-evaluate.mjs",
   "verification-plan.mjs",
+  "validate-verification-receipt.mjs",
+  "project-runtime.mjs",
   "harness-control.mjs",
   "profile-project.mjs"
+];
+
+export const HARNESS_RUNTIME_RESOURCES = [
+  ...[
+    "binding.mjs",
+    "changed-files.mjs",
+    "errors.mjs",
+    "index.mjs",
+    "path-safety.mjs",
+    "planner.mjs",
+    "policy.mjs",
+    "receipt.mjs"
+  ].map(name => ({source: `lib/verification/${name}`, destination: `lib/verification/${name}`})),
+  ...[
+    "verification-policy-v3.schema.json",
+    "verification-plan-v3.schema.json",
+    "verification-receipt-v2.schema.json"
+  ].map(name => ({source: `schemas/${name}`, destination: `schemas/${name}`})),
+  {source: "lib/project/managed-runtime.mjs", destination: "lib/project/managed-runtime.mjs"}
 ];
 
 export function defaultHarnessRuntimeRoot() {
@@ -74,16 +95,21 @@ function ensureSafeDirectory(directory) {
 }
 
 function sourceFiles(sourceRoot) {
-  return Object.fromEntries(HARNESS_RUNTIME_FILES.map(name => {
-    const file = path.join(sourceRoot, "scripts", name);
+  const resources = [
+    ...HARNESS_RUNTIME_FILES.map(name => ({source: `scripts/${name}`, destination: name})),
+    ...HARNESS_RUNTIME_RESOURCES
+  ];
+  return Object.fromEntries(resources.map(resource => {
+    const file = path.join(sourceRoot, resource.source);
     const stat = fs.lstatSync(file);
-    if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`invalid canonical runtime file: ${name}`);
+    if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`invalid canonical runtime file: ${resource.source}`);
     const content = fs.readFileSync(file);
-    return [name, {content, checksum: checksum(content)}];
+    return [resource.destination, {content, checksum: checksum(content)}];
   }));
 }
 
 function writeAtomically(destination, content) {
+  fs.mkdirSync(path.dirname(destination), {recursive: true, mode: 0o700});
   const temporary = path.join(path.dirname(destination), `.${path.basename(destination)}.${crypto.randomUUID()}.tmp`);
   try {
     fs.writeFileSync(temporary, content, {mode: 0o600});
@@ -104,7 +130,7 @@ function readManifest(runtimeRoot) {
   } catch {
     throw new Error("invalid runtime manifest");
   }
-  if (manifest.schemaVersion !== 1 || manifest.adapter !== "leon-engineering" || !manifest.files || typeof manifest.files !== "object") {
+  if (![1, 2].includes(manifest.schemaVersion) || manifest.adapter !== "leon-engineering" || !manifest.files || typeof manifest.files !== "object") {
     throw new Error("invalid runtime manifest");
   }
   if (manifest.sourceRoot !== undefined && (typeof manifest.sourceRoot !== "string" || !path.isAbsolute(manifest.sourceRoot))) {
@@ -120,17 +146,17 @@ export function installHarnessRuntime({sourceRoot = defaultCanonicalSourceRoot()
   const entries = fs.readdirSync(root).filter(name => name !== MANIFEST_NAME);
   if (!existing && entries.length > 0) throw new Error("foreign runtime directory");
   const files = sourceFiles(canonicalRoot);
-  for (const name of HARNESS_RUNTIME_FILES) writeAtomically(path.join(root, name), files[name].content);
+  for (const [name, file] of Object.entries(files)) writeAtomically(path.join(root, name), file.content);
   const manifest = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     adapter: "leon-engineering",
     frameworkVersion: frameworkVersion(canonicalRoot),
     sourceCommit: sourceCommit(canonicalRoot),
     sourceRoot: canonicalRoot,
-    files: Object.fromEntries(HARNESS_RUNTIME_FILES.map(name => [name, files[name].checksum]))
+    files: Object.fromEntries(Object.entries(files).map(([name, file]) => [name, file.checksum]))
   };
   writeAtomically(path.join(root, MANIFEST_NAME), `${JSON.stringify(manifest, null, 2)}\n`);
-  return {runtimeRoot: root, files: HARNESS_RUNTIME_FILES, manifest};
+  return {runtimeRoot: root, files: HARNESS_RUNTIME_FILES, resources: HARNESS_RUNTIME_RESOURCES.map(item => item.destination), manifest};
 }
 
 export function verifyHarnessRuntime({sourceRoot, runtimeRoot = defaultHarnessRuntimeRoot()} = {}) {
@@ -149,7 +175,8 @@ export function verifyHarnessRuntime({sourceRoot, runtimeRoot = defaultHarnessRu
   } catch {
     sourceDrift.push("canonical source unavailable");
   }
-  const drift = HARNESS_RUNTIME_FILES.filter(name => {
+  const expectedNames = files ? Object.keys(files) : Object.keys(manifest.files);
+  const drift = expectedNames.filter(name => {
     const destination = path.join(root, name);
     if (!fs.existsSync(destination)) return true;
     const stat = fs.lstatSync(destination);

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "requiredFiles": [
+    "README.md",
+    "AGENTS.md",
+    "docs/ARCHITECTURE.md",
+    "docs/DEVELOPMENT_MAP.md",
+    "docs/architecture-map.json",
+    ".agents/verification-policy.json"
+  ],
+  "changeRules": [
+    {
+      "name": "framework source changes keep the development map current",
+      "sourcePrefixes": ["lib/", "scripts/", "adapters/", "hooks/", "plugins/", "agents/"],
+      "requiredDocuments": ["docs/DEVELOPMENT_MAP.md"]
+    }
+  ],
+  "contentRules": [],
+  "dependencyRules": [
+    {
+      "name": "shared verification does not depend on business or host adapters",
+      "sourcePrefixes": ["lib/verification/"],
+      "extensions": [".mjs"],
+      "forbiddenPatterns": ["ResearchWorkbench", "app/research_web", "from \"../../adapters", "from '../adapters"]
+    },
+    {
+      "name": "shared governance does not depend on business projects",
+      "sourcePrefixes": ["lib/governance/", "lib/project/"],
+      "extensions": [".mjs"],
+      "forbiddenPatterns": ["ResearchWorkbench", "app/research_web"]
+    }
+  ],
+  "ciRules": [
+    {
+      "name": "framework CI keeps fixed local gates",
+      "workflow": ".github/workflows/framework-checks.yml",
+      "requireAll": [
+        "node --test tests/*.test.mjs",
+        "check-architecture-map.mjs --project .",
+        "project-constraints.mjs",
+        "git diff --check"
+      ]
+    }
+  ]
+}

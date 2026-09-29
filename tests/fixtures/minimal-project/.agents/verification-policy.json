@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 3,
+  "riskOrder": ["docs-only", "local-only", "full-delivery"],
+  "levelOrder": ["L0", "L1", "L2", "L3", "L4"],
+  "platformOrder": ["generic", "linux", "macos", "windows", "cross-platform", "real-machine-required"],
+  "statusOrder": ["PASS", "FAIL", "SKIPPED", "NOT_REQUIRED", "NOT_RUN", "BLOCKED", "MANUAL_REQUIRED"],
+  "escalation": {"highCouplingImpactThreshold": 2, "targetLevel": "L3"},
+  "catalogs": {
+    "tests": {
+      "example-test": {"level": "L1", "lane": "local", "gate": "merge", "platforms": ["generic"], "value": "node --test tests/example.test.mjs"},
+      "fixture-full": {"level": "L4", "lane": "local", "gate": "merge", "platforms": ["generic"], "value": "node --test tests/example.test.mjs"}
+    },
+    "documentation": {
+      "fixture-static": {"level": "L0", "lane": "local", "gate": "merge", "platforms": ["generic"], "value": "node --check src/example.mjs"}
+    },
+    "ci": {
+      "fixture-ci": {"level": "L4", "lane": "ci", "gate": "merge", "platforms": ["generic"], "value": "external-ci"}
+    },
+    "realMachine": {}
+  },
+  "rules": [
+    {
+      "id": "example-source",
+      "risk": "local-only",
+      "minimumLevel": "L1",
+      "reason": "example_change",
+      "impact": ["example"],
+      "coupling": "low",
+      "match": {"files": [], "prefixes": ["src/"], "segments": [], "suffixes": []},
+      "platforms": ["generic"],
+      "tests": ["example-test"],
+      "documentation": ["fixture-static"],
+      "ci": [],
+      "realMachine": []
+    }
+  ],
+  "fallback": {
+    "risk": "full-delivery",
+    "minimumLevel": "L4",
+    "reason": "unknown_path",
+    "impact": ["unknown-boundary"],
+    "coupling": "high",
+    "platforms": ["generic"],
+    "tests": ["fixture-full"],
+    "documentation": ["fixture-static"],
+    "ci": ["fixture-ci"],
+    "realMachine": []
+  }
+}

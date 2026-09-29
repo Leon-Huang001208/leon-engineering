@@ -1,0 +1,261 @@
+{
+  "schemaVersion": 3,
+  "riskOrder": ["docs-only", "local-only", "full-delivery"],
+  "levelOrder": ["L0", "L1", "L2", "L3", "L4"],
+  "platformOrder": ["generic", "linux", "macos", "windows", "cross-platform", "real-machine-required"],
+  "statusOrder": ["PASS", "FAIL", "SKIPPED", "NOT_REQUIRED", "NOT_RUN", "BLOCKED", "MANUAL_REQUIRED"],
+  "escalation": {"highCouplingImpactThreshold": 2, "targetLevel": "L3"},
+  "catalogs": {
+    "tests": {
+      "architecture-map-contracts": {
+        "level": "L1",
+        "lane": "local",
+        "gate": "merge",
+        "platforms": ["generic"],
+        "value": "node --test tests/architecture-map.test.mjs"
+      },
+      "framework-focused": {
+        "level": "L2",
+        "lane": "local",
+        "gate": "merge",
+        "platforms": ["generic"],
+        "value": "node --test tests/*.test.mjs"
+      },
+      "verification-fixed-contracts": {
+        "level": "L4",
+        "lane": "local",
+        "gate": "merge",
+        "platforms": ["generic"],
+        "value": "node --test tests/verification-plan.test.mjs tests/verification-compat.test.mjs tests/verification-change-set.test.mjs tests/verification-receipt.test.mjs tests/framework-policy.test.mjs"
+      },
+      "runtime-contracts": {
+        "level": "L4",
+        "lane": "local",
+        "gate": "merge",
+        "platforms": ["generic"],
+        "value": "node --test tests/project-runtime.test.mjs tests/harness-runtime.test.mjs tests/codex-adapter.test.mjs tests/claude-adapter.test.mjs"
+      },
+      "framework-full": {
+        "level": "L4",
+        "lane": "local",
+        "gate": "merge",
+        "platforms": ["generic"],
+        "value": "node --test tests/*.test.mjs"
+      }
+    },
+    "documentation": {
+      "architecture-map": {
+        "level": "L0",
+        "lane": "local",
+        "gate": "merge",
+        "platforms": ["generic"],
+        "value": "node scripts/check-architecture-map.mjs --project ."
+      }
+    },
+    "ci": {
+      "framework-ci": {
+        "level": "L4",
+        "lane": "ci",
+        "gate": "merge",
+        "platforms": ["generic"],
+        "value": ".github/workflows/framework-checks.yml"
+      }
+    },
+    "realMachine": {}
+  },
+  "rules": [
+    {
+      "id": "verification-system",
+      "risk": "full-delivery",
+      "minimumLevel": "L4",
+      "reason": "verification_system_change",
+      "impact": ["verification-system"],
+      "coupling": "high",
+      "match": {
+        "files": [
+          ".agents/verification-policy.json",
+          ".agents/project-constraints.json",
+          "schemas/verification-policy-v3.schema.json",
+          "schemas/verification-plan-v3.schema.json",
+          "schemas/verification-receipt-v2.schema.json",
+          "scripts/verification-plan.mjs",
+          "scripts/validate-verification-receipt.mjs",
+          "tests/verification-plan.test.mjs",
+          "tests/verification-compat.test.mjs",
+          "tests/verification-change-set.test.mjs",
+          "tests/verification-receipt.test.mjs",
+          "tests/framework-policy.test.mjs"
+        ],
+        "prefixes": ["lib/verification/"],
+        "segments": [],
+        "suffixes": []
+      },
+      "platforms": ["generic"],
+      "tests": ["verification-fixed-contracts", "framework-full"],
+      "documentation": ["architecture-map"],
+      "ci": ["framework-ci"],
+      "realMachine": []
+    },
+    {
+      "id": "runtime-distribution",
+      "risk": "full-delivery",
+      "minimumLevel": "L4",
+      "reason": "runtime_distribution_change",
+      "impact": ["runtime-distribution"],
+      "coupling": "high",
+      "match": {
+        "files": [
+          "schemas/project-runtime-manifest-v1.schema.json",
+          "scripts/harness-runtime.mjs",
+          "scripts/project-runtime.mjs",
+          "tests/harness-runtime.test.mjs",
+          "tests/project-runtime.test.mjs"
+        ],
+        "prefixes": ["lib/project/", "templates/project/"],
+        "segments": [],
+        "suffixes": []
+      },
+      "platforms": ["generic"],
+      "tests": ["runtime-contracts", "framework-full"],
+      "documentation": ["architecture-map"],
+      "ci": ["framework-ci"],
+      "realMachine": []
+    },
+    {
+      "id": "host-boundary",
+      "risk": "full-delivery",
+      "minimumLevel": "L4",
+      "reason": "host_boundary_change",
+      "impact": ["host-boundary"],
+      "coupling": "high",
+      "match": {
+        "files": [
+          "scripts/install-codex-adapter.mjs",
+          "scripts/install-claude-adapter.mjs",
+          "scripts/harness-hook.mjs",
+          "scripts/audit.mjs",
+          "scripts/guard.mjs"
+        ],
+        "prefixes": ["adapters/", "hooks/"],
+        "segments": [],
+        "suffixes": []
+      },
+      "platforms": ["generic"],
+      "tests": ["framework-full"],
+      "documentation": ["architecture-map"],
+      "ci": ["framework-ci"],
+      "realMachine": []
+    },
+    {
+      "id": "plugin-contract",
+      "risk": "full-delivery",
+      "minimumLevel": "L4",
+      "reason": "plugin_contract_change",
+      "impact": ["plugin-contract"],
+      "coupling": "high",
+      "match": {
+        "files": [".claude-plugin/plugin.json", ".claude-plugin/marketplace.json"],
+        "prefixes": ["plugins/", "agents/"],
+        "segments": [],
+        "suffixes": []
+      },
+      "platforms": ["generic"],
+      "tests": ["framework-full"],
+      "documentation": ["architecture-map"],
+      "ci": ["framework-ci"],
+      "realMachine": []
+    },
+    {
+      "id": "ci",
+      "risk": "full-delivery",
+      "minimumLevel": "L4",
+      "reason": "ci_change",
+      "impact": ["verification-system"],
+      "coupling": "high",
+      "match": {
+        "files": [],
+        "prefixes": [".github/workflows/"],
+        "segments": [],
+        "suffixes": []
+      },
+      "platforms": ["generic"],
+      "tests": ["verification-fixed-contracts", "framework-full"],
+      "documentation": ["architecture-map"],
+      "ci": ["framework-ci"],
+      "realMachine": []
+    },
+    {
+      "id": "governance",
+      "risk": "local-only",
+      "minimumLevel": "L1",
+      "reason": "governance_change",
+      "impact": ["governance"],
+      "coupling": "low",
+      "match": {
+        "files": [
+          "docs/architecture-map.json",
+          "scripts/check-architecture-map.mjs",
+          "tests/architecture-map.test.mjs"
+        ],
+        "prefixes": ["lib/governance/"],
+        "segments": [],
+        "suffixes": []
+      },
+      "platforms": ["generic"],
+      "tests": ["architecture-map-contracts"],
+      "documentation": ["architecture-map"],
+      "ci": [],
+      "realMachine": []
+    },
+    {
+      "id": "documentation",
+      "risk": "docs-only",
+      "minimumLevel": "L0",
+      "reason": "documentation_change",
+      "impact": ["documentation"],
+      "coupling": "low",
+      "match": {
+        "files": ["README.md", "AGENTS.md"],
+        "prefixes": ["docs/"],
+        "segments": [],
+        "suffixes": [".md"]
+      },
+      "platforms": ["generic"],
+      "tests": [],
+      "documentation": ["architecture-map"],
+      "ci": [],
+      "realMachine": []
+    },
+    {
+      "id": "framework-code",
+      "risk": "local-only",
+      "minimumLevel": "L2",
+      "reason": "framework_code_change",
+      "impact": ["framework-code"],
+      "coupling": "low",
+      "match": {
+        "files": [],
+        "prefixes": ["scripts/", "tests/"],
+        "segments": [],
+        "suffixes": []
+      },
+      "platforms": ["generic"],
+      "tests": ["framework-focused"],
+      "documentation": ["architecture-map"],
+      "ci": [],
+      "realMachine": []
+    }
+  ],
+  "fallback": {
+    "risk": "full-delivery",
+    "minimumLevel": "L4",
+    "reason": "unknown_path",
+    "impact": ["unknown-boundary"],
+    "coupling": "high",
+    "platforms": ["generic"],
+    "tests": ["framework-full"],
+    "documentation": ["architecture-map"],
+    "ci": ["framework-ci"],
+    "realMachine": []
+  }
+}
