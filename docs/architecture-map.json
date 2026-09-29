@@ -101,6 +101,7 @@
       "tests": [
         "tests/verification-plan.test.mjs",
         "tests/verification-compat.test.mjs",
+        "tests/verification-change-set.test.mjs",
         "tests/fixtures/verification"
       ],
       "documentationTriggers": [

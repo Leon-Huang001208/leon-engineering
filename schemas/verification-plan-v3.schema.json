@@ -22,7 +22,9 @@
     "ci",
     "local",
     "realMachine",
-    "receiptTemplate"
+    "receiptTemplate",
+    "changeSet",
+    "binding"
   ],
   "properties": {
     "schemaVersion": {"const": 3},
@@ -42,7 +44,41 @@
     "ci": {"type": "array", "items": {"$ref": "#/$defs/validation"}},
     "local": {"type": "array", "items": {"$ref": "#/$defs/validation"}},
     "realMachine": {"type": "array", "items": {"$ref": "#/$defs/validation"}},
-    "receiptTemplate": {"type": "object"}
+    "receiptTemplate": {"type": "object"},
+    "changeSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entries"],
+      "properties": {
+        "entries": {"type": "array", "minItems": 1, "items": {"type": "object"}}
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "baseCommit",
+        "headCommit",
+        "changeSetSha256",
+        "policySha256",
+        "frameworkVersion",
+        "frameworkCommit",
+        "frameworkSha256",
+        "planSha256"
+      ],
+      "properties": {
+        "source": {"const": "git"},
+        "baseCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "headCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "changeSetSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "policySha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "frameworkVersion": {"type": "string", "minLength": 1},
+        "frameworkCommit": {"type": ["string", "null"]},
+        "frameworkSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "planSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
   },
   "$defs": {
     "validation": {
