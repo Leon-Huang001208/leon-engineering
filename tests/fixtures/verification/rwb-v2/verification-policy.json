@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 2,
+  "riskOrder": ["docs-only", "local-only", "full-delivery"],
+  "levelOrder": ["L0", "L1", "L2", "L3", "L4"],
+  "escalation": {
+    "highCouplingImpactThreshold": 2,
+    "targetLevel": "L3"
+  },
+  "catalogs": {
+    "tests": {
+      "web-test": {"level": "L1", "execution": "local", "value": "node --test tests/web.test.mjs"},
+      "desktop-test": {"level": "L4", "execution": "local", "value": "node --test tests/desktop.test.mjs"},
+      "full-test": {"level": "L4", "execution": "local", "value": "node --test tests/full.test.mjs"}
+    },
+    "documentation": {
+      "docs-check": {"level": "L0", "execution": "local", "value": "node scripts/check-docs.mjs"},
+      "desktop-guide": {"level": "L4", "execution": "external", "value": "docs/desktop.md"}
+    },
+    "ci": {
+      "project-ci": {"level": "L4", "execution": "external", "value": ".github/workflows/project.yml"},
+      "windows-ci": {"level": "L4", "execution": "external", "value": ".github/workflows/windows.yml"}
+    }
+  },
+  "rules": [
+    {
+      "id": "web",
+      "risk": "local-only",
+      "minimumLevel": "L1",
+      "reason": "web_change",
+      "impact": ["web"],
+      "coupling": "low",
+      "match": {"files": [], "prefixes": ["app/research_web/"], "segments": [], "suffixes": []},
+      "tests": ["web-test"],
+      "documentation": ["docs-check"],
+      "ci": []
+    },
+    {
+      "id": "desktop",
+      "risk": "full-delivery",
+      "minimumLevel": "L4",
+      "reason": "desktop_change",
+      "impact": ["desktop-platform"],
+      "coupling": "high",
+      "match": {"files": [], "prefixes": ["src-tauri/"], "segments": [], "suffixes": []},
+      "tests": ["desktop-test"],
+      "documentation": ["desktop-guide"],
+      "ci": ["windows-ci"]
+    }
+  ],
+  "fallback": {
+    "risk": "full-delivery",
+    "minimumLevel": "L4",
+    "reason": "unknown_path",
+    "impact": ["unknown-boundary"],
+    "coupling": "high",
+    "tests": ["full-test"],
+    "documentation": ["docs-check"],
+    "ci": ["project-ci"]
+  }
+}

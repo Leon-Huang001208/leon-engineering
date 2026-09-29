@@ -1,0 +1,287 @@
+{
+  "schemaVersion": 1,
+  "entrypoints": [
+    "README.md",
+    "AGENTS.md",
+    "docs/README.md",
+    "docs/ARCHITECTURE.md",
+    "docs/DEVELOPMENT_MAP.md"
+  ],
+  "roots": [
+    {"path": ".agents", "owner": "project-constraints"},
+    {"path": ".claude-plugin", "owner": "plugins"},
+    {"path": ".github", "owner": "verification"},
+    {"path": ".gitignore", "owner": "governance"},
+    {"path": "README.md", "owner": "governance"},
+    {"path": "AGENTS.md", "owner": "governance"},
+    {"path": "adapters", "owner": "adapters"},
+    {"path": "agents", "owner": "hooks-agents"},
+    {"path": "docs", "owner": "governance"},
+    {"path": "hooks", "owner": "hooks-agents"},
+    {"path": "lib", "owner": "governance"},
+    {"path": "plugins", "owner": "plugins"},
+    {"path": "schemas", "owner": "verification"},
+    {"path": "scripts", "owner": "governance"},
+    {"path": "templates", "owner": "project-discovery"},
+    {"path": "tests", "owner": "governance"}
+  ],
+  "documentClasses": {
+    "current": [
+      "README.md",
+      "AGENTS.md",
+      "docs/README.md",
+      "docs/ARCHITECTURE.md",
+      "docs/DEVELOPMENT_MAP.md",
+      "docs/harness-v1.md",
+      "docs/harness-control-plane.md",
+      "docs/project-constraints.md",
+      "docs/iteration-delivery.md",
+      "docs/shared-capability-catalog.md"
+    ],
+    "decisions": [
+      "docs/2026-07-31-global-project-framework-design.md",
+      "docs/2026-07-31-codex-claude-adapter-design.md",
+      "docs/superpowers/specs/2026-09-29-engineering-foundation-governance-design.md"
+    ],
+    "plans": [
+      "docs/superpowers/plans/2026-09-29-engineering-foundation-governance.md"
+    ],
+    "evidence": [
+      "docs/pilot-results.md",
+      "docs/2026-09-21-token-harness-v0190.md",
+      "docs/2026-09-23-skill-portfolio-report.md",
+      "docs/2026-09-29-engineering-foundation-governance-audit.md"
+    ],
+    "generated": [],
+    "archive": []
+  },
+  "modules": [
+    {
+      "id": "harness",
+      "responsibility": "Own task state, recovery, observations, bounded evidence, storage, evaluation and control-plane state.",
+      "sources": [
+        "scripts/harness-control.mjs",
+        "scripts/harness-enforce.mjs",
+        "scripts/harness-evaluate.mjs",
+        "scripts/harness-execution.mjs",
+        "scripts/harness-project.mjs",
+        "scripts/harness-run.mjs",
+        "scripts/harness-runtime.mjs",
+        "scripts/harness-session.mjs",
+        "scripts/harness-storage.mjs"
+      ],
+      "documentation": [
+        "docs/harness-v1.md",
+        "docs/harness-control-plane.md"
+      ],
+      "tests": [
+        "tests/harness-control.test.mjs",
+        "tests/harness-enforce.test.mjs",
+        "tests/harness-evaluate.test.mjs",
+        "tests/harness-execution.test.mjs",
+        "tests/harness-project.test.mjs",
+        "tests/harness-runtime.test.mjs",
+        "tests/harness-session.test.mjs",
+        "tests/harness-storage.test.mjs"
+      ],
+      "documentationTriggers": [
+        "Task, session, event, metric, observation, storage, recovery or privacy contracts change."
+      ]
+    },
+    {
+      "id": "verification",
+      "responsibility": "Own read-only verification planning and the compatibility surface for project verification policies.",
+      "sources": [
+        ".agents/verification-policy.json",
+        ".github/workflows/framework-checks.yml",
+        "lib/verification",
+        "schemas/verification-policy-v3.schema.json",
+        "schemas/verification-plan-v3.schema.json",
+        "schemas/verification-receipt-v2.schema.json",
+        "scripts/verification-plan.mjs",
+        "scripts/validate-verification-receipt.mjs"
+      ],
+      "documentation": [
+        "docs/2026-09-21-token-harness-v0190.md",
+        "docs/superpowers/specs/2026-09-29-engineering-foundation-governance-design.md"
+      ],
+      "tests": [
+        "tests/verification-plan.test.mjs",
+        "tests/verification-compat.test.mjs",
+        "tests/verification-change-set.test.mjs",
+        "tests/verification-receipt.test.mjs",
+        "tests/framework-policy.test.mjs",
+        "tests/framework-ci.test.mjs",
+        "tests/fixtures/verification"
+      ],
+      "documentationTriggers": [
+        "Risk, validation depth, platform, execution lane, policy, plan or receipt behavior changes."
+      ]
+    },
+    {
+      "id": "project-discovery",
+      "responsibility": "Own bounded project fact discovery and candidate verifier profiles without claiming execution.",
+      "sources": [
+        "lib/project",
+        "schemas/project-runtime-manifest-v1.schema.json",
+        "scripts/project-runtime.mjs",
+        "scripts/profile-project.mjs",
+        "adapters/codex/project-profile-schema.json",
+        "templates/project"
+      ],
+      "documentation": [
+        "docs/2026-07-31-global-project-framework-design.md"
+      ],
+      "tests": [
+        "tests/project-profile.test.mjs",
+        "tests/project-runtime.test.mjs",
+        "tests/minimal-project.test.mjs",
+        "tests/fixtures/minimal-project"
+      ],
+      "documentationTriggers": [
+        "Discovery evidence, candidate command or project-root safety changes."
+      ]
+    },
+    {
+      "id": "project-constraints",
+      "responsibility": "Own static project constraints and their explicit project-local installer.",
+      "sources": [
+        ".agents/project-constraints.json",
+        "scripts/project-constraints.mjs",
+        "scripts/install-project-constraints.mjs"
+      ],
+      "documentation": [
+        "docs/project-constraints.md"
+      ],
+      "tests": [
+        "tests/project-constraints.test.mjs",
+        "tests/project-constraints-install.test.mjs"
+      ],
+      "documentationTriggers": [
+        "Constraint schema, check semantics, installation or CI invocation changes."
+      ]
+    },
+    {
+      "id": "delivery",
+      "responsibility": "Own isolated feature/integration delivery, remote state, CI receipts, rollback and safe cleanup.",
+      "sources": [
+        "scripts/iteration-delivery.mjs"
+      ],
+      "documentation": [
+        "docs/iteration-delivery.md"
+      ],
+      "tests": [
+        "tests/iteration-delivery.test.mjs"
+      ],
+      "documentationTriggers": [
+        "Branch, worktree, publish, CI, rollback, receipt or cleanup state changes."
+      ]
+    },
+    {
+      "id": "governance",
+      "responsibility": "Own architecture inventory, documentation classification, Skill lifecycle and reversible configuration governance.",
+      "sources": [
+        "lib/governance",
+        "scripts/check-architecture-map.mjs",
+        "scripts/codex-profile.mjs",
+        "scripts/reasoning-skills.mjs",
+        "scripts/skill-portfolio.mjs",
+        "scripts/sync-cc-switch-skills.mjs"
+      ],
+      "documentation": [
+        "docs/ARCHITECTURE.md",
+        "docs/DEVELOPMENT_MAP.md",
+        "docs/framework-learning.md",
+        "docs/reasoning-skills.md"
+      ],
+      "tests": [
+        "tests/architecture-map.test.mjs",
+        "tests/codex-profile.test.mjs",
+        "tests/reasoning-skills.test.mjs",
+        "tests/skill-portfolio.test.mjs"
+      ],
+      "documentationTriggers": [
+        "Module ownership, document classification, Skill lifecycle or configuration profile behavior changes."
+      ]
+    },
+    {
+      "id": "token-audit",
+      "responsibility": "Own redacted session metrics and bounded reporting without reading message content into output.",
+      "sources": [
+        "scripts/token-audit.mjs"
+      ],
+      "documentation": [
+        "docs/2026-09-21-token-harness-v0190.md"
+      ],
+      "tests": [
+        "tests/token-audit.test.mjs"
+      ],
+      "documentationTriggers": [
+        "Metric definitions, privacy filtering, session discovery or output budgets change."
+      ]
+    },
+    {
+      "id": "adapters",
+      "responsibility": "Own Codex and Claude managed policy, document, manifest and installation lifecycle differences.",
+      "sources": [
+        "adapters",
+        "scripts/install-codex-adapter.mjs",
+        "scripts/install-claude-adapter.mjs"
+      ],
+      "documentation": [
+        "docs/2026-07-31-codex-claude-adapter-design.md",
+        "docs/codex-adapter-pilot.md"
+      ],
+      "tests": [
+        "tests/codex-adapter.test.mjs",
+        "tests/claude-adapter.test.mjs"
+      ],
+      "documentationTriggers": [
+        "Managed files, manifests, Hook templates, rollback or host activation boundaries change."
+      ]
+    },
+    {
+      "id": "plugins",
+      "responsibility": "Own compatible plugin identities and core versus optional Skill distribution.",
+      "sources": [
+        ".claude-plugin",
+        "plugins"
+      ],
+      "documentation": [
+        "docs/shared-capability-catalog.md",
+        "docs/2026-09-23-optional-commands-plugin.md"
+      ],
+      "tests": [
+        "tests/catalog.test.mjs",
+        "tests/reasoning-skills.test.mjs"
+      ],
+      "documentationTriggers": [
+        "Plugin IDs, versions, Skill grouping, default enablement or marketplace entries change."
+      ]
+    },
+    {
+      "id": "hooks-agents",
+      "responsibility": "Own host event connections, safe recovery classification and seven bounded shared agent roles.",
+      "sources": [
+        "agents",
+        "hooks",
+        "scripts/audit.mjs",
+        "scripts/guard.mjs",
+        "scripts/harness-hook.mjs"
+      ],
+      "documentation": [
+        "docs/harness-v1.md",
+        "docs/shared-capability-catalog.md"
+      ],
+      "tests": [
+        "tests/audit.test.mjs",
+        "tests/guard.test.mjs",
+        "tests/harness-hook.test.mjs",
+        "tests/catalog.test.mjs"
+      ],
+      "documentationTriggers": [
+        "Hook events, degraded-mode classification, recovery allowlists, role scope or delegation boundaries change."
+      ]
+    }
+  ]
+}

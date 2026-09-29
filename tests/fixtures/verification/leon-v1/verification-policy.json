@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "verifiers": {
+    "service-test": {
+      "kind": "test",
+      "argv": ["node", "--test", "tests/service.test.mjs"],
+      "cwd": "."
+    },
+    "service-lint": {
+      "kind": "lint",
+      "argv": ["node", "scripts/lint.mjs"],
+      "cwd": ".",
+      "appendChangedFiles": true,
+      "extensions": [".mjs"]
+    }
+  },
+  "rules": [
+    {
+      "name": "service",
+      "prefixes": ["services/"],
+      "minimumTier": "local-only",
+      "tests": ["service-test"],
+      "lints": ["service-lint"],
+      "documentation": ["task-report"],
+      "ci": [],
+      "gates": ["harness-task"]
+    }
+  ]
+}
