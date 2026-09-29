@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import {execFileSync} from "node:child_process";
 import test from "node:test";
+import {pathToFileURL} from "node:url";
 
 import {applyProjectRuntime, verifyProjectRuntime} from "../lib/project/managed-runtime.mjs";
 import {planVerification, validateVerificationReceipt} from "../lib/verification/index.mjs";
@@ -83,12 +84,26 @@ test("minimal project validates a complete receipt without RWB assumptions", t =
   }).valid, true);
 });
 
-test("minimal project runtime records framework identity and detects drift", t => {
+test("minimal project runtime records framework identity and detects drift", async t => {
   const projectRoot = copyFixture(t);
   const applied = applyProjectRuntime({sourceRoot: ROOT, projectRoot});
   assert.match(applied.manifest.sourceCommit, /^[0-9a-f]{40}$/);
   assert.equal(applied.manifest.frameworkVersion, "0.19.3");
   assert.equal(verifyProjectRuntime({sourceRoot: ROOT, projectRoot}).valid, true);
+  const base = git(projectRoot, ["rev-parse", "HEAD"]);
+  fs.appendFileSync(path.join(projectRoot, "src", "example.mjs"), "\n// changed\n");
+  const installed = await import(pathToFileURL(path.join(
+    projectRoot,
+    ".agents",
+    "runtime",
+    "leon-engineering",
+    "lib",
+    "verification",
+    "index.mjs",
+  )));
+  const plan = installed.planGitVerification({projectRoot, base});
+  assert.equal(plan.binding.frameworkVersion, "0.19.3");
+  assert.equal(plan.binding.frameworkCommit, applied.manifest.sourceCommit);
   fs.appendFileSync(
     path.join(projectRoot, ".agents", "runtime", "leon-engineering", "lib", "verification", "index.mjs"),
     "// drift\n",
