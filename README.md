@@ -18,6 +18,12 @@ node --test tests/*.test.mjs
 # 架构地图完整性
 node scripts/check-architecture-map.mjs --project .
 
+# 对当前 Git changed set 生成绑定计划
+node scripts/verification-plan.mjs --project . --base <基线提交>
+
+# 项目机械约束（对完整 changed set 重复传入路径）
+node scripts/project-constraints.mjs --project . --changed-file <相对路径>
+
 # 现有项目验收规划兼容入口
 node scripts/verification-plan.mjs \
   --project /absolute/project \

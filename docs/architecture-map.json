@@ -8,7 +8,9 @@
     "docs/DEVELOPMENT_MAP.md"
   ],
   "roots": [
+    {"path": ".agents", "owner": "project-constraints"},
     {"path": ".claude-plugin", "owner": "plugins"},
+    {"path": ".github", "owner": "verification"},
     {"path": ".gitignore", "owner": "governance"},
     {"path": "README.md", "owner": "governance"},
     {"path": "AGENTS.md", "owner": "governance"},
@@ -90,6 +92,8 @@
       "id": "verification",
       "responsibility": "Own read-only verification planning and the compatibility surface for project verification policies.",
       "sources": [
+        ".agents/verification-policy.json",
+        ".github/workflows/framework-checks.yml",
         "lib/verification",
         "schemas/verification-policy-v3.schema.json",
         "schemas/verification-plan-v3.schema.json",
@@ -106,6 +110,8 @@
         "tests/verification-compat.test.mjs",
         "tests/verification-change-set.test.mjs",
         "tests/verification-receipt.test.mjs",
+        "tests/framework-policy.test.mjs",
+        "tests/framework-ci.test.mjs",
         "tests/fixtures/verification"
       ],
       "documentationTriggers": [
@@ -128,7 +134,9 @@
       ],
       "tests": [
         "tests/project-profile.test.mjs",
-        "tests/project-runtime.test.mjs"
+        "tests/project-runtime.test.mjs",
+        "tests/minimal-project.test.mjs",
+        "tests/fixtures/minimal-project"
       ],
       "documentationTriggers": [
         "Discovery evidence, candidate command or project-root safety changes."
@@ -138,6 +146,7 @@
       "id": "project-constraints",
       "responsibility": "Own static project constraints and their explicit project-local installer.",
       "sources": [
+        ".agents/project-constraints.json",
         "scripts/project-constraints.mjs",
         "scripts/install-project-constraints.mjs"
       ],

@@ -1,0 +1,47 @@
+name: Framework Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  framework:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Fixed contracts
+        run: node --test tests/*.test.mjs
+      - name: Architecture map
+        run: node scripts/check-architecture-map.mjs --project .
+      - name: Project constraints for the complete changed set
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          node --input-type=module <<'NODE'
+          import {execFileSync, spawnSync} from "node:child_process";
+          const requested = process.env.BASE_SHA;
+          const base = requested && !/^0+$/.test(requested)
+            ? requested
+            : execFileSync("git", ["rev-parse", "HEAD^"], {encoding: "utf8"}).trim();
+          const plan = JSON.parse(execFileSync(process.execPath, [
+            "scripts/verification-plan.mjs", "--project", ".", "--base", base,
+          ], {encoding: "utf8"}));
+          const args = ["scripts/project-constraints.mjs", "--project", "."];
+          for (const file of plan.changedFiles) args.push("--changed-file", file);
+          const result = spawnSync(process.execPath, args, {encoding: "utf8"});
+          process.stdout.write(result.stdout);
+          process.stderr.write(result.stderr);
+          process.exit(result.status ?? 1);
+          NODE
+      - name: Whitespace
+        run: git diff --check

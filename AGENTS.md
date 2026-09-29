@@ -33,6 +33,8 @@
 
 ```bash
 node scripts/check-architecture-map.mjs --project .
+node scripts/verification-plan.mjs --project . --base <基线提交>
+node scripts/project-constraints.mjs --project . --changed-file <完整变更路径>
 node --test tests/*.test.mjs
 git diff --check
 ```

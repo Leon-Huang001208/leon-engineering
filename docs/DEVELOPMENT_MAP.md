@@ -31,3 +31,10 @@ node scripts/check-architecture-map.mjs --project .
 node --test tests/architecture-map.test.mjs tests/catalog.test.mjs
 git diff --check
 ```
+
+## 框架自用
+
+- `.agents/verification-policy.json` 是 leon 自身的 changed-file 路由真源；验收内核、schema、runtime、adapter、Hook、CI 和插件边界固定升级到 L4。
+- `.agents/project-constraints.json` 检查入口、开发地图同步、共享内核依赖和 CI 固定命令。
+- `.github/workflows/framework-checks.yml` 只声明本仓的轻量固定合同；远端未实际运行时不能报告 CI 已通过。
+- `tests/fixtures/minimal-project/` 是不含业务项目路径的第二样例，证明配置驱动的局部验收、未知升级、回执和 runtime 漂移行为。
