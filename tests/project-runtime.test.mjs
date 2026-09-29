@@ -34,6 +34,26 @@ function project(t) {
   return root;
 }
 
+function upgradedSource(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "leon-project-runtime-source-"));
+  t.after(() => fs.rmSync(root, {recursive: true, force: true}));
+  for (const relative of [".claude-plugin", "lib/verification", "schemas"]) {
+    fs.cpSync(path.join(SOURCE_ROOT, relative), path.join(root, relative), {recursive: true});
+  }
+  git(root, ["init", "-q"]);
+  git(root, ["config", "user.email", "test@example.invalid"]);
+  git(root, ["config", "user.name", "Test User"]);
+  git(root, ["add", "."]);
+  git(root, ["commit", "-q", "-m", "copied source"]);
+  fs.appendFileSync(path.join(root, "lib", "verification", "errors.mjs"), "\n// upgraded fixture\n");
+  const plugin = JSON.parse(fs.readFileSync(path.join(root, ".claude-plugin", "plugin.json"), "utf8"));
+  plugin.version = "0.19.4-test";
+  fs.writeFileSync(path.join(root, ".claude-plugin", "plugin.json"), `${JSON.stringify(plugin, null, 2)}\n`);
+  git(root, ["add", "."]);
+  git(root, ["commit", "-q", "-m", "upgrade source"]);
+  return root;
+}
+
 test("previews and applies a clean runtime without touching project policy or wrappers", t => {
   const projectRoot = project(t);
   const preview = previewProjectRuntime({sourceRoot: SOURCE_ROOT, projectRoot});
@@ -75,6 +95,18 @@ test("injected promotion failure leaves no partial runtime", t => {
   assert.equal(fs.existsSync(path.join(projectRoot, ".agents", "runtime", "leon-engineering")), false);
 });
 
+test("receipt publication failure restores the pre-apply state", t => {
+  const projectRoot = project(t);
+  assert.throws(
+    () => applyProjectRuntime(
+      {sourceRoot: SOURCE_ROOT, projectRoot},
+      {beforeReceipt: () => { throw new Error("injected receipt failure"); }},
+    ),
+    /injected receipt failure/,
+  );
+  assert.equal(fs.existsSync(path.join(projectRoot, ".agents", "runtime", "leon-engineering")), false);
+});
+
 test("refuses a symbolic-link project runtime parent", t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "leon-project-runtime-link-"));
   const external = fs.mkdtempSync(path.join(os.tmpdir(), "leon-project-runtime-external-"));
@@ -100,6 +132,17 @@ test("rollback removes only an owned clean install and refuses later drift", t =
     "// drift\n",
   );
   assert.throws(() => rollbackProjectRuntime({projectRoot: drifted, receiptPath: second.receiptPath}), /runtime drift/);
+});
+
+test("upgrade rollback restores the exact previously managed runtime", t => {
+  const projectRoot = project(t);
+  applyProjectRuntime({sourceRoot: SOURCE_ROOT, projectRoot});
+  const upgradeRoot = upgradedSource(t);
+  const upgraded = applyProjectRuntime({sourceRoot: upgradeRoot, projectRoot});
+  assert.equal(upgraded.status, "upgraded");
+  assert.equal(verifyProjectRuntime({sourceRoot: upgradeRoot, projectRoot}).valid, true);
+  rollbackProjectRuntime({projectRoot, receiptPath: upgraded.receiptPath});
+  assert.equal(verifyProjectRuntime({sourceRoot: SOURCE_ROOT, projectRoot}).valid, true);
 });
 
 test("Harness distribution declares every verification library and schema resource", () => {
