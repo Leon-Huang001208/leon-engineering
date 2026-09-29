@@ -1,9 +1,22 @@
 #!/usr/bin/env node
 
+import fs from "node:fs";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 
-import {buildLegacyVerificationPlan, planGitVerification} from "../lib/verification/index.mjs";
+async function loadVerificationLibrary() {
+  const candidates = ["../lib/verification/index.mjs", "./lib/verification/index.mjs"];
+  for (const candidate of candidates) {
+    try {
+      return await import(new URL(candidate, import.meta.url));
+    } catch (error) {
+      if (error?.code !== "ERR_MODULE_NOT_FOUND") throw error;
+    }
+  }
+  throw new Error("verification library is unavailable");
+}
+
+const {buildLegacyVerificationPlan, planGitVerification} = await loadVerificationLibrary();
 
 export function buildVerificationPlan(options) {
   return buildLegacyVerificationPlan(options);
@@ -54,7 +67,7 @@ function main(args) {
   process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))) {
   try {
     main(process.argv.slice(2));
   } catch (error) {

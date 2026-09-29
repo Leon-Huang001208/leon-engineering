@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leon-engineering.local/schemas/project-runtime-manifest-v1.schema.json",
+  "title": "leon-engineering managed project runtime manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "adapter", "frameworkVersion", "sourceCommit", "protocols", "files"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "adapter": {"const": "leon-engineering-project-runtime"},
+    "frameworkVersion": {"type": "string", "minLength": 1},
+    "sourceCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "protocols": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "plan", "receipt"],
+      "properties": {
+        "policy": {"const": 3},
+        "plan": {"const": 3},
+        "receipt": {"const": 2}
+      }
+    },
+    "files": {
+      "type": "object",
+      "propertyNames": {"type": "string", "minLength": 1},
+      "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    }
+  }
+}

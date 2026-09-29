@@ -20,6 +20,7 @@
     {"path": "plugins", "owner": "plugins"},
     {"path": "schemas", "owner": "verification"},
     {"path": "scripts", "owner": "governance"},
+    {"path": "templates", "owner": "project-discovery"},
     {"path": "tests", "owner": "governance"}
   ],
   "documentClasses": {
@@ -115,14 +116,19 @@
       "id": "project-discovery",
       "responsibility": "Own bounded project fact discovery and candidate verifier profiles without claiming execution.",
       "sources": [
+        "lib/project",
+        "schemas/project-runtime-manifest-v1.schema.json",
+        "scripts/project-runtime.mjs",
         "scripts/profile-project.mjs",
-        "adapters/codex/project-profile-schema.json"
+        "adapters/codex/project-profile-schema.json",
+        "templates/project"
       ],
       "documentation": [
         "docs/2026-07-31-global-project-framework-design.md"
       ],
       "tests": [
-        "tests/project-profile.test.mjs"
+        "tests/project-profile.test.mjs",
+        "tests/project-runtime.test.mjs"
       ],
       "documentationTriggers": [
         "Discovery evidence, candidate command or project-root safety changes."
