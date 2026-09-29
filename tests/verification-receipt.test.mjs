@@ -110,6 +110,8 @@ test("valid bound receipt proves local and CI merge gates while preserving manua
     mergeReady: true,
     releaseReady: false,
     executedCount: fixture.receipt.executed.length,
+    externalCount: fixture.receipt.external.length,
+    realMachineCount: fixture.receipt.realMachine.length,
     escalationRequired: false,
   });
   const cli = spawnSync(process.execPath, [
