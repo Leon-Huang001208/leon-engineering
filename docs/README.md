@@ -1,15 +1,20 @@
 # leon-engineering 文档索引
 
-## 当前工程底座治理
+## 当前入口
 
-- [现状、差异与迁移基线](2026-09-29-engineering-foundation-governance-audit.md)
-- [工程底座治理设计](superpowers/specs/2026-09-29-engineering-foundation-governance-design.md)
-- [分阶段实施计划](superpowers/plans/2026-09-29-engineering-foundation-governance.md)
+- [项目入口](../README.md)
+- [现行架构](ARCHITECTURE.md)
+- [开发地图](DEVELOPMENT_MAP.md)
 
-以上三份文件描述当前治理任务。下列日期文档、历史设计、计划和试点结果保留为决策与证据，不自动代表当前运行方式；现行命令仍以对应模块文档、脚本帮助和测试合同为准。
+日期审计记录观察时点及后续事项，不是另一份运行规则。下列日期文档、历史设计、计划和试点结果保留为决策与证据，不自动代表当前运行方式；现行命令仍以对应模块文档、脚本帮助和测试合同为准。
 
 ## 历史设计、计划与证据
 
+- [2026-09-30 Codex Hook 协议与来源审计](2026-09-30-codex-hook-compat-audit.md)
+- [2026-09-30 职责收敛审计与处置](2026-09-30-role-convergence-audit.md)
+- [2026-09-29 现状、差异与迁移基线](2026-09-29-engineering-foundation-governance-audit.md)
+- [工程底座治理设计](superpowers/specs/2026-09-29-engineering-foundation-governance-design.md)
+- [分阶段实施计划](superpowers/plans/2026-09-29-engineering-foundation-governance.md)
 - [Codex–Claude 共享适配器设计](2026-07-31-codex-claude-adapter-design.md)
 - [全局项目框架设计](2026-07-31-global-project-framework-design.md)
 - [项目适配器设计](superpowers/specs/2026-07-31-project-adapter-design.md)

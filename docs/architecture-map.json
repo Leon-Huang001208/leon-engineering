@@ -50,7 +50,9 @@
       "docs/pilot-results.md",
       "docs/2026-09-21-token-harness-v0190.md",
       "docs/2026-09-23-skill-portfolio-report.md",
-      "docs/2026-09-29-engineering-foundation-governance-audit.md"
+      "docs/2026-09-29-engineering-foundation-governance-audit.md",
+      "docs/2026-09-30-role-convergence-audit.md",
+      "docs/2026-09-30-codex-hook-compat-audit.md"
     ],
     "generated": [],
     "archive": []
@@ -58,7 +60,7 @@
   "modules": [
     {
       "id": "harness",
-      "responsibility": "Own task state, recovery, observations, bounded evidence, storage, evaluation and control-plane state.",
+      "responsibility": "Own task and dependency state, recovery, observations, bounded evidence, storage and evaluation without driving the host model loop.",
       "sources": [
         "scripts/harness-control.mjs",
         "scripts/harness-enforce.mjs",
@@ -90,7 +92,7 @@
     },
     {
       "id": "verification",
-      "responsibility": "Own read-only verification planning and the compatibility surface for project verification policies.",
+      "responsibility": "Own read-only verification planning, deterministic receipt validation and the compatibility surface for project-owned verification policies.",
       "sources": [
         ".agents/verification-policy.json",
         ".github/workflows/framework-checks.yml",
