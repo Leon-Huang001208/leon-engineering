@@ -1,6 +1,6 @@
 # leon-engineering
 
-`leon-engineering` 是面向 Codex 与 Claude 的跨项目工程底座。它提供可复用的 Harness、最小充分验收、项目发现与约束、受管交付、Skill 治理和宿主适配；业务目录、领域测试、支持平台与项目验收仍由各项目配置拥有。
+`leon-engineering` 是面向 Codex、Claude 及其他 coding agents 的跨项目工程治理与验证层。它复用宿主的模型推理循环、工具协议和上下文运行时，提供可复用的项目规则、架构约束、变更影响分析、最小充分验收、证据回执、任务交接、Skill 治理、受管交付及薄宿主适配。项目保有自己的业务规则、验证命令和平台支持策略；跨宿主定位不表示所有宿主均已完成真实兼容验证。
 
 ## 从这里开始
 
@@ -43,10 +43,11 @@ git diff --check
 
 ## 关键边界
 
-- `lib/` 是可复用内核；`scripts/` 保留稳定 CLI、参数、输出和退出码。
+- `lib/` 是宿主无关、项目无关的共享内核；`scripts/` 保留稳定 CLI、参数、输出和退出码。
 - `plugins/*/skills/*/SKILL.md` 是框架 Skill 正文的唯一维护位置；安装副本不手工编辑。
 - `adapters/` 只承载宿主差异；共享内核不反向依赖 Codex 或 Claude。
-- 项目 `.agents/` 拥有自己的路径映射、验证命令、平台支持和工程约束。
+- Codex 插件负责工具前的 guard；受管 User adapter 的 Pre/Post Hook 负责项目账本。同一调用只由一个 Codex Harness 路径登记；Hook 返回不代表命令或验收通过。
+- 项目 `.agents/verification-policy.json` 是变更到验收的机器路由真源；项目配置拥有路径映射、验证命令、平台支持和工程约束。
 - 架构地图说明“谁拥有源码、文档和测试”；验收策略说明“本次改动必须证明什么”，两者不能相互替代。
 
 ## 非目标

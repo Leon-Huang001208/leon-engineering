@@ -306,7 +306,7 @@ test("retains a non-git project instruction root for nested work", t => {
   assert.equal(fs.existsSync(path.join(nested, ".ai")), false);
 });
 
-test("hook CLI emits an allow decision with structured degraded diagnostics", t => {
+test("Codex diagnostic recovery emits no unsupported allow decision and keeps structured diagnostics", t => {
   const project = makeProject(t);
   const script = path.resolve(import.meta.dirname, "..", "scripts", "harness-hook.mjs");
   const executed = spawnSync(process.execPath, [script, "--phase", "pre", "--host", "codex"], {
@@ -316,11 +316,7 @@ test("hook CLI emits an allow decision with structured degraded diagnostics", t 
   });
 
   assert.equal(executed.status, 0, executed.stderr);
-  const output = JSON.parse(executed.stdout).hookSpecificOutput;
-  assert.equal(output.hookEventName, "PreToolUse");
-  assert.equal(output.permissionDecision, "allow");
-  assert.match(output.permissionDecisionReason, /classification=diagnostic_read/);
-  assert.match(output.permissionDecisionReason, /stage=session_identity/);
+  assert.equal(executed.stdout, "");
   assert.doesNotMatch(executed.stdout, /PRIVATE_TOOL_INPUT/);
   const diagnostic = JSON.parse(executed.stderr.trim());
   assert.equal(diagnostic.component, "harness-hook");
@@ -330,6 +326,98 @@ test("hook CLI emits an allow decision with structured degraded diagnostics", t 
   assert.match(diagnostic.manifestPath, /\.leon-engineering-harness-runtime\.json$/);
   assert.match(diagnostic.recoveryCommand, /harness-session\.mjs.*--help/);
   assert.doesNotMatch(executed.stderr, /PRIVATE_TOOL_INPUT/);
+});
+
+test("Codex degraded mutation stays blocked while malformed post input never emits a pre event", t => {
+  const project = makeProject(t);
+  const script = path.resolve(import.meta.dirname, "..", "scripts", "harness-hook.mjs");
+  const pre = spawnSync(process.execPath, [script, "--phase", "pre", "--host", "codex"], {
+    encoding: "utf8",
+    env: {...process.env, CODEX_SESSION_ID: ""},
+    input: JSON.stringify({cwd: project, tool_name: "apply_patch", tool_input: {command: "synthetic edit"}})
+  });
+  assert.equal(pre.status, 0, pre.stderr);
+  assert.equal(JSON.parse(pre.stdout).hookSpecificOutput.permissionDecision, "deny");
+
+  const post = spawnSync(process.execPath, [script, "--phase", "post", "--host", "codex"], {
+    encoding: "utf8",
+    input: "{PRIVATE_SENTINEL"
+  });
+  assert.notEqual(post.status, 0);
+  assert.equal(post.stdout, "");
+  assert.doesNotMatch(post.stderr, /PRIVATE_SENTINEL/);
+  const diagnostic = JSON.parse(post.stderr.trim());
+  assert.equal(diagnostic.component, "harness-hook");
+  assert.equal(diagnostic.stage, "hook_protocol");
+  assert.equal(diagnostic.code, "initialization_failed");
+});
+
+test("Codex plugin and User adapter register one host task and one pre/post pair", t => {
+  const project = makeProject(t);
+  const script = path.resolve(import.meta.dirname, "..", "scripts", "harness-hook.mjs");
+  const pluginRoot = path.resolve(import.meta.dirname, "..");
+  const input = JSON.stringify({cwd: project, session_id: "shared-codex-session", tool_name: "Bash", tool_input: {command: "git status --short"}});
+  for (const phase of ["pre", "post"]) {
+    const plugin = spawnSync(process.execPath, [script, "--phase", phase], {
+      encoding: "utf8", env: {...process.env, PLUGIN_ROOT: pluginRoot, CLAUDE_PLUGIN_ROOT: pluginRoot}, input
+    });
+    assert.equal(plugin.status, 0, plugin.stderr);
+    assert.equal(plugin.stdout, "");
+  }
+  const largePlugin = spawnSync(process.execPath, [script, "--phase", "pre"], {
+    encoding: "utf8",
+    env: {...process.env, PLUGIN_ROOT: pluginRoot, CLAUDE_PLUGIN_ROOT: pluginRoot},
+    input: JSON.stringify({cwd: project, session_id: "shared-codex-session", tool_name: "Bash", tool_input: {command: "x".repeat(256 * 1024)}})
+  });
+  assert.equal(largePlugin.status, 0, largePlugin.stderr);
+  assert.equal(largePlugin.stdout, "");
+
+  for (const phase of ["pre", "post"]) {
+    const user = spawnSync(process.execPath, [script, "--phase", phase, "--host", "codex"], {encoding: "utf8", input});
+    assert.equal(user.status, 0, user.stderr);
+  }
+  const events = fs.readFileSync(path.join(project, ".ai", "harness", "events.jsonl"), "utf8")
+    .trim().split("\n").map(JSON.parse);
+  assert.deepEqual(events.map(event => [event.event, event.host]), [
+    ["task_started", "codex"],
+    ["policy_decision", "codex"],
+    ["tool_completed", "codex"]
+  ]);
+});
+
+test("Claude plugin still records with only its compatibility root", t => {
+  const project = makeProject(t);
+  const script = path.resolve(import.meta.dirname, "..", "scripts", "harness-hook.mjs");
+  const env = {...process.env, CLAUDE_PLUGIN_ROOT: path.resolve(import.meta.dirname, "..")};
+  delete env.PLUGIN_ROOT;
+  const input = JSON.stringify({cwd: project, session_id: "claude-plugin-session", tool_name: "Bash", tool_input: {command: "pwd"}});
+  for (const phase of ["pre", "post"]) {
+    const result = spawnSync(process.execPath, [script, "--phase", phase], {encoding: "utf8", env, input});
+    assert.equal(result.status, 0, result.stderr);
+  }
+  const events = fs.readFileSync(path.join(project, ".ai", "harness", "events.jsonl"), "utf8")
+    .trim().split("\n").map(JSON.parse);
+  assert.deepEqual(events.map(event => [event.event, event.host]), [
+    ["task_started", "claude"],
+    ["policy_decision", "claude"],
+    ["tool_completed", "claude"]
+  ]);
+});
+
+test("failed tool return is recorded as a return, never as passing verification", t => {
+  const project = makeProject(t);
+  const script = path.resolve(import.meta.dirname, "..", "scripts", "harness-hook.mjs");
+  const input = JSON.stringify({
+    cwd: project, session_id: "failed-tool-session", tool_name: "Bash",
+    tool_input: {command: "exit 7"}, tool_response: {exit_code: 7}
+  });
+  const result = spawnSync(process.execPath, [script, "--phase", "post", "--host", "codex"], {encoding: "utf8", input});
+  assert.equal(result.status, 0, result.stderr);
+  const events = fs.readFileSync(path.join(project, ".ai", "harness", "events.jsonl"), "utf8")
+    .trim().split("\n").map(JSON.parse);
+  assert.ok(events.some(event => event.event === "tool_completed"));
+  assert.equal(events.some(event => event.event === "verification_completed"), false);
+  assert.equal(events.some(event => event.verificationStatus === "passed"), false);
 });
 
 test("an installed hook executes from a realpath-normalized temporary runtime", t => {
