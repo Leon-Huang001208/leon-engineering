@@ -342,8 +342,9 @@ function logDiagnostic(result) {
   })}\n`);
 }
 
-function writePreHookDecision(result) {
+function writePreHookDecision(result, host) {
   if (result.decision !== "deny" && !result.degraded) return;
+  if (host === "codex" && result.decision === "allow") return;
   process.stdout.write(JSON.stringify({hookSpecificOutput: {
     hookEventName: "PreToolUse",
     permissionDecision: result.decision,
@@ -355,13 +356,21 @@ function parseArgs(args) {
   if (args.length < 2 || args[0] !== "--phase" || !["pre", "post"].includes(args[1])) {
     throw new Error("use --phase pre|post [--host claude|codex]");
   }
-  if (args.length === 2) return {phase: args[1], host: "claude"};
+  if (args.length === 2) {
+    const pluginCodex = Boolean(process.env.PLUGIN_ROOT);
+    return {phase: args[1], host: pluginCodex ? "codex" : "claude", pluginCodex};
+  }
   if (args.length === 4 && args[2] === "--host" && ["claude", "codex"].includes(args[3])) return {phase: args[1], host: args[3]};
   throw new Error("use --phase pre|post [--host claude|codex]");
 }
 
 async function main(args) {
-  const {phase, host} = parseArgs(args);
+  const {phase, host, pluginCodex} = parseArgs(args);
+  // Codex's User adapter owns the task ledger; the shared plugin owns the guard.
+  if (pluginCodex) {
+    for await (const _chunk of process.stdin) {} // Drain the hook input before exiting.
+    return;
+  }
   const chunks = [];
   for await (const chunk of process.stdin) chunks.push(chunk);
   let input;
@@ -372,7 +381,7 @@ async function main(args) {
   }
   const result = handleHarnessHook({phase, input, host});
   logDiagnostic(result);
-  if (phase === "pre") writePreHookDecision(result);
+  if (phase === "pre") writePreHookDecision(result, host);
 }
 
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))) {
@@ -385,6 +394,7 @@ if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(file
       reason: diagnosticReason(diagnostic, "unknown")
     };
     logDiagnostic(result);
-    writePreHookDecision(result);
+    if (process.argv[3] === "pre") writePreHookDecision(result, "codex");
+    else process.exitCode = 1;
   });
 }
