@@ -251,14 +251,15 @@
       ],
       "documentation": [
         "docs/shared-capability-catalog.md",
-        "docs/2026-09-23-optional-commands-plugin.md"
+        "docs/2026-09-23-optional-commands-plugin.md",
+        "plugins/leon-engineering-core/skills/feature-loop/references/engineering-methods.md"
       ],
       "tests": [
         "tests/catalog.test.mjs",
         "tests/reasoning-skills.test.mjs"
       ],
       "documentationTriggers": [
-        "Plugin IDs, versions, Skill grouping, default enablement or marketplace entries change."
+        "Plugin IDs, versions, Skill grouping, default enablement, marketplace entries or shared method references change."
       ]
     },
     {

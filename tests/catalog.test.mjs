@@ -490,6 +490,46 @@ test("reconciles CC-Switch flags from active directories and the enabled framewo
   ]);
 });
 
+test("keeps engineering methods in one reference without broadening workflow triggers", () => {
+  const relative = "plugins/leon-engineering-core/skills/feature-loop/references/engineering-methods.md";
+  const reference = fs.readFileSync(path.join(root, relative), "utf8");
+  const feature = readSkill("feature-loop");
+  const bugfix = readSkill("bugfix-evidence");
+  assert.equal(frontmatter(feature).description, "Use when delivering a scoped engineering feature from acceptance criteria through implementation, verification, review, and handoff.");
+  assert.equal(frontmatter(bugfix).description, "Use when correcting a regression or defect that needs a reproduced failure, narrow root-cause analysis, minimal fix, and verified evidence.");
+  for (const [directory, source] of [["feature-loop", feature], ["bugfix-evidence", bugfix]]) {
+    const links = [...source.matchAll(/\]\(([^)]+engineering-methods\.md)\)/g)];
+    assert.equal(links.length, 1);
+    const target = path.resolve(root, "plugins/leon-engineering-core/skills", directory, links[0][1]);
+    assert.equal(target, path.join(root, relative));
+  }
+  for (const pattern of [
+    /agreed interfaces.*observable behavior/s,
+    /expected results.*specification.*known-good examples.*independent/s,
+    /Do not recompute.*implementation/s,
+    /Mock.*test purpose/s,
+    /project.*mandatory contracts.*verification routing/s,
+    /prioritizing.*does not waive.*required checks/s,
+    /small, clear task.*does not add.*interview.*approval/s,
+    /does not trigger.*whole-repository scan.*HTML report.*parallel agents/s
+  ]) assert.match(reference, pattern);
+  assert.match(feature, /Implement the smallest complete slice/);
+});
+
+test("preserves architecture judgment and method provenance without a new skill", () => {
+  const reference = fs.readFileSync(path.join(root, "plugins/leon-engineering-core/skills/feature-loop/references/engineering-methods.md"), "utf8");
+  assert.match(reference, /concentrates complexity.*forwarding.*configuration.*understanding/s);
+  assert.match(reference, /thin module.*not.*deletion/s);
+  assert.match(reference, /existing architecture decisions.*concrete problem.*trade-offs/s);
+  assert.match(reference, /mattpocock\/skills/);
+  assert.match(reference, /upstream commit.*unknown/s);
+  assert.match(reference, /folder hash.*not an upstream commit/s);
+  assert.match(reference, /Copyright \(c\) 2026 Matt Pocock/);
+  assert.match(reference, /MIT License/);
+  assert.match(reference, /permission notice shall be included/);
+  assert.doesNotMatch(reference, /^---\s*\nname:/);
+});
+
 test("adds a missing enabled framework workflow to the CC-Switch catalog", () => {
   assert.deepEqual(buildPluginAdditions({
     rows: [{id: "local:agent-routing", directory: "agent-routing"}],
