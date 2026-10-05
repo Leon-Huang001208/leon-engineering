@@ -9,4 +9,6 @@ Confirm the outcome, non-goals, acceptance criteria, affected contracts, and evi
 
 Implement the smallest complete slice. Add or update the closest test before behavior changes, run focused verification, inspect the diff, and request a review proportional to risk. Do not claim browser, platform, or CI results that were not observed.
 
+Use the [engineering methods reference](references/engineering-methods.md) when designing tests or considering an architecture change within the accepted scope.
+
 Hand off changed files, commands and results, omitted checks, rollout risks, and follow-up work.
