@@ -57,3 +57,5 @@ git diff --check
 - 不把本地安装、JSON 合法或模型声明当作真实宿主、CI、原生平台或发布证据。
 
 历史设计、计划和试点证据从 [文档索引](docs/README.md) 查阅；它们不自动代表当前运行契约。
+
+显式平台任务使用 `verification-plan.mjs --project <repo> --base <base-sha> --task-context <项目相对JSON>`；其 plan4/receipt3 将本宿主完成与总体验收分开，旧模式仍输出旧协议。详见 [平台任务验收](docs/platform-task-verification.md)。

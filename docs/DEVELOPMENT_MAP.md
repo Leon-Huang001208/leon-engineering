@@ -7,7 +7,7 @@
 | 模块 | 源码 | 权威文档 | 主要固定合同 | 文档同步触发 |
 | --- | --- | --- | --- | --- |
 | Harness | `scripts/harness-*.mjs` | `harness-v1.md`、`harness-control-plane.md` | `harness-*.test.mjs` | 账本、状态、事件、观察、恢复或隐私边界变化；控制状态不驱动模型/任务执行 |
-| Verification | `lib/verification/`、`schemas/verification-*.json`、`scripts/verification-plan.mjs` | 本文、治理设计、`2026-09-21-token-harness-v0190.md` | `verification-plan.test.mjs`、兼容/回执合同 | policy/plan/receipt schema、风险、深度、平台或证据语义变化 |
+| Verification | `lib/verification/`、`schemas/verification-*.json`、`scripts/verification-plan.mjs` | 本文、治理设计、`2026-09-21-token-harness-v0190.md` | `verification-plan.test.mjs`、兼容/回执合同 | policy/plan/receipt schema、风险、深度、平台或证据语义变化（新 task 模式 plan4/receipt3，旧模式保持 plan3/receipt2） |
 | Project discovery/runtime | `lib/project/`、`profile-project.mjs`、`project-runtime.mjs`、profile/runtime schema 与 `templates/project/` | 全局项目框架设计、治理设计 | `project-profile.test.mjs`、`project-runtime.test.mjs` | 发现事实、候选命令、受管项目运行时、manifest 或 project root 安全变化 |
 | Project constraints | `project-constraints*.mjs` | `project-constraints.md` | `project-constraints*.test.mjs` | 约束 schema、安装或 CI 使用方式变化 |
 | Delivery | `iteration-delivery.mjs` | `iteration-delivery.md` | `iteration-delivery.test.mjs` | 分支、worktree、发布、CI、回滚或清理状态变化 |
@@ -42,3 +42,5 @@ git diff --check
 - `.agents/project-constraints.json` 检查入口、开发地图同步、共享内核依赖和 CI 固定命令。
 - `.github/workflows/framework-checks.yml` 只声明本仓的轻量固定合同；远端未实际运行时不能报告 CI 已通过。
 - `tests/fixtures/minimal-project/` 是不含业务项目路径的第二样例，证明配置驱动的局部验收、未知升级、回执和 runtime 漂移行为。
+
+平台任务协议以 [Platform task verification](platform-task-verification.md) 为准：宿主任务通过与完整总体验收分开，runner/checkout/machine 身份是新模式硬门。

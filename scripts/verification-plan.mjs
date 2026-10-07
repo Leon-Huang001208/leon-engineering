@@ -16,7 +16,7 @@ async function loadVerificationLibrary() {
   throw new Error("verification library is unavailable");
 }
 
-const {buildLegacyVerificationPlan, planGitVerification} = await loadVerificationLibrary();
+const {buildLegacyVerificationPlan, planGitVerification, safeRegularFile} = await loadVerificationLibrary();
 
 export function buildVerificationPlan(options) {
   return buildLegacyVerificationPlan(options);
@@ -26,7 +26,7 @@ function parseArgs(args) {
   const options = {changedFiles: [], signals: []};
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
-    if (["--project", "--risk-tier", "--change-kind", "--changed-file", "--base", "--signal"].includes(argument)) {
+    if (["--project", "--risk-tier", "--change-kind", "--changed-file", "--base", "--signal", "--task-context"].includes(argument)) {
       const value = args[index + 1];
       if (!value || value.startsWith("--")) throw new Error(`${argument} requires a value`);
       if (argument === "--changed-file") options.changedFiles.push(value);
@@ -42,7 +42,7 @@ function parseArgs(args) {
 function usage() {
   return [
     "用法：verification-plan.mjs --project <项目目录> --risk-tier read-only|local-only|isolated|full-delivery --change-kind <类型> --changed-file <相对路径> [--changed-file ...]",
-    "      verification-plan.mjs --project <项目目录> --base <Git基线> [--changed-file <完整路径集> ...] [--signal validation_failure|unexpected_behavior]",
+    "      verification-plan.mjs --project <项目目录> --base <Git基线> [--changed-file <完整路径集> ...] [--signal validation_failure|unexpected_behavior] [--task-context <项目相对JSON>]",
   ].join("\n");
 }
 
@@ -53,11 +53,17 @@ function main(args) {
     return;
   }
   if (!options.project) throw new Error("--project requires a value");
+  let task;
+  if(options.task_context) {
+    if(!options.base) throw new Error('--task-context requires Git-bound planning with --base');
+    task=JSON.parse(fs.readFileSync(safeRegularFile(path.resolve(options.project),options.task_context,'PATH_ERROR'),'utf8'));
+  }
   const plan = options.base ? planGitVerification({
     projectRoot: options.project,
     base: options.base,
     changedFiles: options.changedFiles.length > 0 ? options.changedFiles : undefined,
     signals: options.signals,
+    task,
   }) : buildVerificationPlan({
       projectRoot: options.project,
       riskTier: options.risk_tier,

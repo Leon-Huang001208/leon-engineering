@@ -54,3 +54,7 @@ project rules + complete changed set
 ## 分发与回滚
 
 插件 manifest、Harness runtime manifest 和项目 runtime manifest 分别声明所有权。安装先整批预检，再 staging、哈希 readback 和原子提升；漂移、外来文件、符号链接、部分失败或回滚冲突均 fail closed。真实宿主加载需要独立重启/行为证据。
+
+## 显式平台任务验收
+
+Verification 可在显式 task 上下文启用 plan4/receipt3，保留完整 changed set 和总门禁，同时独立推导 hostAcceptance、platformHandoffs 与 aggregateAcceptance。旧 plan3/receipt2 不重解释为宿主通过。CI 来源平台与候选/checkout 身份必须一致，generic 不等于所有原生系统；cross-platform 未覆盖目标必须留下 NOT_RUN 交接。见 [协议说明](platform-task-verification.md)。
