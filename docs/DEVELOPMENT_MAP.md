@@ -10,7 +10,7 @@
 | Verification | `lib/verification/`、`schemas/verification-*.json`、`scripts/verification-plan.mjs` | 本文、治理设计、`2026-09-21-token-harness-v0190.md` | `verification-plan.test.mjs`、兼容/回执合同 | policy/plan/receipt schema、风险、深度、平台或证据语义变化（新 task 模式 plan4/receipt3，旧模式保持 plan3/receipt2） |
 | Project discovery/runtime | `lib/project/`、`profile-project.mjs`、`project-runtime.mjs`、profile/runtime schema 与 `templates/project/` | 全局项目框架设计、治理设计 | `project-profile.test.mjs`、`project-runtime.test.mjs` | 发现事实、候选命令、受管项目运行时、manifest 或 project root 安全变化 |
 | Project constraints | `project-constraints*.mjs` | `project-constraints.md` | `project-constraints*.test.mjs` | 约束 schema、安装或 CI 使用方式变化 |
-| Delivery | `iteration-delivery.mjs` | `iteration-delivery.md` | `iteration-delivery.test.mjs` | 分支、worktree、发布、CI、回滚或清理状态变化 |
+| Delivery | `iteration-delivery.mjs` | `iteration-delivery.md` | `iteration-delivery.test.mjs`（真实冲突、非冲突失败、旧回执恢复、候选/base关联与stderr脱敏） | 分支、worktree、发布、CI、回滚或清理状态变化 |
 | Governance | `lib/governance/`、Skill/profile 工具 | `ARCHITECTURE.md`、共享能力目录 | `architecture-map.test.mjs`、catalog/Skill tests | 模块归属、Skill 生命周期、文档分类或地图格式变化 |
 | Token audit | `token-audit.mjs` | Token/Harness v0.19.0 设计 | `token-audit.test.mjs` | 指标、隐私、输入发现或输出预算变化 |
 | Adapters | `adapters/`、`install-*-adapter.mjs` | Codex-Claude adapter 设计 | `codex-adapter.test.mjs`、`claude-adapter.test.mjs` | 受管文件、manifest、Hook 或宿主生命周期变化 |

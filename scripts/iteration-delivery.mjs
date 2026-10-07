@@ -11,23 +11,34 @@ const CI_STATUSES = new Set(["pending", "passed", "failed", "not_configured"]);
 const MAX_REPAIR_ATTEMPTS = 3;
 
 class CommandError extends Error {
-  constructor(message, result) {
-    super(message);
-    this.result = result;
+  constructor(command, result) {
+    const diagnostic = commandDiagnostic(result);
+    super(`${command} failed (${diagnostic.classification})`);
+    Object.defineProperty(this, "result", {value: result});
+    this.diagnostic = diagnostic;
   }
 }
 
+function commandDiagnostic(result, classification) {
+  const stderr = result.stderrBytes ?? Buffer.from(result.stderr ?? "", "utf8");
+  const errorCode = typeof result.error?.code === "string" && /^[A-Z0-9_]+$/.test(result.error.code) ? result.error.code : null;
+  return {
+    classification: classification ?? (result.error ? "spawn_error" : result.signal ? "process_signal" : "command_failed"),
+    exitStatus: Number.isInteger(result.status) ? result.status : null,
+    signal: typeof result.signal === "string" && /^SIG[A-Z0-9]+$/.test(result.signal) ? result.signal : null,
+    errorCode,
+    stderrBytes: stderr.length,
+    stderrSha256: crypto.createHash("sha256").update(stderr).digest("hex")
+  };
+}
+
 function run(command, args, {cwd, allowFailure = false, env} = {}) {
-  const result = spawnSync(command, args, {
+  const captured = spawnSync(command, args, {
     cwd,
-    encoding: "utf8",
     env: env ? {...process.env, ...env} : process.env
   });
-  if (result.error) throw result.error;
-  if (!allowFailure && result.status !== 0) {
-    const detail = (result.stderr || result.stdout || "command failed").trim();
-    throw new CommandError(`${command} failed: ${detail}`, result);
-  }
+  const result = {...captured, stdout: captured.stdout?.toString("utf8") ?? "", stderr: captured.stderr?.toString("utf8") ?? "", stderrBytes: captured.stderr ?? Buffer.alloc(0)};
+  if (!allowFailure && (result.error || result.status !== 0)) throw new CommandError(command, result);
   return result;
 }
 
@@ -270,24 +281,41 @@ export function startDelivery({projectRoot, taskId, slug, remote = "origin", wor
   return receipt;
 }
 
+function verifiedIntegrationCommit(receipt) {
+  const root = receipt.integrationWorktree;
+  const branch = git(root, ["symbolic-ref", "--quiet", "--short", "HEAD"], {allowFailure: true});
+  if (branch.status !== 0 || output(branch) !== receipt.integrationBranch) throw new Error("integration worktree is not on the recorded branch");
+  const head = output(git(root, ["rev-parse", "HEAD"]));
+  const currentFeature = output(git(root, ["rev-parse", "--verify", `${receipt.featureBranch}^{commit}`]));
+  if (currentFeature !== receipt.featureCommit) throw new Error("recorded feature commit moved; rebuild the integration candidate");
+  for (const [field, label] of [["featureCommit", "feature"], ["baseCommit", "base"], ...(receipt.mergeSourceCommit ? [["mergeSourceCommit", "merge source"]] : [])]) {
+    if (!/^[a-f0-9]{40}$/.test(receipt[field] ?? "")) throw new Error(`invalid recorded ${label} commit`);
+    if (git(root, ["merge-base", "--is-ancestor", receipt[field], head], {allowFailure: true}).status !== 0) {
+      throw new Error(`integration result does not contain recorded ${label} commit`);
+    }
+  }
+  return head;
+}
+
 export function prepareDelivery({projectRoot, taskId, integrationWorktreeRoot, replacePrepared = false}) {
   const repository = resolveRepository(projectRoot);
   assertTaskId(taskId);
   if (typeof replacePrepared !== "boolean") throw new Error("invalid replace prepared flag");
   return withTaskLock(repository, "integration", () => {
     const receipt = readDeliveryReceipt({projectRoot: repository.repositoryRoot, taskId});
-    if (receipt.status === "integration_conflict") {
+    if (new Set(["integration_conflict", "integration_failed"]).has(receipt.status)) {
+      const recoveredStatus = receipt.status;
       const unresolved = output(git(receipt.integrationWorktree, ["diff", "--name-only", "--diff-filter=U"]));
       if (unresolved) throw new Error("integration merge still has unresolved conflicts");
       assertCleanWorktree(receipt.integrationWorktree, "integration worktree");
       if (git(receipt.integrationWorktree, ["rev-parse", "-q", "--verify", "MERGE_HEAD"], {allowFailure: true}).status === 0) {
         throw new Error("integration merge must be committed before prepare can continue");
       }
-      receipt.integrationCommit = output(git(receipt.integrationWorktree, ["rev-parse", "HEAD"]));
+      receipt.integrationCommit = verifiedIntegrationCommit(receipt);
       receipt.status = "prepared";
       receipt.ci = {status: "pending", runs: []};
       saveReceipt(repository, receipt);
-      appendLog(repository, taskId, "prepared_after_conflict", {integrationCommit: receipt.integrationCommit});
+      appendLog(repository, taskId, recoveredStatus === "integration_conflict" ? "prepared_after_conflict" : "prepared_after_failure", {integrationCommit: receipt.integrationCommit});
       return receipt;
     }
     const replacingPrepared = replacePrepared && receipt.status === "prepared";
@@ -395,19 +423,31 @@ export function prepareDelivery({projectRoot, taskId, integrationWorktreeRoot, r
       "worktree", "add", "-b", integrationBranch, integrationWorktree,
       `refs/remotes/${receipt.remote}/${receipt.defaultBranch}`
     ]);
-    const merge = git(integrationWorktree, ["merge", "--no-ff", "--no-edit", mergeSource], {allowFailure: true});
+    const mergeSourceCommit = output(git(integrationWorktree, ["rev-parse", "--verify", `${mergeSource}^{commit}`]));
+    const merge = git(integrationWorktree, ["merge", "--no-ff", "--no-edit", mergeSourceCommit], {allowFailure: true});
     receipt.baseCommit = baseCommit;
     receipt.featureCommit = featureCommit;
     receipt.integrationBranch = integrationBranch;
     receipt.integrationWorktree = integrationWorktree;
     receipt.integrationHistory = history;
+    receipt.mergeSourceCommit = mergeSourceCommit;
     if (merge.status !== 0) {
-      receipt.status = "integration_conflict";
+      const unresolved = git(integrationWorktree, ["diff", "--name-only", "--diff-filter=U", "-z"], {allowFailure: true});
+      const conflicts = unresolved.status === 0 && unresolved.stdout.split("\0").some(Boolean);
+      receipt.status = conflicts ? "integration_conflict" : "integration_failed";
+      receipt.mergeFailure = commandDiagnostic(merge, conflicts ? "merge_conflict" : unresolved.status !== 0 ? "merge_state_unavailable" : undefined);
       saveReceipt(repository, receipt);
-      appendLog(repository, taskId, "integration_conflict");
-      throw new Error("integration merge has conflicts; resolve them in the preserved integration worktree");
+      appendLog(repository, taskId, receipt.status, {mergeFailure: receipt.mergeFailure});
+      throw new Error(conflicts ? "integration merge has conflicts; resolve them in the preserved integration worktree" : `integration merge failed (${receipt.mergeFailure.classification}); inspect the preserved worktree and safe diagnostics`);
     }
-    receipt.integrationCommit = output(git(integrationWorktree, ["rev-parse", "HEAD"]));
+    try {receipt.integrationCommit = verifiedIntegrationCommit(receipt);}
+    catch (error) {
+      receipt.status = "integration_failed";
+      receipt.mergeFailure = commandDiagnostic(merge, "integration_identity_failed");
+      saveReceipt(repository, receipt);
+      appendLog(repository, taskId, receipt.status, {mergeFailure: receipt.mergeFailure});
+      throw error;
+    }
     receipt.status = "prepared";
     receipt.ci = {status: "pending", runs: []};
     saveReceipt(repository, receipt);
@@ -766,6 +806,7 @@ if (process.argv[1] && fs.realpathSync(process.argv[1]) === fs.realpathSync(file
   try {
     main(process.argv.slice(2));
   } catch (error) {
+    if (error instanceof CommandError) process.stderr.write(`${JSON.stringify({component: "iteration-delivery", event: "command_failed", diagnostic: error.diagnostic})}\n`);
     process.stderr.write(`iteration delivery failed: ${error.message}\n`);
     process.exitCode = 1;
   }

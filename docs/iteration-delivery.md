@@ -27,7 +27,11 @@
 
 远端在 `prepare` 后推进时，`publish` 把 receipt 标为 `remote_moved` 并拒绝发布。再次运行 `prepare` 会保留旧集成提交的祖先关系，从新远端基线重建集成结果；新的结果必须重新验证。
 
-合并冲突时保留集成 worktree。解决冲突并提交后再次运行 `prepare`，控制器确认无未解决冲突且 worktree 干净，再进入 `prepared`。
+合并失败时保留集成 worktree。只有实际存在 unmerged entries 才记录 `integration_conflict`；Hook、权限、进程或其他非冲突错误记录 `integration_failed`，不把任意 Git 非零退出误报为内容冲突。receipt 与追加日志记录脱敏 `mergeFailure`：稳定分类、exitStatus、signal、errorCode、stderr 字节数及 SHA-256，不公开原 stderr。
+
+解决冲突或执行失败并提交后再次运行 `prepare`，控制器确认无未解决冲突、无 MERGE_HEAD、worktree 干净且位于登记集成分支。集成 HEAD 必须包含登记的 feature/base 提交及新回执的 mergeSourceCommit，功能分支也不能在恢复期间移到另一候选；干净但未归并的基线不能进入 `prepared`。无新增诊断字段的旧 conflict receipt 仍可恢复，但同样须证明 feature/base 已进入结果。正常合并使用固定 merge source SHA，并执行相同候选关联检查；后续 publish 的远端推进检查、重新验证及清理硬门保持。
+
+非零退出的底层原因若没有捕获证据仍为未知；稳定分类与 stderr 哈希不自动证明具体 Hook、权限或网络原因。修复控制器状态语义不授予关闭用户 Hook、重复发布或删除现场的权限。
 
 审核若在 `prepared` 后、发布前要求功能分支增加修复提交，使用 `--prepare --replace-prepared`。该操作不是普通重跑：receipt 必须仍为 `prepared`，功能和集成 worktree 必须干净，功能 HEAD 必须不同于已记录提交，远端默认分支必须仍等于 receipt 基线，旧集成提交不得已进入远端，并且 receipt 不得已有 CI run、PR、mode 或 remote commit。控制器在全部检查通过后才把旧 branch/worktree/commit 以 `superseded` 写入 `integrationHistory`、非强制移除旧集成 worktree，并创建下一编号 revision；任何条件失败都保留原 receipt 与 worktree。新 revision 必须重新运行合并结果验证。
 

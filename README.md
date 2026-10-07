@@ -49,6 +49,7 @@ git diff --check
 - Codex 插件负责工具前的 guard；受管 User adapter 的 Pre/Post Hook 负责项目账本。同一调用只由一个 Codex Harness 路径登记；Hook 返回不代表命令或验收通过。
 - 项目 `.agents/verification-policy.json` 是变更到验收的机器路由真源；项目配置拥有路径映射、验证命令、平台支持和工程约束。
 - 架构地图说明“谁拥有源码、文档和测试”；验收策略说明“本次改动必须证明什么”，两者不能相互替代。
+- 交付恢复必须证明登记候选与基线已进入所属集成分支；干净工作树不等于已归并。命令失败与内容冲突分别记录，诊断仅输出稳定分类和 stderr 字节数/哈希，见 [交付控制器](docs/iteration-delivery.md)。
 
 ## 非目标
 
