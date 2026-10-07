@@ -18,7 +18,7 @@ host-native agent runtime (model loop, tools, context, sandbox, approval)
 - Verification：只读规划、风险/深度/平台/执行维度、回执和兼容协议；项目策略是机器路由真源，规划器不执行配置命令。
 - Project：项目事实发现、候选命令和配置安装；发现不是验证。
 - Constraints：静态项目规则；不推断运行时或平台成功。
-- Delivery：隔离实现、集成、远端/CI 状态和安全清理；只有明确授权才发布。
+- Delivery：隔离实现、集成、远端/CI 状态和安全清理；只有实际 unmerged entries 才判内容冲突，其他命令失败保留脱敏诊断。prepared 必须证明登记候选/base 已进入所属集成分支，干净工作树本身不代表归并；只有明确授权才发布。
 - Governance：架构地图、Skill 生命周期、配置画像和文档分类。
 - Token audit：脱敏指标；代理指标不冒充 Token 节省。
 - Adapters：Codex/Claude 的文件、Hook 和生命周期差异。

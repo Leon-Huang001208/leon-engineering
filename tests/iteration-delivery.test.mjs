@@ -48,6 +48,86 @@ function receiptPath(project, taskId) {
   return path.join(commonDirectory, "leon-engineering", "deliveries", `${taskId}.json`);
 }
 
+function failedMergeFixture(t, taskId) {
+  const fixture = makeRepository(t);
+  const started = startDelivery({projectRoot: fixture.project, taskId, slug: "merge-failure"});
+  fs.writeFileSync(path.join(started.featureWorktree, "feature.txt"), "candidate\n");
+  commit(started.featureWorktree, "feat: controlled merge failure candidate");
+  const common = path.dirname(path.dirname(path.dirname(receiptPath(fixture.project, taskId))));
+  const hook = path.join(common, "hooks", "pre-merge-commit");
+  const sentinel = "PRIVATE_MERGE_STDERR_SENTINEL";
+  fs.writeFileSync(hook, `#!/bin/sh\nprintf '%s\\n' 'CONFLICT ${sentinel}' >&2\nexit 1\n`, {mode: 0o755});
+  assert.throws(() => prepareDelivery({projectRoot: fixture.project, taskId}), /integration merge/);
+  const failed = readDeliveryReceipt({projectRoot: fixture.project, taskId});
+  return {...fixture, started, failed, hook, sentinel, taskId};
+}
+
+test("non-conflict merge failures retain safe diagnostics instead of declaring content conflicts", t => {
+  const f = failedMergeFixture(t, "merge-error-classification");
+  assert.equal(git(f.failed.integrationWorktree, ["diff", "--name-only", "--diff-filter=U"]), "");
+  assert.equal(f.failed.status, "integration_failed");
+  assert.equal(f.failed.mergeFailure.classification, "command_failed");
+  assert.equal(f.failed.mergeFailure.exitStatus, 1);
+  assert.equal(f.failed.mergeFailure.signal, null);
+  assert.equal(f.failed.mergeFailure.errorCode, null);
+  assert.ok(f.failed.mergeFailure.stderrBytes > 0);
+  assert.match(f.failed.mergeFailure.stderrSha256, /^[a-f0-9]{64}$/);
+  assert.equal(JSON.stringify(f.failed).includes(f.sentinel), false);
+});
+
+test("legacy conflict receipts cannot promote a clean unmerged baseline to prepared", t => {
+  const f = failedMergeFixture(t, "merge-baseline-recovery");
+  git(f.failed.integrationWorktree, ["merge", "--abort"]);
+  const legacy = {...f.failed, status: "integration_conflict"};delete legacy.mergeFailure;delete legacy.mergeSourceCommit;
+  fs.writeFileSync(receiptPath(f.project, f.taskId), JSON.stringify(legacy));
+  const before = fs.readFileSync(receiptPath(f.project, f.taskId), "utf8");
+  assert.throws(() => prepareDelivery({projectRoot: f.project, taskId: f.taskId}), /recorded feature commit/);
+  assert.equal(fs.readFileSync(receiptPath(f.project, f.taskId), "utf8"), before);
+  assert.equal(git(f.failed.integrationWorktree, ["rev-parse", "HEAD"]), f.failed.baseCommit);
+});
+
+test("recovery accepts a committed candidate result but rejects an unrelated recorded base", t => {
+  const f = failedMergeFixture(t, "merge-base-association");
+  fs.unlinkSync(f.hook);commit(f.failed.integrationWorktree, "merge: complete controlled failure");
+  const wrongBase = git(f.project, ["commit-tree", "HEAD^{tree}", "-m", "unrelated fixture base"]);
+  fs.writeFileSync(receiptPath(f.project, f.taskId), JSON.stringify({...f.failed, baseCommit: wrongBase}));
+  assert.throws(() => prepareDelivery({projectRoot: f.project, taskId: f.taskId}), /recorded base commit/);
+  fs.writeFileSync(receiptPath(f.project, f.taskId), JSON.stringify(f.failed));
+  const resumed = prepareDelivery({projectRoot: f.project, taskId: f.taskId});
+  assert.equal(resumed.status, "prepared");
+});
+
+test("CLI command failures do not expose private Git stderr", t => {
+  const {root, project} = makeRepository(t);
+  const started = startDelivery({projectRoot: project, taskId: "command-private-stderr", slug: "private-stderr"});
+  fs.writeFileSync(path.join(started.featureWorktree, "feature.txt"), "candidate\n");commit(started.featureWorktree, "feat: candidate");
+  const sentinel = "PRIVATE_REMOTE_STDERR_SENTINEL";
+  git(project, ["remote", "set-url", "origin", path.join(root, sentinel)]);
+  const result = spawnSync(process.execPath, [new URL("../scripts/iteration-delivery.mjs", import.meta.url).pathname, "--prepare", "--project", project, "--task-id", "command-private-stderr"], {encoding: "utf8"});
+  assert.notEqual(result.status, 0);assert.equal(result.stderr.includes(sentinel), false);assert.match(result.stderr, /command_failed/);
+  const diagnostic = JSON.parse(result.stderr.split("\n")[0]).diagnostic;
+  assert.equal(diagnostic.classification, "command_failed");assert.ok(diagnostic.stderrBytes > 0);assert.match(diagnostic.stderrSha256, /^[a-f0-9]{64}$/);
+});
+
+test("legacy conflict receipts still recover after an actually committed candidate merge", t => {
+  const f = failedMergeFixture(t, "legacy-merged-recovery");
+  fs.unlinkSync(f.hook);commit(f.failed.integrationWorktree, "merge: complete legacy candidate");
+  const legacy = {...f.failed, status: "integration_conflict"};delete legacy.mergeFailure;delete legacy.mergeSourceCommit;
+  fs.writeFileSync(receiptPath(f.project, f.taskId), JSON.stringify(legacy));
+  assert.equal(prepareDelivery({projectRoot: f.project, taskId: f.taskId}).status, "prepared");
+});
+
+test("recovery refuses a moved feature candidate and a detached integration branch", t => {
+  const f = failedMergeFixture(t, "changed-candidate-recovery");
+  fs.unlinkSync(f.hook);commit(f.failed.integrationWorktree, "merge: complete candidate");
+  git(f.failed.integrationWorktree, ["checkout", "--detach"]);
+  assert.throws(() => prepareDelivery({projectRoot: f.project, taskId: f.taskId}), /recorded branch/);
+  git(f.failed.integrationWorktree, ["checkout", f.failed.integrationBranch]);
+  fs.writeFileSync(path.join(f.started.featureWorktree, "later.txt"), "new candidate\n");commit(f.started.featureWorktree, "feat: advance candidate");
+  assert.throws(() => prepareDelivery({projectRoot: f.project, taskId: f.taskId}), /recorded feature commit moved/);
+  assert.equal(readDeliveryReceipt({projectRoot: f.project, taskId: f.taskId}).status, "integration_failed");
+});
+
 function assertReplacementRefusedWithoutStateChange(project, taskId, expected) {
   const file = receiptPath(project, taskId);
   const receiptBefore = fs.readFileSync(file, "utf8");
