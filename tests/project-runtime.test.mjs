@@ -3,6 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {execFileSync, spawnSync} from "node:child_process";
+import {createHash} from "node:crypto";
+import {pathToFileURL} from "node:url";
 import test from "node:test";
 
 import {
@@ -67,6 +69,52 @@ test("previews and applies a clean runtime without touching project policy or wr
   assert.equal(fs.readFileSync(path.join(projectRoot, "scripts", "plan_verification.mjs"), "utf8"), "// project-owned wrapper\n");
   assert.equal(verifyProjectRuntime({sourceRoot: SOURCE_ROOT, projectRoot}).valid, true);
   assert.equal(fs.statSync(applied.receiptPath).mode & 0o777, 0o600);
+});
+
+test("legacy runtime inventories upgrade and rollback, but cannot certify the new source bundle", async t => {
+  const projectRoot = project(t);
+  const applied = applyProjectRuntime({sourceRoot: SOURCE_ROOT, projectRoot});
+  const manifestPath = path.join(applied.runtimeRoot, "manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  for (const file of ["lib/verification/platform-task.mjs", "schemas/verification-plan-v4.schema.json", "schemas/verification-receipt-v3.schema.json"]) {
+    fs.unlinkSync(path.join(applied.runtimeRoot, file));
+    delete manifest.files[file];
+  }
+  manifest.protocols = {policy: 3, plan: 3, receipt: 2};
+  const legacyCommit = "31be48bf7271421a30d05b3816e7f03d78ccffd4";
+  for (const file of Object.keys(manifest.files)) {
+    const content = execFileSync("git", ["show", `${legacyCommit}:${file}`], {cwd: SOURCE_ROOT});
+    fs.writeFileSync(path.join(applied.runtimeRoot, file), content);
+    manifest.files[file] = createHash("sha256").update(content).digest("hex");
+  }
+  manifest.sourceCommit = legacyCommit;
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+  assert.equal(verifyProjectRuntime({sourceRoot: SOURCE_ROOT, projectRoot}).valid, false);
+  assert.equal(previewProjectRuntime({sourceRoot: SOURCE_ROOT, projectRoot}).valid, true);
+  const upgraded = applyProjectRuntime({sourceRoot: SOURCE_ROOT, projectRoot});
+  assert.equal(verifyProjectRuntime({sourceRoot: SOURCE_ROOT, projectRoot}).valid, true);
+  rollbackProjectRuntime({projectRoot, receiptPath: upgraded.receiptPath});
+  assert.deepEqual(JSON.parse(fs.readFileSync(manifestPath, "utf8")).protocols, manifest.protocols);
+  assert.equal(fs.existsSync(path.join(applied.runtimeRoot, "lib/verification/platform-task.mjs")), false);
+  const legacy = await import(pathToFileURL(path.join(applied.runtimeRoot, "lib/verification/index.mjs")).href);
+  fs.copyFileSync(path.join(SOURCE_ROOT, "tests/fixtures/verification/rwb-v3/verification-policy.json"), path.join(projectRoot, ".agents/verification-policy.json"));
+  const plan = legacy.planVerification({projectRoot, changedFiles: ["app/research_web/main.py"]});
+  assert.equal(plan.schemaVersion, 3);
+  const validations = new Map([...plan.tests, ...plan.documentation, ...plan.ci].map(item => [item.id, item]));
+  const evidence = "legacy-evidence.txt";
+  fs.writeFileSync(path.join(projectRoot, evidence), "Synthetic compatibility fixture, not platform acceptance.\n");
+  const receipt = {
+    schemaVersion: 2, changeSummary: plan.changeSummary, changedFiles: plan.changedFiles,
+    plannedLevel: plan.requiredLevel, actualLevel: plan.requiredLevel, components: plan.components,
+    platforms: plan.platforms, impact: plan.impact,
+    executed: plan.receiptTemplate.requiredValidationIds.map(id => ({id, level: validations.get(id).level, status: "PASS", durationSeconds: 0, evidence})),
+    external: plan.receiptTemplate.externalGateIds.map(id => ({id, status: "PASS", evidence})),
+    realMachine: [], result: "PASS", mergeReady: true, releaseReady: true,
+    uncoveredRisks: plan.uncoveredRisks, escalation: {required: false, targetLevel: null, reasons: []},
+  };
+  const planPath = path.join(projectRoot, "legacy-plan.json"), receiptPath = path.join(projectRoot, "legacy-receipt.json");
+  fs.writeFileSync(planPath, JSON.stringify(plan)); fs.writeFileSync(receiptPath, JSON.stringify(receipt));
+  assert.equal(legacy.validateVerificationReceipt({projectRoot, planPath: "legacy-plan.json", receiptPath: "legacy-receipt.json"}).valid, true);
 });
 
 test("repeated apply is idempotent and managed drift is rejected", t => {

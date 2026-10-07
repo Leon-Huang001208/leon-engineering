@@ -8,22 +8,70 @@
     "docs/DEVELOPMENT_MAP.md"
   ],
   "roots": [
-    {"path": ".agents", "owner": "project-constraints"},
-    {"path": ".claude-plugin", "owner": "plugins"},
-    {"path": ".github", "owner": "verification"},
-    {"path": ".gitignore", "owner": "governance"},
-    {"path": "README.md", "owner": "governance"},
-    {"path": "AGENTS.md", "owner": "governance"},
-    {"path": "adapters", "owner": "adapters"},
-    {"path": "agents", "owner": "hooks-agents"},
-    {"path": "docs", "owner": "governance"},
-    {"path": "hooks", "owner": "hooks-agents"},
-    {"path": "lib", "owner": "governance"},
-    {"path": "plugins", "owner": "plugins"},
-    {"path": "schemas", "owner": "verification"},
-    {"path": "scripts", "owner": "governance"},
-    {"path": "templates", "owner": "project-discovery"},
-    {"path": "tests", "owner": "governance"}
+    {
+      "path": ".agents",
+      "owner": "project-constraints"
+    },
+    {
+      "path": ".claude-plugin",
+      "owner": "plugins"
+    },
+    {
+      "path": ".github",
+      "owner": "verification"
+    },
+    {
+      "path": ".gitignore",
+      "owner": "governance"
+    },
+    {
+      "path": "README.md",
+      "owner": "governance"
+    },
+    {
+      "path": "AGENTS.md",
+      "owner": "governance"
+    },
+    {
+      "path": "adapters",
+      "owner": "adapters"
+    },
+    {
+      "path": "agents",
+      "owner": "hooks-agents"
+    },
+    {
+      "path": "docs",
+      "owner": "governance"
+    },
+    {
+      "path": "hooks",
+      "owner": "hooks-agents"
+    },
+    {
+      "path": "lib",
+      "owner": "governance"
+    },
+    {
+      "path": "plugins",
+      "owner": "plugins"
+    },
+    {
+      "path": "schemas",
+      "owner": "verification"
+    },
+    {
+      "path": "scripts",
+      "owner": "governance"
+    },
+    {
+      "path": "templates",
+      "owner": "project-discovery"
+    },
+    {
+      "path": "tests",
+      "owner": "governance"
+    }
   ],
   "documentClasses": {
     "current": [
@@ -36,7 +84,8 @@
       "docs/harness-control-plane.md",
       "docs/project-constraints.md",
       "docs/iteration-delivery.md",
-      "docs/shared-capability-catalog.md"
+      "docs/shared-capability-catalog.md",
+      "docs/platform-task-verification.md"
     ],
     "decisions": [
       "docs/2026-07-31-global-project-framework-design.md",
@@ -101,11 +150,14 @@
         "schemas/verification-plan-v3.schema.json",
         "schemas/verification-receipt-v2.schema.json",
         "scripts/verification-plan.mjs",
-        "scripts/validate-verification-receipt.mjs"
+        "scripts/validate-verification-receipt.mjs",
+        "schemas/verification-plan-v4.schema.json",
+        "schemas/verification-receipt-v3.schema.json"
       ],
       "documentation": [
         "docs/2026-09-21-token-harness-v0190.md",
-        "docs/superpowers/specs/2026-09-29-engineering-foundation-governance-design.md"
+        "docs/superpowers/specs/2026-09-29-engineering-foundation-governance-design.md",
+        "docs/platform-task-verification.md"
       ],
       "tests": [
         "tests/verification-plan.test.mjs",
@@ -114,7 +166,8 @@
         "tests/verification-receipt.test.mjs",
         "tests/framework-policy.test.mjs",
         "tests/framework-ci.test.mjs",
-        "tests/fixtures/verification"
+        "tests/fixtures/verification",
+        "tests/verification-platform-task.test.mjs"
       ],
       "documentationTriggers": [
         "Risk, validation depth, platform, execution lane, policy, plan or receipt behavior changes."

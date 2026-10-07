@@ -37,12 +37,15 @@ export const HARNESS_RUNTIME_RESOURCES = [
     "path-safety.mjs",
     "planner.mjs",
     "policy.mjs",
+    "platform-task.mjs",
     "receipt.mjs"
   ].map(name => ({source: `lib/verification/${name}`, destination: `lib/verification/${name}`})),
   ...[
     "verification-policy-v3.schema.json",
     "verification-plan-v3.schema.json",
-    "verification-receipt-v2.schema.json"
+    "verification-receipt-v2.schema.json",
+    "verification-plan-v4.schema.json",
+    "verification-receipt-v3.schema.json"
   ].map(name => ({source: `schemas/${name}`, destination: `schemas/${name}`})),
   {source: "lib/project/managed-runtime.mjs", destination: "lib/project/managed-runtime.mjs"}
 ];
