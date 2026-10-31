@@ -43,6 +43,8 @@ git diff --check
 
 ## 关键边界
 
+开发产物使用[事件驱动生命周期](docs/resource-lifecycle.md)：交付、部署验收、明确退休及恢复事件触发回收；保留有限回滚和最小记录，不建立定时清理任务。安装与全局启用单独验收。
+
 - `lib/` 是宿主无关、项目无关的共享内核；`scripts/` 保留稳定 CLI、参数、输出和退出码。
 - `plugins/*/skills/*/SKILL.md` 是框架 Skill 正文的唯一维护位置；安装副本不手工编辑。
 - `adapters/` 只承载宿主差异；共享内核不反向依赖 Codex 或 Claude。

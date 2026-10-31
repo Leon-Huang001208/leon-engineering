@@ -48,6 +48,21 @@ function receiptPath(project, taskId) {
   return path.join(commonDirectory, "leon-engineering", "deliveries", `${taskId}.json`);
 }
 
+test("resource cleanup debt cannot be certified cleaned and can retry without another delivery", t => {
+  const {project} = makeRepository(t);
+  const started = startDelivery({projectRoot: project, taskId: "resource-debt", slug: "cleanup"});
+  fs.writeFileSync(path.join(started.featureWorktree, "feature.txt"), "delivered\n");
+  commit(started.featureWorktree, "feat: resource debt fixture");
+  prepareDelivery({projectRoot: project, taskId: "resource-debt"});
+  publishDelivery({projectRoot: project, taskId: "resource-debt", verification: {command: "test", status: "passed", durationSeconds: 1}});
+  refreshDeliveryStatus({projectRoot: project, taskId: "resource-debt", resolveCiStatus: () => ({status: "passed", runs: []})});
+  const pending = cleanupDelivery({projectRoot: project, taskId: "resource-debt", resourceCleaner: () => ({status: "blocked"})});
+  assert.equal(pending.status, "ci_passed");
+  assert.equal(fs.existsSync(started.featureWorktree), true);
+  const clean = cleanupDelivery({projectRoot: project, taskId: "resource-debt", resourceCleaner: () => ({status: "cleaned"})});
+  assert.equal(clean.status, "cleaned");
+});
+
 function assertReplacementRefusedWithoutStateChange(project, taskId, expected) {
   const file = receiptPath(project, taskId);
   const receiptBefore = fs.readFileSync(file, "utf8");

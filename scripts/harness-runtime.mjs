@@ -19,6 +19,7 @@ export const HARNESS_RUNTIME_FILES = [
   "harness-session.mjs",
   "harness-enforce.mjs",
   "iteration-delivery.mjs",
+  "resource-lifecycle.mjs",
   "harness-hook.mjs",
   "harness-evaluate.mjs",
   "verification-plan.mjs",
@@ -29,6 +30,8 @@ export const HARNESS_RUNTIME_FILES = [
 ];
 
 export const HARNESS_RUNTIME_RESOURCES = [
+  {source: "lib/resources/lifecycle.mjs", destination: "lib/resources/lifecycle.mjs"},
+  {source: "schemas/resource-lifecycle-v1.schema.json", destination: "schemas/resource-lifecycle-v1.schema.json"},
   ...[
     "binding.mjs",
     "changed-files.mjs",

@@ -39,6 +39,10 @@ CI 失败最多允许三次 `publish --repair`。三次仍失败时，只有直�
 
 ## 状态与硬门
 
+接入[资源生命周期](resource-lifecycle.md)后，`cleanup`在原CI和远端包含检查后发出交付事件。
+资源欠账保存在`resourceCleanup`；受阻时仍为`ci_passed`，不删除工作树也不认证`cleaned`，后续cleanup可重入。
+部署验收为独立事件。日志摘要和已退休原文读取遵守生命周期协议，不能从源码合并推断部署完成。
+
 无秘密状态以原子写入保存在 Git common dir：
 
 - `.git/leon-engineering/deliveries/<task-id>.json`

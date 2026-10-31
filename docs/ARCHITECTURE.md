@@ -19,6 +19,7 @@ host-native agent runtime (model loop, tools, context, sandbox, approval)
 - Project：项目事实发现、候选命令和配置安装；发现不是验证。
 - Constraints：静态项目规则；不推断运行时或平台成功。
 - Delivery：隔离实现、集成、远端/CI 状态和安全清理；只有明确授权才发布。
+- Resources：宿主资源登记、共享引用、阶段退休、缓存预算、有界证据和欠账；不替代业务部署与项目Git安全入口。
 - Governance：架构地图、Skill 生命周期、配置画像和文档分类。
 - Token audit：脱敏指标；代理指标不冒充 Token 节省。
 - Adapters：Codex/Claude 的文件、Hook 和生命周期差异。

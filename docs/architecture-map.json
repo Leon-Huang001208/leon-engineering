@@ -36,6 +36,7 @@
       "docs/harness-control-plane.md",
       "docs/project-constraints.md",
       "docs/iteration-delivery.md",
+      "docs/resource-lifecycle.md",
       "docs/shared-capability-catalog.md"
     ],
     "decisions": [
@@ -58,6 +59,14 @@
     "archive": []
   },
   "modules": [
+    {
+      "id": "resource-lifecycle",
+      "responsibility": "Own host-scoped resource registration, leases, staged retirement, bounded evidence, cache budget and recoverable cleanup debt without deploying business services.",
+      "sources": ["lib/resources", "scripts/resource-lifecycle.mjs", "schemas/resource-lifecycle-v1.schema.json"],
+      "documentation": ["docs/resource-lifecycle.md"],
+      "tests": ["tests/resource-lifecycle.test.mjs", "tests/resource-integration.test.mjs"],
+      "documentationTriggers": ["Resource registration, cleanup, retention, proof, cache, debt or host event contracts change."]
+    },
     {
       "id": "harness",
       "responsibility": "Own task and dependency state, recovery, observations, bounded evidence, storage and evaluation without driving the host model loop.",
