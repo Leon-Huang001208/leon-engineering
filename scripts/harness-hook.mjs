@@ -5,6 +5,7 @@ import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {appendHarnessEvent, startHarnessSession} from "./harness-project.mjs";
 import {defaultHarnessRuntimeRoot, verifyHarnessRuntime} from "./harness-runtime.mjs";
+import {resumeProjectResources} from "./resource-lifecycle.mjs";
 
 const MODULE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const SOURCE_RUNTIME = path.basename(MODULE_DIRECTORY) === "scripts"
@@ -325,6 +326,15 @@ export function handleHarnessHook({
         ? {event: "policy_decision", host, tool: toolCategory(input?.tool_name), decision: "allow"}
         : {event: "tool_completed", host, tool: toolCategory(input?.tool_name)}
     });
+    if (phase === "pre") {
+      // Cleanup debt is separate from Harness initialization and never denies a tool.
+      try {
+        const cleanup = resumeProjectResources({projectRoot: root, taskId: session.taskId});
+        if (cleanup?.notify && cleanup.status === "blocked") return {decision: "allow", taskId: session.taskId, cleanup: "blocked"};
+      } catch (error) {
+        return {decision: "allow", taskId: session.taskId, cleanup: "blocked", cleanupCode: error.code ?? "LIFECYCLE_FAILED"};
+      }
+    }
     return {decision: "allow", taskId: session.taskId};
   } catch (error) {
     return initializationFailure({phase, input, error, stage});

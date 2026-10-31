@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import {spawnSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
+import {acceptedDeliveryResources} from "./resource-lifecycle.mjs";
 
 const TASK_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,79}$/;
 const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,47}$/;
@@ -618,7 +619,7 @@ function deleteRemoteBranchIfPresent(repository, receipt, branch) {
   return true;
 }
 
-export function cleanupDelivery({projectRoot, taskId}) {
+export function cleanupDelivery({projectRoot, taskId, resourceCleaner = acceptedDeliveryResources, deferResourceCleanup = false}) {
   const repository = resolveRepository(projectRoot);
   return withTaskLock(repository, assertTaskId(taskId), () => {
     const receipt = readDeliveryReceipt({projectRoot: repository.repositoryRoot, taskId});
@@ -631,6 +632,14 @@ export function cleanupDelivery({projectRoot, taskId}) {
       `refs/remotes/${receipt.remote}/${receipt.defaultBranch}`
     ], {allowFailure: true});
     if (ancestor.status !== 0) throw new Error("integration commit is not contained in the remote default branch");
+    // Run only after the existing remote-containment and CI gates. Deployment is a separate event.
+    try { receipt.resourceCleanup = deferResourceCleanup ? null : resourceCleaner({projectRoot: repository.repositoryRoot, receipt}); }
+    catch (error) { receipt.resourceCleanup = {status: "blocked", code: error.code ?? "LIFECYCLE_FAILED"}; }
+    if (receipt.resourceCleanup?.status === "blocked") {
+      saveReceipt(repository, receipt);
+      appendLog(repository, taskId, "resource_cleanup_blocked", {status: "blocked"});
+      return receipt;
+    }
     assertCleanWorktree(receipt.featureWorktree, "feature worktree");
     assertCleanWorktree(receipt.integrationWorktree, "integration worktree");
 
