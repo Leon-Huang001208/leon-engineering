@@ -12,17 +12,21 @@ export const {createLifecycle, prepareResourceDirectory, inventoryPaths} = await
 export function activateProjectResources({projectRoot}) {
   const storage = resolveHarnessStorage({projectRoot});
   const api = createLifecycle();
-  if (api.isEnrolled(storage.projectRoot)) return {api, storage};
-  const config = path.join(os.homedir(), ".agents/leon-engineering/resource-policy.json");
-  if (!fs.existsSync(config)) return null;
-  if (fs.lstatSync(config).isSymbolicLink()) throw new Error("POLICY_INVALID");
-  const policy = JSON.parse(fs.readFileSync(config, "utf8"));
-  if (policy.schemaVersion !== 1 || policy.enabled !== true) return null;
+  const enrolled = api.isEnrolled(storage.projectRoot);
+  if (!enrolled) {
+    const config = path.join(os.homedir(), ".agents/leon-engineering/resource-policy.json");
+    if (!fs.existsSync(config)) return null;
+    if (fs.lstatSync(config).isSymbolicLink()) throw new Error("POLICY_INVALID");
+    const policy = JSON.parse(fs.readFileSync(config, "utf8"));
+    if (policy.schemaVersion !== 1 || policy.enabled !== true) return null;
+  }
   // Auto-enrollment owns only future Harness observation files, never existing unknown artifacts.
   const logs = path.join(storage.directory, "logs");
   if (fs.existsSync(logs) && fs.lstatSync(logs).isSymbolicLink()) throw new Error("SYMLINK_FORBIDDEN");
   prepareResourceDirectory(logs);
-  api.enroll({project: storage.projectRoot, roots: [fs.realpathSync(logs)]});
+  const roots = enrolled ? api.status().projects[storage.projectRoot].roots : [];
+  const logRoot = fs.realpathSync(logs);
+  if (!roots.includes(logRoot)) api.enroll({project: storage.projectRoot, roots: [...roots, logRoot]});
   return {api, storage};
 }
 

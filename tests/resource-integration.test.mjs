@@ -25,6 +25,8 @@ function setup(t) {
 
 test("real host hook enrolls and retries debt; successful verifier evidence retires and remains readable", async t => {
   const {project} = setup(t);
+  const existingRoot=path.join(project,"existing-project-evidence");fs.mkdirSync(existingRoot);
+  createLifecycle().enroll({project,roots:[existingRoot]});
   fs.writeFileSync(path.join(project, "package.json"), JSON.stringify({scripts: {test: "node verifier.mjs"}}));
   fs.writeFileSync(path.join(project, "verifier.mjs"), "console.log('successful raw evidence')");
   const files = writeHarness({projectRoot: project, harness: buildHarness({projectRoot: project,
