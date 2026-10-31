@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
@@ -39,6 +40,14 @@ export function resumeProjectResources({projectRoot, taskId}) {
 export function registerObservedResources({projectRoot, taskId, metadata, archiveFiles}) {
   const context = activateProjectResources({projectRoot});
   if (!context) return null;
+  if (metadata.archiveLocation === "fallback") {
+    const key = crypto.createHash("sha256").update(context.storage.projectRoot).digest("hex").slice(0,24);
+    const root = path.join(fs.realpathSync(os.tmpdir()),"leon-harness-observation-fallback",key);
+    const expectedDirectory = path.join(root,taskId);
+    if (archiveFiles.length !== 3 || archiveFiles.some(file => path.dirname(file) !== expectedDirectory)) throw new Error("FALLBACK_ARCHIVE_INVALID");
+    const roots = context.api.status().projects[context.storage.projectRoot].roots;
+    if (!roots.includes(root)) context.api.enroll({project:context.storage.projectRoot,roots:[...roots,root]});
+  }
   const evidence = Object.fromEntries(["observationId", "verifierId", "status", "sha256", "fullBytes", "durationMs"].map(k => [k, metadata[k]]));
   return archiveFiles.map(file => context.api.register({project: context.storage.projectRoot, task: taskId,
     kind: "evidence", path: fs.realpathSync(file), evidence}));

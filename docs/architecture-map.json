@@ -142,7 +142,8 @@
         "tests/harness-project.test.mjs",
         "tests/harness-runtime.test.mjs",
         "tests/harness-session.test.mjs",
-        "tests/harness-storage.test.mjs"
+        "tests/harness-storage.test.mjs",
+        "tests/support/isolated-home.mjs"
       ],
       "documentationTriggers": [
         "Task, session, event, metric, observation, storage, recovery or privacy contracts change."

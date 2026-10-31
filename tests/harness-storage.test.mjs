@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import "./support/isolated-home.mjs";
 import os from "node:os";
 import path from "node:path";
 import {spawnSync} from "node:child_process";

@@ -38,7 +38,10 @@ test("real host hook enrolls and retries debt; successful verifier evidence reti
   const hook = handleHarnessHook({phase: "pre", input: {cwd: project, session_id: "resource-real-hook", tool_name: "Read"}, runtimeVerifier: () => {}});
   assert.equal(hook.decision, "allow");
   assert.equal(createLifecycle().isEnrolled(project), true);
-  const observed = await runObserved({projectRoot: project, taskId: "observed", verifierId: v.id});
+  const observed = await runObserved({projectRoot: project, taskId: "observed", verifierId: v.id},
+    {archiveWriter:()=>{throw new Error("controlled primary archive failure");}});
+  assert.equal(observed.archiveLocation,"fallback");
+  t.after(()=>fs.rmSync(path.dirname(path.dirname(observed.archiveFiles[0])),{recursive:true,force:true}));
   assert.equal(createLifecycle().status().resources.length, 3);
   const receipt = {taskId: "observed", status: "ci_passed", ci: {status: "passed"},
     verification: {status: "passed"}, integrationCommit: "a".repeat(40)};
@@ -65,4 +68,11 @@ test("installed runtime carries the engine and CLI without developer-relative im
   installHarnessRuntime({sourceRoot: path.resolve("."), runtimeRoot});
   const result = spawnSync(process.execPath, [path.join(runtimeRoot, "resource-lifecycle.mjs"), "preview", "--store", path.join(root, "empty")], {encoding: "utf8"});
   assert.equal(result.status, 0, result.stderr); assert.equal(JSON.parse(result.stdout).status, "preview");
+});
+
+test("a real post-tool boundary enrolls and resumes resources without depending on a pre-hook", t => {
+  const {project}=setup(t);
+  const result=handleHarnessHook({phase:"post",input:{cwd:project,session_id:"post-tool-lifecycle",tool_name:"Bash"},runtimeVerifier:()=>{}});
+  assert.equal(result.decision,"allow");
+  assert.equal(createLifecycle().isEnrolled(project),true);
 });

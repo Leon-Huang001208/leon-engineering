@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import "./support/isolated-home.mjs";
 import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";

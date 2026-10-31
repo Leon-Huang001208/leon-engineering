@@ -326,14 +326,13 @@ export function handleHarnessHook({
         ? {event: "policy_decision", host, tool: toolCategory(input?.tool_name), decision: "allow"}
         : {event: "tool_completed", host, tool: toolCategory(input?.tool_name)}
     });
-    if (phase === "pre") {
-      // Cleanup debt is separate from Harness initialization and never denies a tool.
-      try {
-        const cleanup = resumeProjectResources({projectRoot: root, taskId: session.taskId});
-        if (cleanup?.notify && cleanup.status === "blocked") return {decision: "allow", taskId: session.taskId, cleanup: "blocked"};
-      } catch (error) {
-        return {decision: "allow", taskId: session.taskId, cleanup: "blocked", cleanupCode: error.code ?? "LIFECYCLE_FAILED"};
-      }
+    // Either boundary can enroll/resume: a completed tool is a real lifecycle event
+    // even when the host has not activated a pre-tool hook. Debt never denies a tool.
+    try {
+      const cleanup = resumeProjectResources({projectRoot: root, taskId: session.taskId});
+      if (cleanup?.notify && cleanup.status === "blocked") return {decision: "allow", taskId: session.taskId, cleanup: "blocked"};
+    } catch (error) {
+      return {decision: "allow", taskId: session.taskId, cleanup: "blocked", cleanupCode: error.code ?? "LIFECYCLE_FAILED"};
     }
     return {decision: "allow", taskId: session.taskId};
   } catch (error) {

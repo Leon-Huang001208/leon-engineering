@@ -16,7 +16,7 @@
 | Token audit | `token-audit.mjs` | Token/Harness v0.19.0 设计 | `token-audit.test.mjs` | 指标、隐私、输入发现或输出预算变化 |
 | Adapters | `adapters/`、`install-*-adapter.mjs` | Codex-Claude adapter 设计 | `codex-adapter.test.mjs`、`claude-adapter.test.mjs` | 受管文件、manifest、Hook 或宿主生命周期变化 |
 | Plugins | `.claude-plugin/`、`plugins/` | `shared-capability-catalog.md` | `catalog.test.mjs`、reasoning Skill tests | 插件 ID/版本、Skill 分组或默认启用状态变化 |
-| Hooks and agents | `hooks/`、`agents/`、hook/audit/guard scripts | `harness-v1.md` 与 adapter 文档 | hook/audit/guard/catalog tests | Hook 输出协议、来源分工、事件分类、恢复白名单、角色范围或非递归委派变化 |
+| Hooks and agents | `hooks/`、`agents/`、hook/audit/guard scripts | `harness-v1.md` 与 adapter 文档 | hook/audit/guard/catalog tests | Hook 输出协议、来源分工、Pre/Post事件退休、事件分类、恢复白名单、角色范围或非递归委派变化 |
 
 ## 文档类别
 
