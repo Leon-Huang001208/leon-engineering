@@ -42,7 +42,15 @@ test("real host hook enrolls and retries debt; successful verifier evidence reti
   assert.equal(createLifecycle().status().resources.length, 3);
   const receipt = {taskId: "observed", status: "ci_passed", ci: {status: "passed"},
     verification: {status: "passed"}, integrationCommit: "a".repeat(40)};
-  const result = acceptedDeliveryResources({projectRoot: project, receipt});
+  let result = acceptedDeliveryResources({projectRoot: project, receipt});
+  if (process.platform !== "darwin") {
+    assert.equal(result.status, "blocked");
+    assert.ok(result.items.every(item => item.reason === "OCCUPANCY_UNKNOWN"));
+    for (const file of observed.archiveFiles) assert.equal(fs.existsSync(file), true);
+    // Exercise the shared retirement algorithm only in this closed fixture;
+    // native deletion on an unadapted host remains blocked above.
+    result = createLifecycle({occupancy: () => "idle"}).event({project, task: "observed", type: "resume"});
+  }
   assert.equal(result.status, "cleaned");
   for (const file of observed.archiveFiles) assert.equal(fs.existsSync(file), false);
   const retired = readObservation({projectRoot: project, taskId: "observed", observationId: observed.observationId});
