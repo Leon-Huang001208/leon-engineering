@@ -88,7 +88,7 @@ test("minimal project runtime records framework identity and detects drift", asy
   const projectRoot = copyFixture(t);
   const applied = applyProjectRuntime({sourceRoot: ROOT, projectRoot});
   assert.match(applied.manifest.sourceCommit, /^[0-9a-f]{40}$/);
-  assert.equal(applied.manifest.frameworkVersion, "0.19.3");
+  assert.equal(applied.manifest.frameworkVersion, "0.19.4");
   assert.equal(verifyProjectRuntime({sourceRoot: ROOT, projectRoot}).valid, true);
   const base = git(projectRoot, ["rev-parse", "HEAD"]);
   fs.appendFileSync(path.join(projectRoot, "src", "example.mjs"), "\n// changed\n");
@@ -102,7 +102,7 @@ test("minimal project runtime records framework identity and detects drift", asy
     "index.mjs",
   )));
   const plan = installed.planGitVerification({projectRoot, base});
-  assert.equal(plan.binding.frameworkVersion, "0.19.3");
+  assert.equal(plan.binding.frameworkVersion, "0.19.4");
   assert.equal(plan.binding.frameworkCommit, applied.manifest.sourceCommit);
   fs.appendFileSync(
     path.join(projectRoot, ".agents", "runtime", "leon-engineering", "lib", "verification", "index.mjs"),

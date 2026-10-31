@@ -168,11 +168,11 @@ test("splits the plugin catalog into a compatible core and opt-in workflows exte
   const marketplace = JSON.parse(fs.readFileSync(path.join(root, ".claude-plugin", "marketplace.json"), "utf8"));
 
   assert.equal(core.name, "leon-engineering");
-  assert.equal(core.version, "0.19.3");
+  assert.equal(core.version, "0.19.4");
   assert.deepEqual(core.skills, ["./plugins/leon-engineering-core/skills/"]);
   assert.equal(workflows.name, "leon-engineering-workflows");
-  assert.equal(workflows.version, "0.19.3");
-  assert.equal(codexWorkflows.version, "0.19.3");
+  assert.equal(workflows.version, "0.19.4");
+  assert.equal(codexWorkflows.version, "0.19.4");
   assert.deepEqual(workflows.skills, ["./skills/"]);
   assert.deepEqual(
     fs.readdirSync(path.join(root, "plugins", "leon-engineering-core", "skills")).sort(),
@@ -188,7 +188,7 @@ test("splits the plugin catalog into a compatible core and opt-in workflows exte
     "leon-engineering-commands"
   ]);
   assert.equal(marketplace.plugins[1].source, "./plugins/leon-engineering-workflows");
-  assert.ok(marketplace.plugins.every(plugin => plugin.version === "0.19.3"));
+  assert.ok(marketplace.plugins.every(plugin => plugin.version === "0.19.4"));
 });
 
 test("packages mapped source commands in a default-disabled optional plugin", () => {
@@ -202,8 +202,8 @@ test("packages mapped source commands in a default-disabled optional plugin", ()
 
   assert.equal(codex.name, "leon-engineering-commands");
   assert.equal(claude.name, "leon-engineering-commands");
-  assert.equal(codex.version, "0.19.3");
-  assert.equal(claude.version, "0.19.3");
+  assert.equal(codex.version, "0.19.4");
+  assert.equal(claude.version, "0.19.4");
   assert.deepEqual(codex.skills, "./skills/");
   assert.deepEqual(claude.skills, ["./skills/"]);
   assert.equal(commandMap.schemaVersion, 1);
@@ -227,7 +227,7 @@ test("packages mapped source commands in a default-disabled optional plugin", ()
     name: "leon-engineering-commands",
     source: "./plugins/leon-engineering-commands",
     description: "Optional migrated source-command wrappers",
-    version: "0.19.3"
+    version: "0.19.4"
   });
 });
 

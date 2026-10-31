@@ -1,6 +1,6 @@
 {
   "name": "leon-engineering-commands",
-  "version": "0.19.3",
+  "version": "0.19.4",
   "description": "Optional migrated source-command wrappers",
   "author": {"name": "Leon"},
   "license": "UNLICENSED",
