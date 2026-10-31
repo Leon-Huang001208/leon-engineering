@@ -126,6 +126,20 @@ test("recovery refuses a moved feature candidate and a detached integration bran
   fs.writeFileSync(path.join(f.started.featureWorktree, "later.txt"), "new candidate\n");commit(f.started.featureWorktree, "feat: advance candidate");
   assert.throws(() => prepareDelivery({projectRoot: f.project, taskId: f.taskId}), /recorded feature commit moved/);
   assert.equal(readDeliveryReceipt({projectRoot: f.project, taskId: f.taskId}).status, "integration_failed");
+
+test("resource cleanup debt cannot be certified cleaned and can retry without another delivery", t => {
+  const {project} = makeRepository(t);
+  const started = startDelivery({projectRoot: project, taskId: "resource-debt", slug: "cleanup"});
+  fs.writeFileSync(path.join(started.featureWorktree, "feature.txt"), "delivered\n");
+  commit(started.featureWorktree, "feat: resource debt fixture");
+  prepareDelivery({projectRoot: project, taskId: "resource-debt"});
+  publishDelivery({projectRoot: project, taskId: "resource-debt", verification: {command: "test", status: "passed", durationSeconds: 1}});
+  refreshDeliveryStatus({projectRoot: project, taskId: "resource-debt", resolveCiStatus: () => ({status: "passed", runs: []})});
+  const pending = cleanupDelivery({projectRoot: project, taskId: "resource-debt", resourceCleaner: () => ({status: "blocked"})});
+  assert.equal(pending.status, "ci_passed");
+  assert.equal(fs.existsSync(started.featureWorktree), true);
+  const clean = cleanupDelivery({projectRoot: project, taskId: "resource-debt", resourceCleaner: () => ({status: "cleaned"})});
+  assert.equal(clean.status, "cleaned");
 });
 
 function assertReplacementRefusedWithoutStateChange(project, taskId, expected) {

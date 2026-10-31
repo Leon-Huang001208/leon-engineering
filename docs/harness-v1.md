@@ -49,7 +49,7 @@ node scripts/harness-run.mjs --project /absolute/project --task-id task-id --ver
 node scripts/harness-run.mjs --project /absolute/project --task-id task-id --read-observation observation-0123456789abcdef01234567
 ```
 
-观察层只运行逻辑 Harness 目录 `verifiers.json` 中已登记且标记为非交互的 verifier；未知命令仍由原生 `exec_command` 执行。完整 stdout/stderr 写入本地日志。普通调用最多返回 4 KiB，显式宽回执最多 8 KiB；超限时保留头、尾、错误上下文、状态、退出码、超时原因、SHA-256和日志引用。疑似秘密不进入模型可见回执或 `readObservation` 回查，原文只留本地；主归档失败时持久 fallback 仍保存原始字节。
+观察层只运行逻辑 Harness 目录 `verifiers.json` 中已登记且标记为非交互的 verifier；未知命令仍由原生 `exec_command` 执行。完整 stdout/stderr 写入本地日志。普通调用最多返回 4 KiB，显式宽回执最多 8 KiB；超限时保留头、尾、错误上下文、状态、退出码、超时原因、SHA-256和日志引用。疑似秘密不进入模型可见回执或 `readObservation` 回查，原文只留本地；主归档失败时持久 fallback 仍保存原始字节。接入[资源生命周期](resource-lifecycle.md)后，后续新观察文件自动登记；交付成功且引用释放后删除完整原文，`readObservation`明确返回retired及校验摘要，不伪造原文。未纳管历史原文和fallback继续保留待核对。
 
 `metrics.jsonl` 增加 `observation_recorded` 与 `observation_recalled`，仅记录 verifier ID、状态、耗时、字节量、截断、归档失败标记与回查次数，不记录命令正文、日志引用、哈希或输出。评估器汇总 Observation 样本量、返回字节比、回查率、归档失败率，以及有重复样本的 verifier 结果一致率。
 

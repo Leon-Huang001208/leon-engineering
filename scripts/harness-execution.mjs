@@ -5,6 +5,7 @@ import path from "node:path";
 import {spawn} from "node:child_process";
 import {readHarnessTask, VERIFIERS_FILENAME} from "./harness-project.mjs";
 import {resolveHarnessStorage} from "./harness-storage.mjs";
+import {registerObservedResources, retiredObservation, isManagedResource} from "./resource-lifecycle.mjs";
 
 const LOGS_RELATIVE = "logs";
 const DEFAULT_VISIBLE_BYTES = 4 * 1024;
@@ -424,6 +425,8 @@ export async function runObserved(spec, dependencies = {}) {
     truncated: metadata.truncated,
     archiveFailed: metadata.archiveFailed
   });
+  // Failed fallback archives remain protected until explicitly enrolled; never silently omit a registration failure.
+  registerObservedResources({projectRoot: root, taskId, metadata, archiveFiles});
   return {
     ...metadata,
     logRef,
@@ -442,6 +445,8 @@ export function readObservation(query) {
   if (query.wideReceipt !== undefined && typeof query.wideReceipt !== "boolean") throw new Error("invalid wide receipt flag");
   const visibleLimit = query.wideReceipt ? WIDE_VISIBLE_BYTES : DEFAULT_VISIBLE_BYTES;
   readHarnessTask({projectRoot: root, taskId});
+  const retired = retiredObservation({projectRoot: root, taskId, observationId});
+  if (retired) return retired;
   let files;
   try {
     files = observationFiles(harnessRoot, taskId, observationId);
@@ -469,7 +474,8 @@ export function readObservation(query) {
     throw new Error("invalid observation evidence");
   }
   metadata.recallCount += 1;
-  writeMetadata(files.metadataFile, metadata);
+  // Metadata is immutable after registration; recall statistics are already recorded in metrics.
+  if (!isManagedResource({projectRoot: root, file: files.metadataFile})) writeMetadata(files.metadataFile, metadata);
   const logRef = metadata.archiveLocation === "fallback"
     ? files.metadataFile
     : path.posix.join(LOGS_RELATIVE, taskId, `${observationId}.json`);

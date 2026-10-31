@@ -27,3 +27,5 @@ CI failures may receive at most three evidence-based repair commits through `pub
 Run `cleanup` only after CI is `passed` or explicitly `not_configured`. Cleanup refuses dirty worktrees, confirms the integration commit is in the remote default branch, removes managed worktrees, and deletes local and remote task branches. Never force-push, force-remove a dirty worktree, or force-delete an unmerged branch.
 
 The full-delivery hard gate reads the real receipt and verifies the live remote default branch, CI, local branch, and worktree state; Harness itself does not run Git.
+
+启用事件驱动资源清理后（源码权威文档`docs/resource-lifecycle.md`），临时产物在写入完成时登记到本任务，交付与部署分别退休。缓存共用宿主20GiB预算；成功原始日志只留有界摘要。清理欠账不等于cleaned，不为清理再复制永久备份。存量先核对并逐类批准；特殊修复备份继续保护。没有定时任务，也不把合并成功当成部署成功。
