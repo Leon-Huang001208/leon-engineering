@@ -65,7 +65,7 @@ test("the repository architecture map resolves every current entrypoint and modu
   assert.deepEqual(result, {
     schemaVersion: 1,
     valid: true,
-    moduleCount: 10,
+    moduleCount: 11,
     referencedPathCount: result.referencedPathCount,
   });
   assert.ok(result.referencedPathCount >= 40);

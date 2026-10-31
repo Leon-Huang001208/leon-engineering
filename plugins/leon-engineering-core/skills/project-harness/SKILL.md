@@ -37,7 +37,7 @@ node "$HOME/.agents/leon-engineering/runtime/harness-run.mjs" --project /absolut
 node "$HOME/.agents/leon-engineering/runtime/harness-run.mjs" --project /absolute/project --task-id task-id --read-observation observation-0123456789abcdef01234567
 ```
 
-未登记命令继续使用宿主原生 `exec_command`，不得把命令动态写入 verifier 清单来绕过边界。观察层把完整 stdout/stderr 以 `0600` 保存在逻辑目录的 `logs/<task-id>/`，拒绝符号链接与路径穿越且不自动删除。普通调用最多返回 4 KiB；只有显式 `wideReceipt: true` 才放宽到 8 KiB。超过预算时返回含头、尾、错误上下文、SHA-256和日志引用的去重短回执；错误状态、退出码和超时原因不得省略。疑似秘密不进入模型可见回执或回查；原文只保存在本地。主归档失败时使用持久本地 fallback 保留证据。
+未登记命令继续使用宿主原生 `exec_command`，不得把命令动态写入 verifier 清单来绕过边界。观察层把完整 stdout/stderr 以 `0600` 保存在逻辑目录的 `logs/<task-id>/`，拒绝符号链接与路径穿越；未纳管文件不自动删除。启用事件驱动资源生命周期后，新观察文件自动登记，交付验收后在引用释放及占用检查通过时退休，保留有界摘要和原校验值，readObservation明确标记retired。协议见`docs/resource-lifecycle.md`，完整原文不永久归档。普通调用最多返回 4 KiB；只有显式 `wideReceipt: true` 才放宽到 8 KiB。超过预算时返回含头、尾、错误上下文、SHA-256和日志引用的去重短回执；错误状态、退出码和超时原因不得省略。疑似秘密不进入模型可见回执或回查；原文只保存在本地。主归档失败时使用持久本地 fallback 保留证据。
 
 `metrics.jsonl` 的 `observation_recorded` 与 `observation_recalled` 只保存 verifier ID、状态、耗时、字节量、截断、归档失败标记和回查次数，不保存命令正文、日志引用、哈希或输出。评估器据此报告样本量、返回字节比、回查率、归档失败率及重复 verifier 的结果一致率。
 
