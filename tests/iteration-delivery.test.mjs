@@ -127,6 +127,8 @@ test("recovery refuses a moved feature candidate and a detached integration bran
   assert.throws(() => prepareDelivery({projectRoot: f.project, taskId: f.taskId}), /recorded feature commit moved/);
   assert.equal(readDeliveryReceipt({projectRoot: f.project, taskId: f.taskId}).status, "integration_failed");
 
+});
+
 test("resource cleanup debt cannot be certified cleaned and can retry without another delivery", t => {
   const {project} = makeRepository(t);
   const started = startDelivery({projectRoot: project, taskId: "resource-debt", slug: "cleanup"});
