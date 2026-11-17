@@ -5,19 +5,8 @@ import {execFileSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
 
 export const LEON_ENGINEERING_PLUGIN = "leon-engineering@leon-local";
-export const LEON_ENGINEERING_SKILLS = [
-  "agent-routing",
-  "bugfix-evidence",
-  "feature-loop",
-  "iteration-delivery",
-  "logging-observability",
-  "project-adapter",
-  "project-bootstrap",
-  "project-constraints",
-  "project-harness",
-  "review-ship",
-  "skill-health"
-];
+export {CORE_SKILL_NAMES as LEON_ENGINEERING_SKILLS} from "./install-codex-adapter.mjs";
+import {CORE_SKILL_NAMES as LEON_ENGINEERING_SKILLS} from "./install-codex-adapter.mjs";
 
 function parseArguments(args) {
   const options = {apply: false};
@@ -51,11 +40,12 @@ function readDirectoryNames(directory) {
   );
 }
 
-function readPluginEnabled() {
-  const output = execFileSync("claude", ["plugin", "list"], {encoding: "utf8", stdio: ["ignore", "pipe", "pipe"]});
-  const start = output.indexOf(LEON_ENGINEERING_PLUGIN);
-  if (start === -1) return false;
-  return /Status:\s*.*enabled/i.test(output.slice(start, start + 240));
+function readInstalledPluginSkills() {
+  const output = execFileSync("claude", ["plugin", "list", "--json"], {encoding: "utf8", stdio: ["ignore", "pipe", "ignore"]});
+  const plugin = JSON.parse(output).find(item => item.id === LEON_ENGINEERING_PLUGIN && item.enabled === true);
+  if (!plugin) return [];
+  const folder = path.join(plugin.installPath, "plugins", "leon-engineering-core", "skills");
+  return [...readDirectoryNames(folder)].filter(name => fs.existsSync(path.join(folder, name, "SKILL.md")));
 }
 
 function readRows(database) {
@@ -70,15 +60,15 @@ function readRows(database) {
   return JSON.parse(output || "[]");
 }
 
-export function buildReconciliation({rows, claudeDirectories, codexDirectories, pluginEnabled}) {
-  const pluginSkills = new Set(LEON_ENGINEERING_SKILLS);
+export function buildReconciliation({rows, claudeDirectories, codexDirectories, pluginEnabled, pluginSkills = LEON_ENGINEERING_SKILLS}) {
+  const installedPluginSkills = new Set(pluginSkills);
   const changes = [];
   let claudeEnabled = 0;
   let codexEnabled = 0;
 
   for (const row of rows) {
     const desiredClaude = Number(
-      claudeDirectories.has(row.directory) || (pluginEnabled && pluginSkills.has(row.directory))
+      claudeDirectories.has(row.directory) || (pluginEnabled && installedPluginSkills.has(row.directory))
     );
     const desiredCodex = Number(codexDirectories.has(row.directory));
     claudeEnabled += desiredClaude;
@@ -135,12 +125,13 @@ function main() {
   const claudeSkills = options.claude_skills ?? path.join(home, ".claude", "skills");
   const codexSkills = options.codex_skills ?? path.join(home, ".codex", "skills");
   const backupDirectory = options.backup_dir ?? path.join(home, ".cc-switch", "backups", "leon-engineering-sync");
-  const pluginEnabled = options.plugin_enabled === undefined
-    ? readPluginEnabled()
-    : options.plugin_enabled === "true";
   if (options.plugin_enabled !== undefined && !["true", "false"].includes(options.plugin_enabled)) {
     throw new Error("--plugin-enabled must be true or false");
   }
+  const pluginSkills = options.plugin_enabled === undefined
+    ? readInstalledPluginSkills()
+    : options.plugin_enabled === "true" ? LEON_ENGINEERING_SKILLS : [];
+  const pluginEnabled = pluginSkills.length > 0;
   const rows = readRows(database);
   const claudeDirectories = readDirectoryNames(claudeSkills);
   const codexDirectories = readDirectoryNames(codexSkills);
@@ -148,9 +139,10 @@ function main() {
     rows,
     claudeDirectories,
     codexDirectories,
-    pluginEnabled
+    pluginEnabled,
+    pluginSkills
   });
-  const additions = buildPluginAdditions({rows, pluginEnabled, claudeDirectories, codexDirectories});
+  const additions = buildPluginAdditions({rows, pluginSkills, pluginEnabled, claudeDirectories, codexDirectories});
   reconciliation.counts.claude += additions.reduce((total, addition) => total + addition.enabledClaude, 0);
   reconciliation.counts.codex += additions.reduce((total, addition) => total + addition.enabledCodex, 0);
   const backup = options.apply ? applyChanges(database, backupDirectory, reconciliation.changes, additions) : null;

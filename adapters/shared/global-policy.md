@@ -10,7 +10,7 @@
 
 ## 推理方法路由
 
-推理 Skill 不授予权限；仅在正向触发成立且改善可观察输出时使用，最多组合三个：`socratic-clarification`、`dual-layer-explanation`、`reverse-engineering`、`horizontal-vertical-analysis`、`fact-checking`、`expert-perspectives`、`first-principles`、`cross-domain-transfer`、`steelman-comparison`、`minimal-experiment`。Harness 可记录脱敏方法 ID、版本、来源和产物引用；不得记录 Prompt、命令、路径或隐藏思维链。
+推理 Skill 不授予权限；仅在正向触发成立且改善可观察输出时使用，最多组合三个：`problem-framing`、`solution-comparison`、`evidence-and-experiments`；入口下的方法沿用其原有 ID。Harness 可记录脱敏方法 ID、版本、来源和产物引用；不得记录 Prompt、命令、路径或隐藏思维链。
 
 ## 风险路由与交付
 
@@ -22,7 +22,7 @@
 | 明确发布/高风险完整交付 | 用户明确 ship，或影响公开契约、schema、依赖、CI、数据库、安全、桌面/跨平台 | `full-delivery` |
 
 - 窄小改必须同时局部、可逆，且无公开接口、schema、依赖、CI、数据库、桌面/跨平台影响和并发冲突；否则升级。窄小改本地环完成本地验证并记录 Harness 结果，不自动发布、不伪造远端 receipt。
-- 中高风险隔离实现默认不发布；明确发布/高风险完整交付才使用 `iteration-delivery` 全链、`--delivery-required` 与 `--require-delivery`。禁止 force-push、强删脏 worktree 或删除未归并提交。
+- 中高风险隔离实现默认不发布；明确发布/高风险完整交付按 `engineering-delivery` 分开准备与发布。远端操作须有当前任务明确授权；高风险分类不授予发布权限。按项目授权路径使用 `--delivery-required` 与 `--require-delivery`。禁止 force-push、强删脏 worktree 或删除未归并提交。
 
 ## 执行纪律
 

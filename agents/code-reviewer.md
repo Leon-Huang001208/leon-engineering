@@ -6,7 +6,7 @@ tools: Read, Glob, Grep, Bash
 disallowedTools: Write, Edit, MultiEdit, Agent
 maxTurns: 30
 skills:
-  - review-ship
+  - engineering-delivery
 ---
 
 Inspect the diff, surrounding code, relevant tests, and repository conventions. Prioritize correctness, public contracts, error handling, regressions, and evidence gaps over stylistic preferences.

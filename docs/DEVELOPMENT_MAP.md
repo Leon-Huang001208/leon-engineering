@@ -20,7 +20,7 @@
 
 ## 文档类别
 
-测试设计与任务范围内的架构判断只维护在 [feature-loop 的工程方法参考](../plugins/leon-engineering-core/skills/feature-loop/references/engineering-methods.md)，由 feature-loop 和 bugfix-evidence 引用。它不新增工作流或验收路由；引用、触发范围与来源许可由 `tests/catalog.test.mjs` 固定合同检查。
+测试设计与任务范围内的架构判断只维护在 [engineering-work 的工程方法参考](../plugins/leon-engineering-core/skills/engineering-work/references/engineering-methods.md)，由工程任务的功能与缺陷模式共用。它不新增工作流或验收路由；引用、触发范围与来源许可由 `tests/catalog.test.mjs` 固定合同检查。
 
 - 当前入口：根 README/AGENTS、`ARCHITECTURE.md`、本文件及模块现行指南；任务状态和证据不是宿主模型运行时。
 - 决策：设计文档与明确的架构取舍。

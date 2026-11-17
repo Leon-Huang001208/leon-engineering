@@ -23,7 +23,7 @@ host-native agent runtime (model loop, tools, context, sandbox, approval)
 - Governance：架构地图、Skill 生命周期、配置画像和文档分类。
 - Token audit：脱敏指标；代理指标不冒充 Token 节省。
 - Adapters：Codex/Claude 的文件、Hook 和生命周期差异。
-- Plugins：核心与默认关闭扩展的分发边界。
+- Plugins：六个核心工程入口与默认关闭的扩展；三个推理入口保留十个方法合同，兼容命令单独分发。
 - Hooks and agents：事件连接和七个受限职责角色；不拥有核心协议。
 
 精确路径、权威文档和测试见 [机器地图](architecture-map.json) 与 [开发地图](DEVELOPMENT_MAP.md)。

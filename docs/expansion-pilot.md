@@ -113,3 +113,29 @@ Give a failing fixture CI log and matching workflow. Confirm it classifies the f
 ### docs-mapper
 
 Give a renamed fixture command and documentation that references the old name. Confirm it identifies the stale path and exact update without rewriting unrelated documents.
+
+## Consolidated entry scenarios
+
+### project-onboarding
+
+Inspect an unfamiliar fixture's rules and CI, then propose one change without writing any profile or policy. Obtain explicit fixture-only authorization before persisting it.
+
+### engineering-work
+
+Exercise a reproducible regression and a small new feature separately. The first should capture a failure before the fix. The second should identify acceptance criteria and verify the smallest complete slice.
+
+### engineering-delivery
+
+Review a realistic diff and prepare evidence without contacting a remote. Give the runner a PR-only authorization and confirm it never invokes the legacy direct-first controller. Full publication requires current-task authorization.
+
+### problem-framing
+
+Give a consequential ambiguity and a known constraint. Select only the relevant method and distinguish the established fact from the inference.
+
+### solution-comparison
+
+Give two plausible approaches with conflicting evidence. Compare their strongest cases and identify the deciding uncertainty.
+
+### evidence-and-experiments
+
+Give a source conflict and a testable unknown. Separate claim verification from an isolated reversible experiment with a decision criterion.

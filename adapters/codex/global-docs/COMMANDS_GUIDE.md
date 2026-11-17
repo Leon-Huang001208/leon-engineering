@@ -97,6 +97,8 @@ node "$HOME/.agents/leon-engineering/runtime/harness-enforce.mjs" --project /abs
 
 明确发布或高风险 Git 任务由交付控制器管理；窄小改不得启动下列发布链。`start` 返回功能 worktree，`prepare` 创建集成 worktree，验证后 `publish`，只在状态变化、超时或需要操作时查询 CI，最后 `cleanup`：
 
+下面保留旧控制器的 CLI 示例。远端发布与清理须有当前任务明确授权；这个控制器可能尝试直推，仅在项目规则和授权都允许时使用。PR-only 项目使用其项目入口。
+
 ```bash
 node "$HOME/.agents/leon-engineering/runtime/iteration-delivery.mjs" --start --project /absolute/project --task-id task-id --slug short-slug
 node "$HOME/.agents/leon-engineering/runtime/iteration-delivery.mjs" --prepare --project /absolute/project --task-id task-id

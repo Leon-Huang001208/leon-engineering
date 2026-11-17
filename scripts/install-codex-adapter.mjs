@@ -5,7 +5,7 @@ import path from "node:path";
 import {execFileSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
 import {defaultHarnessRuntimeRoot, installHarnessRuntime, verifyHarnessRuntime} from "./harness-runtime.mjs";
-import {REASONING_SKILL_NAMES} from "./reasoning-skills.mjs";
+import {REASONING_METHOD_GROUPS, REASONING_SKILL_NAMES} from "./reasoning-skills.mjs";
 
 const MANIFEST_NAME = ".leon-engineering.json";
 const DISTRIBUTION_MANIFEST_NAME = ".leon-engineering-distribution.json";
@@ -18,14 +18,17 @@ const GLOBAL_POLICY_END = "<!-- leon-engineering:global-framework:end -->";
 
 export const CORE_SKILL_NAMES = Object.freeze([
   "agent-routing",
-  "bugfix-evidence",
-  "feature-loop",
-  "iteration-delivery",
-  "project-adapter",
-  "project-bootstrap",
+  "engineering-delivery",
+  "engineering-work",
   "project-constraints",
   "project-harness",
-  "review-ship"
+  "project-onboarding"
+]);
+
+const RETIRED_SKILL_NAMES = Object.freeze([
+  "bugfix-evidence", "feature-loop", "iteration-delivery",
+  "project-adapter", "project-bootstrap", "review-ship",
+  ...Object.values(REASONING_METHOD_GROUPS).flat()
 ]);
 
 export const EXTENDED_SKILL_NAMES = Object.freeze([
@@ -229,7 +232,7 @@ function assertOwnedSkillNames(skills) {
     throw new Error("invalid adapter manifest");
   }
   for (const [name, checksum] of Object.entries(skills)) {
-    if (!SKILL_NAMES.includes(name) || !/^[0-9a-f]{64}$/.test(checksum)) {
+    if ((!SKILL_NAMES.includes(name) && !RETIRED_SKILL_NAMES.includes(name)) || !/^[0-9a-f]{64}$/.test(checksum)) {
       throw new Error("invalid adapter manifest");
     }
   }
@@ -577,6 +580,18 @@ export function install({sourceRoot = SOURCE_ROOT, targetRoot, logResult = true}
 
   const existing = readManifest(targetRoot);
   preflight(sourceRoot, targetRoot, existing);
+  const retired = Object.keys(existing?.skills ?? {}).filter(name => RETIRED_SKILL_NAMES.includes(name));
+  for (const name of retired) {
+    const installed = path.join(targetRoot, name);
+    if (!fs.existsSync(installed) || fs.lstatSync(installed).isSymbolicLink()
+      || skillChecksum(listSkillFiles(installed, name, false)) !== existing.skills[name]) {
+      throw new Error(`refusing to retire drifted skill: ${name}`);
+    }
+  }
+  const retiredPaths = [];
+  const newDirectories = new Set(SKILL_NAMES.filter(name => !fs.existsSync(path.join(targetRoot, name))));
+  const created = [];
+  let preserveStaging = false;
 
   const staging = fs.mkdtempSync(path.join(targetRoot, ".leon-engineering-stage-"));
   try {
@@ -592,6 +607,13 @@ export function install({sourceRoot = SOURCE_ROOT, targetRoot, logResult = true}
     }
 
     for (const name of SKILL_NAMES) {
+      if (newDirectories.has(name)) {
+        const destination = path.join(targetRoot, name);
+        if (fs.existsSync(destination)) throw new Error(`skill directory created during install: ${name}`);
+        fs.renameSync(path.join(staging, name), destination);
+        created.push({name, destination, checksum: skills[name]});
+        continue;
+      }
       for (const file of listSkillFiles(path.join(staging, name), name, false)) {
         const destination = path.join(targetRoot, name, file.relative);
         fs.mkdirSync(path.dirname(destination), {recursive: true});
@@ -606,14 +628,45 @@ export function install({sourceRoot = SOURCE_ROOT, targetRoot, logResult = true}
       sourceCommit: sourceCommit(sourceRoot),
       skills
     };
+    for (const name of retired) {
+      const original = path.join(targetRoot, name);
+      const previous = path.join(staging, "retired", name);
+      fs.mkdirSync(path.dirname(previous), {recursive: true});
+      fs.renameSync(original, previous);
+      retiredPaths.push({original, previous});
+    }
     writeAtomically(manifestPath(targetRoot), `${JSON.stringify(manifest, null, 2)}\n`);
     if (logResult) log("installed", {skillCount: SKILL_NAMES.length});
     return {skills: SKILL_NAMES, manifest};
   } catch (error) {
+    const recoveryFailures = [];
+    for (const {original, previous} of retiredPaths.reverse()) {
+      try {
+        if (fs.existsSync(original)) throw new Error("retired path recreated during install");
+        fs.renameSync(previous, original);
+      } catch {
+        preserveStaging = true;
+        recoveryFailures.push(original);
+      }
+    }
+    for (const {name, destination, checksum} of created) {
+      try {
+        if (fs.lstatSync(destination).isSymbolicLink()
+          || skillChecksum(listSkillFiles(destination, name, false)) !== checksum) {
+          throw new Error("new skill changed during installation");
+        }
+        fs.rmSync(destination, {recursive: true});
+      } catch {
+        recoveryFailures.push(destination);
+      }
+    }
+    if (recoveryFailures.length) {
+      throw new Error(`install rollback needs review: ${recoveryFailures.join(", ")}; staging: ${staging}`, {cause: error});
+    }
     if (logResult) log("install_failed", {message: error.message});
     throw error;
   } finally {
-    fs.rmSync(staging, {recursive: true, force: true});
+    if (!preserveStaging) fs.rmSync(staging, {recursive: true, force: true});
   }
 }
 
@@ -683,7 +736,7 @@ function readDistributionManifest(targetRoot) {
     || Array.isArray(manifest.retiredSkills)
   ) throw new Error("invalid distribution manifest");
   for (const [name, checksum] of Object.entries(manifest.retiredSkills)) {
-    if (!SKILL_NAMES.includes(name) || !/^[0-9a-f]{64}$/.test(checksum)) {
+    if ((!SKILL_NAMES.includes(name) && !RETIRED_SKILL_NAMES.includes(name)) || !/^[0-9a-f]{64}$/.test(checksum)) {
       throw new Error("invalid distribution manifest");
     }
   }

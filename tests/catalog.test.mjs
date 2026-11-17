@@ -8,27 +8,17 @@ import {buildReconciliation, buildPluginAdditions} from "../scripts/sync-cc-swit
 const root = path.resolve(import.meta.dirname, "..");
 
 const skills = {
-  "project-bootstrap": ["project instructions", "CI"],
-  "feature-loop": ["acceptance criteria", "worktree"],
-  "bugfix-evidence": ["reproduce", "root cause"],
-  "review-ship": ["diff", "handoff"],
+  "project-onboarding": ["read-only|by default", "explicit authorization"],
+  "engineering-work": ["acceptance criteria", "reproduce", "root cause"],
+  "engineering-delivery": ["diff", "current-task authorization", "PR-only"],
   "logging-observability": ["structured", "redact"],
   "agent-routing": ["worktree", "agent team"],
   "skill-health": ["overlap", "Never delete"],
-  "project-adapter": ["read-only", "candidate"],
   "project-harness": ["handoff", "--write-harness"],
   "project-constraints": ["read-only", "--changed-file"],
-  "iteration-delivery": ["default branch", "cleanup"],
-  "socratic-clarification": ["Triggers", "Anti-triggers", "Observable output"],
-  "dual-layer-explanation": ["Triggers", "Anti-triggers", "Observable output"],
-  "reverse-engineering": ["Triggers", "Anti-triggers", "Observable output"],
-  "horizontal-vertical-analysis": ["Triggers", "Anti-triggers", "Observable output"],
-  "fact-checking": ["Triggers", "Anti-triggers", "Observable output"],
-  "expert-perspectives": ["Triggers", "Anti-triggers", "Observable output"],
-  "first-principles": ["Triggers", "Anti-triggers", "Observable output"],
-  "cross-domain-transfer": ["Triggers", "Anti-triggers", "Observable output"],
-  "steelman-comparison": ["Triggers", "Anti-triggers", "Observable output"],
-  "minimal-experiment": ["Triggers", "Anti-triggers", "Observable output"]
+  "problem-framing": ["only the method", "first-principles"],
+  "solution-comparison": ["only the method", "steelman-comparison"],
+  "evidence-and-experiments": ["only the method", "fact-checking"]
 };
 
 const agents = {
@@ -70,11 +60,9 @@ test("separates shared engineering principles from host-specific policy deltas",
   for (const phrase of ["目标与约束", "事实与假设", "证据闭环", "系统边界", "期望效用", "不确定性", "反馈", "思考深度"]) {
     assert.match(shared, new RegExp(phrase));
   }
-  for (const method of [
-    "socratic-clarification", "dual-layer-explanation", "reverse-engineering", "horizontal-vertical-analysis",
-    "fact-checking", "expert-perspectives", "first-principles", "cross-domain-transfer",
-    "steelman-comparison", "minimal-experiment"
-  ]) assert.match(shared, new RegExp(method));
+  for (const method of ["problem-framing", "solution-comparison", "evidence-and-experiments"]) {
+    assert.match(shared, new RegExp(method));
+  }
   assert.match(codex, /Codex.*PreToolUse.*PostToolUse.*Hook/);
   assert.match(claude, /^\{\{LEON_ENGINEERING_SHARED_POLICY_IMPORT\}\}/m);
   assert.doesNotMatch(claude, /目标与约束|期望效用|first-principles/);
@@ -461,7 +449,7 @@ test("governs the audited Claude catalog through explicit shared boundaries", ()
   }
   assert.match(agentGuide, /七个规范职责代理/);
   assert.match(routing, /不把 Claude 专用 agent 或 skill 隐式当成共享能力/);
-  for (const phrase of ["52 个", "51 个", "230 个", "11 个工程工作流", "10 个推理 Skill", "iteration-delivery", "project-constraints", "project-harness", "first-principles", "minimal-experiment", "ecc", "zq", "data-connector-development", "## 共享工作流", "## 共享推理 Skill", "## Claude 专用排除项"]) {
+  for (const phrase of ["52 个", "51 个", "230 个", "6 个核心工程入口", "3 个按需推理入口", "engineering-delivery", "project-constraints", "project-harness", "first-principles", "minimal-experiment", "ecc", "zq", "data-connector-development", "## 共享工作流", "## 共享推理 Skill", "## Claude 专用排除项"]) {
     assert.match(catalog, new RegExp(phrase));
   }
 });
@@ -471,12 +459,12 @@ test("reconciles CC-Switch flags from active directories and the enabled framewo
     rows: [
       {id: "local:zq", directory: "zq", enabled_claude: 1, enabled_codex: 0},
       {id: "local:data-connector-development", directory: "data-connector-development", enabled_claude: 1, enabled_codex: 1},
-      {id: "local:feature-loop", directory: "feature-loop", enabled_claude: 0, enabled_codex: 1},
-      {id: "local:project-adapter", directory: "project-adapter", enabled_claude: 0, enabled_codex: 1},
+      {id: "local:engineering-work", directory: "engineering-work", enabled_claude: 0, enabled_codex: 1},
+      {id: "local:project-onboarding", directory: "project-onboarding", enabled_claude: 0, enabled_codex: 1},
       {id: "local:document", directory: "document", enabled_claude: 0, enabled_codex: 0}
     ],
     claudeDirectories: new Set(["data-connector-development", "document"]),
-    codexDirectories: new Set(["feature-loop"]),
+    codexDirectories: new Set(["engineering-work"]),
     pluginEnabled: true
   });
 
@@ -484,24 +472,21 @@ test("reconciles CC-Switch flags from active directories and the enabled framewo
   assert.deepEqual(result.changes, [
     {id: "local:zq", before: {claude: 1, codex: 0}, after: {claude: 0, codex: 0}},
     {id: "local:data-connector-development", before: {claude: 1, codex: 1}, after: {claude: 1, codex: 0}},
-    {id: "local:feature-loop", before: {claude: 0, codex: 1}, after: {claude: 1, codex: 1}},
-    {id: "local:project-adapter", before: {claude: 0, codex: 1}, after: {claude: 1, codex: 0}},
+    {id: "local:engineering-work", before: {claude: 0, codex: 1}, after: {claude: 1, codex: 1}},
+    {id: "local:project-onboarding", before: {claude: 0, codex: 1}, after: {claude: 1, codex: 0}},
     {id: "local:document", before: {claude: 0, codex: 0}, after: {claude: 1, codex: 0}}
   ]);
 });
 
 test("keeps engineering methods in one reference without broadening workflow triggers", () => {
-  const relative = "plugins/leon-engineering-core/skills/feature-loop/references/engineering-methods.md";
+  const relative = "plugins/leon-engineering-core/skills/engineering-work/references/engineering-methods.md";
   const reference = fs.readFileSync(path.join(root, relative), "utf8");
-  const feature = readSkill("feature-loop");
-  const bugfix = readSkill("bugfix-evidence");
-  assert.equal(frontmatter(feature).description, "Use when delivering a scoped engineering feature from acceptance criteria through implementation, verification, review, and handoff.");
-  assert.equal(frontmatter(bugfix).description, "Use when correcting a regression or defect that needs a reproduced failure, narrow root-cause analysis, minimal fix, and verified evidence.");
-  for (const [directory, source] of [["feature-loop", feature], ["bugfix-evidence", bugfix]]) {
-    const links = [...source.matchAll(/\]\(([^)]+engineering-methods\.md)\)/g)];
-    assert.equal(links.length, 1);
-    const target = path.resolve(root, "plugins/leon-engineering-core/skills", directory, links[0][1]);
-    assert.equal(target, path.join(root, relative));
+  const feature = readSkill("engineering-work");
+  assert.match(feature, /references\/feature-loop\.md/);
+  assert.match(feature, /references\/bugfix-evidence\.md/);
+  for (const mode of ["feature-loop", "bugfix-evidence"]) {
+    const source = fs.readFileSync(path.join(root, path.dirname(relative), `${mode}.md`), "utf8");
+    assert.match(source, /\]\(engineering-methods\.md\)/);
   }
   for (const pattern of [
     /agreed interfaces.*observable behavior/s,
@@ -513,11 +498,11 @@ test("keeps engineering methods in one reference without broadening workflow tri
     /small, clear task.*does not add.*interview.*approval/s,
     /does not trigger.*whole-repository scan.*HTML report.*parallel agents/s
   ]) assert.match(reference, pattern);
-  assert.match(feature, /Implement the smallest complete slice/);
+  assert.match(feature, /implement the smallest complete slice/);
 });
 
 test("preserves architecture judgment and method provenance without a new skill", () => {
-  const reference = fs.readFileSync(path.join(root, "plugins/leon-engineering-core/skills/feature-loop/references/engineering-methods.md"), "utf8");
+  const reference = fs.readFileSync(path.join(root, "plugins/leon-engineering-core/skills/engineering-work/references/engineering-methods.md"), "utf8");
   assert.match(reference, /concentrates complexity.*forwarding.*configuration.*understanding/s);
   assert.match(reference, /thin module.*not.*deletion/s);
   assert.match(reference, /existing architecture decisions.*concrete problem.*trade-offs/s);
@@ -544,4 +529,16 @@ test("adds a missing enabled framework workflow to the CC-Switch catalog", () =>
     enabledClaude: 1,
     enabledCodex: 1
   }]);
+});
+
+test("discovers six core entries and three opt-in reasoning entry points", () => {
+  assert.deepEqual([...CORE_SKILL_NAMES].sort(), [
+    "agent-routing", "engineering-delivery", "engineering-work", "project-constraints", "project-harness", "project-onboarding"
+  ]);
+  assert.deepEqual([...EXTENDED_SKILL_NAMES].sort(), [
+    "evidence-and-experiments", "logging-observability", "problem-framing", "skill-health", "solution-comparison"
+  ]);
+  const delivery = readSkill("engineering-delivery");
+  assert.match(delivery, /current-task authorization/i);
+  assert.doesNotMatch(delivery, /direct push is the default|standing delivery preference/i);
 });

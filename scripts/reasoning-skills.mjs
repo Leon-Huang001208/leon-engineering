@@ -1,15 +1,10 @@
-export const REASONING_SKILL_NAMES = Object.freeze([
-  "socratic-clarification",
-  "dual-layer-explanation",
-  "reverse-engineering",
-  "horizontal-vertical-analysis",
-  "fact-checking",
-  "expert-perspectives",
-  "first-principles",
-  "cross-domain-transfer",
-  "steelman-comparison",
-  "minimal-experiment"
-]);
+export const REASONING_METHOD_GROUPS = Object.freeze({
+  "problem-framing": Object.freeze(["socratic-clarification", "first-principles", "reverse-engineering", "dual-layer-explanation"]),
+  "solution-comparison": Object.freeze(["horizontal-vertical-analysis", "expert-perspectives", "steelman-comparison", "cross-domain-transfer"]),
+  "evidence-and-experiments": Object.freeze(["fact-checking", "minimal-experiment"]),
+});
+
+export const REASONING_SKILL_NAMES = Object.freeze(Object.keys(REASONING_METHOD_GROUPS));
 
 function normalizedTerms(values, field) {
   if (!Array.isArray(values) || values.length === 0 || values.some(value => typeof value !== "string" || value.trim().length === 0)) {

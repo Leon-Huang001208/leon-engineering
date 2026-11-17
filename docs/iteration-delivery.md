@@ -17,7 +17,7 @@
 2. 执行者在功能 worktree 实现、测试并提交。
 3. `prepare` 获取任务锁，从最新远端默认分支创建临时集成 worktree，以 `--no-ff` 合并功能分支。
 4. 执行者在集成 worktree 运行与风险相称的真实验证，并把命令、通过状态和实测耗时交给 `publish`。
-5. `publish` 再次确认远端未并发推进。优先直推默认分支；若 GitHub 分支保护拒绝，则推送集成分支、创建 PR、启用自动合并并等待检查。
+5. `publish` 再次确认远端未并发推进。发布须有当前任务的明确授权并服从项目规定。这个旧控制器会先尝试直推，遇到分支保护才转 PR；仅在当前授权明确允许该路径时调用。PR-only 项目应使用项目指定的 PR 流程。
 6. `status` 查询 CI。没有任何 Actions workflow 时记录 `not_configured`，不能把“暂时没有 run”误判为未配置。
 7. `cleanup` 只在交付提交已包含于远端默认分支、CI 为 `passed` 或 `not_configured` 且 worktree 干净时，删除本地/远端任务分支和临时 worktree。
 
