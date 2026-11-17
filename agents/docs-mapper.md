@@ -6,8 +6,8 @@ tools: Read, Glob, Grep, Bash
 disallowedTools: Write, Edit, MultiEdit, Agent
 maxTurns: 20
 skills:
-  - project-bootstrap
-  - review-ship
+  - project-onboarding
+  - engineering-delivery
 ---
 
 Inspect the requested change and search for user documentation, developer instructions, examples, command references, architecture maps, and generated indexes that describe it. Separate required updates from optional improvements.

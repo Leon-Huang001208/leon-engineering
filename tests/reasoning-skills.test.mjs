@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
-import {REASONING_SKILL_NAMES, evaluateTriggerExample} from "../scripts/reasoning-skills.mjs";
+import {REASONING_METHOD_GROUPS, REASONING_SKILL_NAMES, evaluateTriggerExample} from "../scripts/reasoning-skills.mjs";
 import {install, rollback, verify} from "../scripts/install-codex-adapter.mjs";
 import {installClaudeSkills, rollbackClaudeSkills, verifyClaudeSkills} from "../scripts/install-claude-adapter.mjs";
 
@@ -15,10 +15,11 @@ function temporaryDirectory(t, prefix) {
   return directory;
 }
 
-test("ships ten versioned reasoning skills with executable trigger examples", () => {
-  assert.equal(REASONING_SKILL_NAMES.length, 10);
-  for (const name of REASONING_SKILL_NAMES) {
-    const contract = JSON.parse(fs.readFileSync(path.join(sourceRoot, "plugins", "leon-engineering-workflows", "skills", name, "contract.json"), "utf8"));
+test("ships ten versioned methods under three reasoning skills with executable trigger examples", () => {
+  assert.equal(REASONING_SKILL_NAMES.length, 3);
+  assert.equal(new Set(Object.values(REASONING_METHOD_GROUPS).flat()).size, 10);
+  for (const [entry, methods] of Object.entries(REASONING_METHOD_GROUPS)) for (const name of methods) {
+    const contract = JSON.parse(fs.readFileSync(path.join(sourceRoot, "plugins", "leon-engineering-workflows", "skills", entry, "references", `${name}.contract.json`), "utf8"));
     assert.equal(contract.methodId, name);
     assert.match(contract.version, /^1\.0\.0$/);
     assert.equal(contract.permissions, "none");
@@ -51,13 +52,13 @@ test("installs the same canonical reasoning skills into isolated Codex and Claud
 
 test("Claude reasoning skill install refuses foreign names and drifted rollback", t => {
   const foreignHome = temporaryDirectory(t, "leon-reasoning-claude-foreign-");
-  fs.mkdirSync(path.join(foreignHome, "skills", "first-principles"), {recursive: true});
-  fs.writeFileSync(path.join(foreignHome, "skills", "first-principles", "SKILL.md"), "foreign\n");
+  fs.mkdirSync(path.join(foreignHome, "skills", "problem-framing"), {recursive: true});
+  fs.writeFileSync(path.join(foreignHome, "skills", "problem-framing", "SKILL.md"), "foreign\n");
   assert.throws(() => installClaudeSkills({sourceRoot, claudeHome: foreignHome}), /foreign skill directory/);
 
   const driftHome = temporaryDirectory(t, "leon-reasoning-claude-drift-");
   installClaudeSkills({sourceRoot, claudeHome: driftHome});
-  fs.appendFileSync(path.join(driftHome, "skills", "first-principles", "SKILL.md"), "drift\n");
+  fs.appendFileSync(path.join(driftHome, "skills", "problem-framing", "SKILL.md"), "drift\n");
   assert.equal(verifyClaudeSkills({sourceRoot, claudeHome: driftHome}).valid, false);
   assert.throws(() => rollbackClaudeSkills({claudeHome: driftHome}), /refusing to rollback drifted skills/);
 });

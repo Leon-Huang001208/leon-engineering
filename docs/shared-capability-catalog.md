@@ -8,7 +8,7 @@
 - 54 个 Claude skill 入口：38 个真实目录、16 个符号链接；52 个与本机 `.agents/skills` 或 `.cc-switch/skills` 的同名内容逐文件一致。
 - 235 个 agent Markdown 文件：230 个元数据完整、2 个 YAML 无效（`a11y-architect`、`zk-steward`）、3 个为说明文件而非 agent。
 - 99 个用户级规则 Markdown 文件，其中 55 个 `ecc` 嵌套 skill 和未限定路径的规则会增加每个 Claude 会话的指令负担。
-- `leon-engineering@leon-local` 是跨宿主框架的唯一规范插件；其 11 个工程工作流、10 个推理 Skill 和 7 个职责代理是稳定的共享基线。
+- `leon-engineering@leon-local` 是跨宿主框架的唯一规范插件；当时的基线包含 11 个工程工作流、10 个推理 Skill 和 7 个职责代理。现行分发见下文。
 
 ## 共享工作流
 
@@ -18,13 +18,13 @@
 
 审查中有 52 个入口与 `.agents/skills` 或 `.cc-switch/skills` 的来源内容一致；其中 `data-connector-development` 目前只在 Claude 直接目录可发现，Codex 没有对应入口。因此“同源”不等于“已跨宿主可用”，它不计入上述 51 个共享运行时工作流。
 
-`leon-engineering` 自己管理的共享核心工程工作流仍是：`agent-routing`、`bugfix-evidence`、`feature-loop`、`iteration-delivery`、`logging-observability`、`project-adapter`、`project-bootstrap`、`project-constraints`、`project-harness`、`review-ship`、`skill-health`。
+`leon-engineering` 自己管理的 6 个核心工程入口是：`agent-routing`、`project-onboarding`、`engineering-work`、`engineering-delivery`、`project-constraints`、`project-harness`。`logging-observability` 和 `skill-health` 属于可选扩展。42 个兼容命令通过可选命令包分发。
 
 ## 共享推理 Skill
 
-以下 10 个版本化方法由同一权威目录维护，并由 Codex／Claude adapter 安装到各自 Skill 目录：`socratic-clarification`、`dual-layer-explanation`、`reverse-engineering`、`horizontal-vertical-analysis`、`fact-checking`、`expert-perspectives`、`first-principles`、`cross-domain-transfer`、`steelman-comparison`、`minimal-experiment`。
+3 个按需推理入口（`problem-framing`、`solution-comparison`、`evidence-and-experiments`）收录以下十个版本化方法由同一权威目录维护，并由 Codex／Claude adapter 安装到各自 Skill 目录：`socratic-clarification`、`dual-layer-explanation`、`reverse-engineering`、`horizontal-vertical-analysis`、`fact-checking`、`expert-perspectives`、`first-principles`、`cross-domain-transfer`、`steelman-comparison`、`minimal-experiment`。
 
-它们只改变判断程序与可观察输出，不授予新权限。每个目录包含 `contract.json` 的正反触发样例和完整目录哈希；安装器拒绝外来同名目录、漂移安装、部分验证和漂移回滚。工程工作流与推理 Skill 按触发条件路由，不能因目录重复而重复安装。
+它们只改变判断程序与可观察输出，不授予新权限。各方法参考附带 `<method>.contract.json` 的正反触发样例和完整目录哈希；安装器拒绝外来同名目录、漂移安装、部分验证和漂移回滚。工程工作流与推理 Skill 按触发条件路由，不能因目录重复而重复安装。
 
 ## 规范职责代理
 
@@ -52,7 +52,7 @@ node scripts/sync-cc-switch-skills.mjs
 node scripts/sync-cc-switch-skills.mjs --apply
 ```
 
-判定规则固定为：Claude 的直接目录加上已启用 `leon-engineering` 插件的二十一个共享 Skill；Codex 只计入其直接 `~/.codex/skills` 目录。UI 必须以此脚本的输出为准，不能把“共享目录中的内容等价”误写成“两个宿主各有相同数量的直接安装目录”。
+判定规则固定为：Claude 的直接目录加上已启用 `leon-engineering` 插件实际声明的核心 Skill；Codex 只计入其直接 `~/.codex/skills` 目录。UI 必须以此脚本的输出为准，不能把“共享目录中的内容等价”误写成“两个宿主各有相同数量的直接安装目录”。
 
 ## 再审条件
 

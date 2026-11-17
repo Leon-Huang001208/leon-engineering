@@ -1,24 +1,21 @@
 # 全局工程工作流：技能治理
 
-0.19.0 将能力拆为两层：`leon-engineering` 保留 Hook/runtime 与九个高频工程 workflow；`leon-engineering-workflows` 承载十个推理方法及 `logging-observability`、`skill-health`，默认不安装。不得同时从插件和 `~/.codex/skills` 暴露同一批受管 skills；旧全局副本只能经校验迁移器移除，并保留可回滚备份。
+主插件 `leon-engineering` 提供六个核心工程入口；可选 `leon-engineering-workflows` 提供三个按需推理入口，以及 `logging-observability` 和 `skill-health`。42 个旧命令留在独立的可选插件。安装时避免同时暴露同一来源的插件和用户目录副本。
 
 现有技能按触发条件分工，而不是为每个项目复制一套流程：
 
 | 技能 | 何时使用 |
 |---|---|
-| `project-adapter` | 进入用户指定的陌生项目、生成只读档案并选择后续工作流前。 |
-| `project-bootstrap` | 首次进入陌生项目、确认项目约束或建立经授权的项目档案。 |
+| `project-onboarding` | 先只读了解陌生项目；明确授权后才持久化项目配置。 |
 | `project-constraints` | 需要把用户已授权项目的架构、文档、日志/错误处理或平台规则作为本地/CI 门禁时。 |
 | `project-harness` | 需要让一个已授权项目的目标、验收、交接状态和交付指标跨会话延续时。 |
-| `iteration-delivery` | 用户明确 ship，或 Git 改动影响公开契约、schema、依赖、CI、数据库、安全、桌面/跨平台而需完整发布闭环时。 |
-| `feature-loop` | 交付边界清晰的功能。 |
-| `bugfix-evidence` | 修复已有行为回归或缺陷。 |
+| `engineering-delivery` | 审查、准备交付；发布与清理按当前任务授权和项目规则分别执行。 |
+| `engineering-work` | 在功能交付与缺陷复现两种模式之间选择。 |
 | `logging-observability` | 调整日志、错误可观测性或诊断信息。 |
 | `agent-routing` | 决定直做、只读调研、worktree 或经同意的团队。 |
-| `review-ship` | 审查改动、验证证据并准备交付。 |
 | `skill-health` | 审计技能目录、生命周期和重叠触发条件。 |
 
-工程轨还提供十个无权限推理 Skill：`socratic-clarification`、`dual-layer-explanation`、`reverse-engineering`、`horizontal-vertical-analysis`、`fact-checking`、`expert-perspectives`、`first-principles`、`cross-domain-transfer`、`steelman-comparison` 与 `minimal-experiment`。它们只在正向触发成立时改变分析程序，最多组合三个；反向触发、版本、可观察输出和组合边界由各自 `contract.json` 与 `SKILL.md` 共同定义。
+推理入口是 `problem-framing`、`solution-comparison` 和 `evidence-and-experiments`。各入口的参考资料保留原有十个方法、方法 ID、触发合同和结果要求。
 
 处理可能受益于专门能力的任务时，先检查已安装目录中与目标匹配的 skill、agent 和工具；这属于任务路由，不是安装动作。发现外部候选不等于安装：没有现成匹配时继续以通用能力完成当前工作；只有外部候选预计有明确质量或速度收益，才进入下述生命周期并取得用户同意。
 
@@ -44,11 +41,11 @@ node "$HOME/.agents/leon-engineering/runtime/skill-portfolio.mjs" --rollback --r
 
 项目专属或陈旧 Skill 可用 manifest 的 `kind: "quarantine"` 省略 canonical，但仍必须固定完整源树哈希并保留同样的私有备份/回滚门。复制到项目时只使用受测 sanitizer：排除环境/配置、锁、日志、输出、缓存、Chroma/SQLite、二进制索引和数据表，并在写入前拒绝 included 文本中的 literal secret。项目副本验证完成后，才可隔离全局源。
 
-`project-adapter` 的输出是路径证据与候选命令，不是已执行的测试结果。它默认不写入项目；持久化档案需要针对该项目的明确授权。
+`project-onboarding` 默认只读，输出路径证据与候选命令。持久化档案需要针对该项目的明确授权。
 
 `project-harness` 对未启用强制协议的项目保持默认只读；对用户已经启用强制 Harness 的目标项目，Agent 必须自动开始或恢复任务，无需逐项要求用户运行命令。结果记录只接受已观察到的验证状态，不能把候选命令或未运行检查写成通过；`harness-enforce` 是跨宿主的只读交付硬门。对已初始化 Harness 的依赖任务、显式重试或中断恢复，P2 控制平面先预览任务 DAG；它只保存状态和已存在 worktree 的定位信息，不创建 worktree、不自动重试，也不运行 Git、测试、构建或任务命令。
 
-`iteration-delivery` 只服务明确发布/高风险完整交付。窄小改本地验证并记录 Harness 结果，不使用 delivery flags、不自动发布或伪造远端 receipt；中高风险先隔离实现，只有升级到完整交付才发布。完整链自动识别远端默认分支，分支保护拒绝直推时转 PR，并在提交进入默认分支、CI 通过或明确未配置、worktree 干净后清理。
+`engineering-delivery` 区分审查、交付准备与发布。任何远端写入须由当前任务明确授权，发布方式由项目规则及授权指定。旧控制器仍保留原有 CLI 行为，仅在其直接推送路径获明确授权时使用。
 
 `project-constraints` 默认也只读。它只读取受跟踪的 `.agents/project-constraints.json` 与调用方明确传入的相对变更路径；有违反时以 JSON 和退出码交给 CI，不能把静态检查当作运行时或 Windows 平台验证。
 

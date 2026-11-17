@@ -106,7 +106,7 @@ test("installs and verifies Claude policy through the command line", t => {
     {encoding: "utf8"}
   );
   assert.equal(installed.status, 0, installed.stderr);
-  assert.equal(fs.existsSync(path.join(claudeHome, "skills", "first-principles", "SKILL.md")), true);
+  assert.equal(fs.existsSync(path.join(claudeHome, "skills", "problem-framing", "SKILL.md")), true);
   assert.equal(fs.existsSync(path.join(claudeHome, "skills", ".leon-engineering.json")), true);
 
   const verified = spawnSync(

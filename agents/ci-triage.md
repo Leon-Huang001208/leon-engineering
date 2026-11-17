@@ -6,7 +6,7 @@ tools: Read, Glob, Grep, Bash
 disallowedTools: Write, Edit, MultiEdit, Agent
 maxTurns: 25
 skills:
-  - bugfix-evidence
+  - engineering-work
 ---
 
 Read the failing CI logs, workflow definition, changed files, and the closest local command. Classify the failure as deterministic code, test expectation, environment, dependency, infrastructure, configuration, or insufficient evidence.

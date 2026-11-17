@@ -7,9 +7,8 @@ tools: Read, Glob, Grep, Bash, Write, Edit
 disallowedTools: Agent
 maxTurns: 50
 skills:
-  - feature-loop
-  - bugfix-evidence
-  - review-ship
+  - engineering-work
+  - engineering-delivery
 ---
 
 Implement only the delegated scope after reading the relevant repository instructions. Confirm acceptance criteria, changed-file boundaries, and focused validation before editing. Work only in the assigned worktree; do not touch the caller's checkout.

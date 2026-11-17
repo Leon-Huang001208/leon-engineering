@@ -337,29 +337,29 @@ test("installs every canonical skill and writes a checksum manifest", t => {
 
 test("refuses to overwrite a foreign skill directory", t => {
   const target = makeTarget(t);
-  fs.mkdirSync(path.join(target, "feature-loop"));
-  fs.writeFileSync(path.join(target, "feature-loop", "SKILL.md"), "foreign");
+  fs.mkdirSync(path.join(target, "engineering-work"));
+  fs.writeFileSync(path.join(target, "engineering-work", "SKILL.md"), "foreign");
 
   assert.throws(() => install({sourceRoot, targetRoot: target}), /foreign skill directory/);
-  assert.equal(fs.readFileSync(path.join(target, "feature-loop", "SKILL.md"), "utf8"), "foreign");
+  assert.equal(fs.readFileSync(path.join(target, "engineering-work", "SKILL.md"), "utf8"), "foreign");
 });
 
 test("detects drift and refuses rollback without removing managed or unrelated skills", t => {
   const target = makeTarget(t);
   install({sourceRoot, targetRoot: target});
-  fs.appendFileSync(path.join(target, "bugfix-evidence", "SKILL.md"), "\nchanged");
+  fs.appendFileSync(path.join(target, "engineering-work", "SKILL.md"), "\nchanged");
 
-  assert.deepEqual(verify({sourceRoot, targetRoot: target}).drift, ["bugfix-evidence"]);
+  assert.deepEqual(verify({sourceRoot, targetRoot: target}).drift, ["engineering-work"]);
 
   fs.mkdirSync(path.join(target, "pdf"));
   fs.writeFileSync(path.join(target, "pdf", "SKILL.md"), "existing");
   assert.throws(
     () => rollback({targetRoot: target}),
-    /refusing to rollback drifted skills: bugfix-evidence/
+    /refusing to rollback drifted skills: engineering-work/
   );
 
-  assert.equal(fs.existsSync(path.join(target, "feature-loop")), true);
-  assert.equal(fs.readFileSync(path.join(target, "bugfix-evidence", "SKILL.md"), "utf8").endsWith("\nchanged"), true);
+  assert.equal(fs.existsSync(path.join(target, "engineering-work")), true);
+  assert.equal(fs.readFileSync(path.join(target, "engineering-work", "SKILL.md"), "utf8").endsWith("\nchanged"), true);
   assert.equal(fs.readFileSync(path.join(target, "pdf", "SKILL.md"), "utf8"), "existing");
 });
 
@@ -431,4 +431,30 @@ test("plugin-only migration accepts a new canonical version when installed skill
   const result = migrateToPluginDistribution({sourceRoot: changingSource, targetRoot: target});
   assert.equal(result.retiredSkills.length, SKILL_NAMES.length);
   assert.equal(verifyPluginDistribution({sourceRoot: changingSource, targetRoot: target}).valid, true);
+});
+
+test("upgrades a legacy catalog without removing foreign retired-name directories", async t => {
+  const {createHash} = await import("node:crypto");
+  const target = makeTarget(t);
+  const legacy = path.join(target, "feature-loop");
+  const manifest = path.join(target, ".leon-engineering.json");
+  const stock = "previous managed feature skill\n";
+  fs.mkdirSync(legacy);
+  fs.writeFileSync(path.join(legacy, "SKILL.md"), stock);
+  fs.mkdirSync(path.join(target, "project-adapter"));
+  fs.writeFileSync(path.join(target, "project-adapter", "SKILL.md"), "foreign");
+  fs.writeFileSync(manifest, JSON.stringify({
+    adapter: "leon-engineering",
+    schemaVersion: 1,
+    skills: {"feature-loop": createHash("sha256").update("SKILL.md\0").update(stock).update("\0").digest("hex")}
+  }));
+  fs.appendFileSync(path.join(legacy, "SKILL.md"), "locally modified");
+  assert.throws(() => install({sourceRoot, targetRoot: target}), /refusing to retire drifted skill/);
+  assert.equal(fs.existsSync(path.join(target, "engineering-work")), false);
+
+  fs.writeFileSync(path.join(legacy, "SKILL.md"), stock);
+  install({sourceRoot, targetRoot: target});
+  assert.equal(fs.existsSync(legacy), false);
+  assert.equal(fs.readFileSync(path.join(target, "project-adapter", "SKILL.md"), "utf8"), "foreign");
+  assert.equal(verify({sourceRoot, targetRoot: target}).valid, true);
 });
