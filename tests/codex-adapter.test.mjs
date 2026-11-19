@@ -78,6 +78,35 @@ test("installs the global framework without replacing custom global rules", t =>
   }
 });
 
+test("installs the decision-based clarification rule and four skill routing examples", t => {
+  const codexHome = makeCodexHome(t);
+  installGlobalFramework({sourceRoot, codexHome});
+
+  const agents = fs.readFileSync(path.join(codexHome, "AGENTS.md"), "utf8");
+  assert.match(agents, /按全局 `docs\/SKILLS_GUIDE\.md` 澄清影响范围、方案或验收的歧义/);
+
+  const guide = fs.readFileSync(path.join(codexHome, "docs", "SKILLS_GUIDE.md"), "utf8");
+  const rule = guide.match(/^### 需求澄清\n\n([^\n]+)/m)?.[1];
+  assert.ok(rule, "the installed guide defines the referenced clarification rule");
+  assert.match(rule, /先查目标项目和已有材料/);
+  assert.match(rule, /需求明确就直接执行/);
+  assert.match(rule, /只有.*范围、方案或验收.*才提问/);
+  assert.match(rule, /每次只问一个关键问题.*给出推荐选项/);
+  assert.match(rule, /problem-framing.*socratic-clarification/);
+
+  const examples = [
+    ["按钮右移 8px", /直接.*验证/],
+    ["优化这个 UI", /先查.*一个关键问题/],
+    ["查原站切日期时的请求", /reverse-engineer-anything.*参数/],
+    ["把这个功能迁入我的项目", /REA.*engineering-work.*对照/]
+  ];
+  for (const [request, expected] of examples) {
+    const row = guide.split("\n").find(line => line.startsWith("| " + request + " |"));
+    assert.ok(row, "missing example: " + request);
+    assert.match(row, expected);
+  }
+});
+
 test("refuses to replace a foreign global hook file", t => {
   const codexHome = makeCodexHome(t);
   const foreign = JSON.stringify({hooks: {PreToolUse: []}}, null, 2);
