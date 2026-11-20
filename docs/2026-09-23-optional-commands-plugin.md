@@ -1,5 +1,7 @@
 # Optional source-command plugin
 
+Historical snapshot. The 42 wrappers described below are now retired; the current contract is [commands retirement](commands-retirement.md). Their historical measurements and migration results are retained without claiming current distribution or Token savings.
+
 ## Packaging
 
 - `leon-engineering-commands` packages 42 one-file `source-command-*` wrappers behind an optional plugin; it is present in the local marketplace source but is not installed/enabled by this migration.

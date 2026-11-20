@@ -1,9 +1,7 @@
 {
   "name": "leon-engineering-commands",
   "version": "0.19.4",
-  "description": "Optional migrated source-command wrappers",
+  "description": "Retired metadata-only command compatibility package",
   "author": {"name": "Leon"},
-  "license": "UNLICENSED",
-  "skills": ["./skills/"],
-  "mcpServers": {}
+  "license": "UNLICENSED"
 }

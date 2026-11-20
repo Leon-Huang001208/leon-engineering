@@ -1,6 +1,6 @@
 # 全局工程工作流：技能治理
 
-主插件提供六个核心入口：`agent-routing`、`engineering-work`、`engineering-delivery`、`project-onboarding`、`project-constraints`、`project-harness`。可选扩展提供三个推理入口及日志/目录治理；42 个旧命令在独立可选包，不默认启用。
+主插件提供六个核心入口：`agent-routing`、`engineering-work`、`engineering-delivery`、`project-onboarding`、`project-constraints`、`project-harness`。可选扩展提供三个推理入口及日志/目录治理。42 个旧命令入口已经退役，必要方法按需进入既有工程参考；旧插件 ID 只保留退休记录，不提供可发现 Skill。
 
 先按目标检查已安装能力；发现外部候选不等于安装。跨宿主范围以 `docs/shared-capability-catalog.md` 为准，不复制 Claude 专用能力。Skill 不扩大授权、不代替项目验收。
 

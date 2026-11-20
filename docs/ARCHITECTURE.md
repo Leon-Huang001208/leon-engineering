@@ -24,7 +24,7 @@ host-native agent runtime (model loop, tools, context, sandbox, approval)
 - Skill 发现目录收敛只生成候选清单；实际迁移复用 portfolio 的哈希预检、备份回执与回滚，不另建安装状态。
 - Token audit：脱敏指标；代理指标不冒充 Token 节省。
 - Adapters：Codex/Claude 的短规则、按需文档和受管文件生命周期；默认不挂载 Hook。
-- Plugins：核心与默认关闭扩展的分发边界。
+- Plugins：六核心与五个默认关闭扩展的分发边界；旧 commands 插件 ID 保留退休元数据，42 个命令入口不再分发或参与规范 Skill 发现。
 - 手动审计与角色：保留事件兼容辅助函数和七个受限职责模板；没有默认事件注册，不拥有核心协议。
 
 精确路径、权威文档和测试见 [机器地图](architecture-map.json) 与 [开发地图](DEVELOPMENT_MAP.md)。

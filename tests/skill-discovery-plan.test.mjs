@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import {auditSkillTree, previewSkillPortfolio} from "../scripts/skill-portfolio.mjs";
 
 const cli = fileURLToPath(new URL("../scripts/skill-discovery-plan.mjs", import.meta.url));
-const plugins = ["leon-engineering-core", "leon-engineering-workflows", "leon-engineering-commands"];
+const plugins = ["leon-engineering-core", "leon-engineering-workflows"];
 
 function writeSkill(directory, name) {
   fs.mkdirSync(path.join(directory, "references"), {recursive: true});
@@ -124,7 +124,7 @@ test("divergent trees are skipped unless explicitly hash-pinned for quarantine",
   const divergent = [];
   for (const [plugin, name, changedFile] of [
     [plugins[1], "fact-checking", "references/guide.md"],
-    [plugins[2], "source-command-aside", ".hidden"]
+    [plugins[0], "engineering-work", ".hidden"]
   ]) {
     const canonical = path.join(fixtureData.sourceRoot, "plugins", plugin, "skills", name);
     const source = path.join(fixtureData.skillsRoot, name);
@@ -169,9 +169,9 @@ test("linked Skill roots are ownership_unknown, including cc-switch and dangling
   fs.mkdirSync(path.dirname(target), {recursive: true});
   fs.renameSync(fixtureData.source, target);
   fs.symlinkSync(target, fixtureData.source);
-  const canonical = path.join(fixtureData.sourceRoot, "plugins", plugins[2], "skills", "source-command-aside");
-  writeSkill(canonical, "source-command-aside");
-  fs.symlinkSync(path.join(fixtureData.root, "absent-target"), path.join(fixtureData.skillsRoot, "source-command-aside"));
+  const canonical = path.join(fixtureData.sourceRoot, "plugins", plugins[1], "skills", "problem-framing");
+  writeSkill(canonical, "problem-framing");
+  fs.symlinkSync(path.join(fixtureData.root, "absent-target"), path.join(fixtureData.skillsRoot, "problem-framing"));
   const before = snapshot(fixtureData.root);
 
   for (const flags of [[], ["--include-divergent"]]) {
@@ -183,7 +183,7 @@ test("linked Skill roots are ownership_unknown, including cc-switch and dangling
   assert.equal(auditSkillTree(target).treeHash, auditSkillTree(fixtureData.canonical).treeHash);
 });
 
-test("only flat canonical SKILL.md names from the three plugins are inspected", testContext => {
+test("only flat canonical SKILL.md names from the active plugins are inspected", testContext => {
   const fixtureData = fixture(testContext);
   for (const name of ["source-command-hello", "source-command-jira", "private-local-skill"]) {
     const canonical = path.join(fixtureData.sourceRoot, "plugins", "other-plugin", "skills", name);
@@ -202,6 +202,25 @@ test("only flat canonical SKILL.md names from the three plugins are inspected", 
   assert.deepEqual(result.actions.map(action => action.source), [fixtureData.source]);
   assert.deepEqual(result.skipped, []);
   assert.doesNotMatch(JSON.stringify(result), /source-command-hello|source-command-jira|private-local-skill|not-a-skill|PRIVATE_CANARY/);
+  assert.deepEqual(snapshot(fixtureData.root), before);
+});
+
+test("retired commands are not canonical and similarly named user Skills receive no automatic action", testContext => {
+  const fixtureData = fixture(testContext);
+  const retiredRoot = path.join(fixtureData.sourceRoot, "plugins", "leon-engineering-commands");
+  for (const name of ["source-command-aside", "source-command-build-fix", "agent-routing"]) {
+    writeSkill(path.join(retiredRoot, "skills", name), name);
+    if (name !== "agent-routing") writeSkill(path.join(fixtureData.skillsRoot, name), name);
+  }
+  fs.appendFileSync(path.join(fixtureData.skillsRoot, "source-command-build-fix", "SKILL.md"), "User-owned divergence.\n");
+  const before = snapshot(fixtureData.root);
+  for (const flags of [[], ["--include-divergent"]]) {
+    const result = plan([...fixtureData.args, ...flags]);
+    assert.equal(result.summary.canonicalSkillCount, 1);
+    assert.deepEqual(result.actions.map(action => action.source), [fixtureData.source]);
+    assert.deepEqual(result.skipped, []);
+    assert.doesNotMatch(JSON.stringify(result), /source-command-|leon-engineering-commands/);
+  }
   assert.deepEqual(snapshot(fixtureData.root), before);
 });
 
@@ -328,14 +347,14 @@ test("invalid root types, aliases, overlapping roots and occupied destinations f
 
 test("canonical plugin aliases, missing plugin roots and ambiguous names invalidate the source root", testContext => {
   const fixtureData = fixture(testContext);
-  const commandsRoot = path.join(fixtureData.sourceRoot, "plugins", plugins[2], "skills");
-  const moved = path.join(fixtureData.root, "commands");
-  fs.renameSync(commandsRoot, moved);
+  const workflowsRoot = path.join(fixtureData.sourceRoot, "plugins", plugins[1], "skills");
+  const moved = path.join(fixtureData.root, "workflows");
+  fs.renameSync(workflowsRoot, moved);
   failsClosed(fixtureData.args, "invalid_source_root");
-  fs.symlinkSync(moved, commandsRoot);
+  fs.symlinkSync(moved, workflowsRoot);
   failsClosed(fixtureData.args, "invalid_source_root");
-  fs.unlinkSync(commandsRoot);
-  fs.renameSync(moved, commandsRoot);
+  fs.unlinkSync(workflowsRoot);
+  fs.renameSync(moved, workflowsRoot);
 
   const pluginsRoot = path.join(fixtureData.sourceRoot, "plugins");
   const movedPlugins = path.join(fixtureData.root, "plugin-alias");
@@ -345,7 +364,7 @@ test("canonical plugin aliases, missing plugin roots and ambiguous names invalid
   fs.unlinkSync(pluginsRoot);
   fs.renameSync(movedPlugins, pluginsRoot);
 
-  writeSkill(path.join(commandsRoot, "agent-routing"), "agent-routing");
+  writeSkill(path.join(workflowsRoot, "agent-routing"), "agent-routing");
   failsClosed(fixtureData.args, "invalid_source_root");
 });
 

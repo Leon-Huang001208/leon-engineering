@@ -1,16 +1,14 @@
 {
   "name": "leon-engineering-commands",
   "version": "0.19.4",
-  "description": "Optional migrated source-command wrappers",
+  "description": "Retired metadata-only command compatibility package",
   "author": {"name": "Leon"},
   "license": "UNLICENSED",
-  "skills": "./skills/",
   "interface": {
-    "displayName": "Leon Engineering Commands",
-    "shortDescription": "Optional low-frequency command wrappers",
-    "longDescription": "Migrated source-command wrappers kept outside default global Skill discovery.",
+    "displayName": "Leon Engineering Commands (Retired)",
+    "shortDescription": "Retired command identities and replacement references",
+    "longDescription": "Metadata-only compatibility package. Legacy command Skills are retired; use the core engineering Skills and opt-in workflows.",
     "developerName": "Leon",
-    "category": "Developer Tools",
-    "capabilities": ["Read", "Write", "Reasoning"]
+    "category": "Developer Tools"
   }
 }

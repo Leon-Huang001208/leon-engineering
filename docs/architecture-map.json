@@ -319,13 +319,14 @@
     },
     {
       "id": "plugins",
-      "responsibility": "Own compatible plugin identities and core versus optional Skill distribution.",
+      "responsibility": "Own compatible plugin identities, active core/optional distribution and retired command metadata.",
       "sources": [
         ".claude-plugin",
         "plugins"
       ],
       "documentation": [
         "docs/shared-capability-catalog.md",
+        "docs/commands-retirement.md",
         "docs/2026-09-23-optional-commands-plugin.md",
         "docs/engineering-workflow.md",
         "plugins/leon-engineering-core/skills/engineering-work/references/engineering-methods.md"
