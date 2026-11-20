@@ -14,17 +14,18 @@ host-native agent runtime (model loop, tools, context, sandbox, approval)
 
 ## 模块边界
 
-- Harness：任务、依赖状态、恢复、观察和证据账本；不发起模型推理循环，不替代测试或 CI。
+- Harness：显式选用的任务、依赖状态、恢复、观察和证据账本；默认不安装、不自动启动，不替代测试或 CI。
 - Verification：只读规划、风险/深度/平台/执行维度、回执和兼容协议；项目策略是机器路由真源，规划器不执行配置命令。
 - Project：项目事实发现、候选命令和配置安装；发现不是验证。
 - Constraints：静态项目规则；不推断运行时或平台成功。
 - Delivery：隔离实现、集成、远端/CI 状态和安全清理；只有实际 unmerged entries 才判内容冲突，其他命令失败保留脱敏诊断。prepared 必须证明登记候选/base 已进入所属集成分支，干净工作树本身不代表归并；只有明确授权才发布。
 - Resources：宿主资源登记、共享引用、阶段退休、缓存预算、有界证据和欠账；不替代业务部署与项目Git安全入口。
 - Governance：架构地图、Skill 生命周期、配置画像和文档分类。
+- Skill 发现目录收敛只生成候选清单；实际迁移复用 portfolio 的哈希预检、备份回执与回滚，不另建安装状态。
 - Token audit：脱敏指标；代理指标不冒充 Token 节省。
-- Adapters：Codex/Claude 的文件、Hook 和生命周期差异。
-- Plugins：六个核心工程入口与默认关闭的扩展；三个推理入口保留十个方法合同，兼容命令单独分发。
-- Hooks and agents：事件连接和七个受限职责角色；不拥有核心协议。
+- Adapters：Codex/Claude 的短规则、按需文档和受管文件生命周期；默认不挂载 Hook。
+- Plugins：核心与默认关闭扩展的分发边界。
+- 手动审计与角色：保留事件兼容辅助函数和七个受限职责模板；没有默认事件注册，不拥有核心协议。
 
 精确路径、权威文档和测试见 [机器地图](architecture-map.json) 与 [开发地图](DEVELOPMENT_MAP.md)。
 
@@ -32,6 +33,7 @@ host-native agent runtime (model loop, tools, context, sandbox, approval)
 
 - 一项规则、一份配置和一种协议只有一个可编辑权威源；兼容入口只引用它。
 - `plugins/*/skills/*/SKILL.md` 是 Skill 正文真源。
+- `agent-routing` 是日常工程主入口；功能、修复的规范正文位于 `engineering-work/references/`，评审与交付位于 `engineering-delivery/references/`。历史主入口参考仅短转发，不恢复已退役的独立 Skill。工作类型与风险档分开选择，项目验收策略和发布授权保持独立。
 - `lib/` 是宿主无关、项目无关的共享内核；`scripts/` 是稳定 CLI；`adapters/` 只处理宿主差异。安装副本由受管分发产生，不手工维护。
 - `docs/architecture-map.json` 只回答职责和资产位置。
 - 项目 `.agents/verification-policy.json` 只回答 changed set 触发的影响与验证。
@@ -45,7 +47,7 @@ project rules + complete changed set
               -> explicit validations and external gates
               -> runner / CI / manual evidence
               -> bound receipt validator
-              -> Harness outcome and handoff
+              -> project handoff (optional explicit Harness record)
 ```
 
 未知路径、未知协议、缺失引用、不完整 changed set 或失效证据必须失败或保守升级。Worktree 是文件隔离，不代表更高验证等级；generic 不是所有 OS；高风险也不自动选择无关平台。
@@ -55,6 +57,8 @@ project rules + complete changed set
 ## 分发与回滚
 
 插件 manifest、Harness runtime manifest 和项目 runtime manifest 分别声明所有权。安装先整批预检，再 staging、哈希 readback 和原子提升；漂移、外来文件、符号链接、部分失败或回滚冲突均 fail closed。真实宿主加载需要独立重启/行为证据。
+
+全局安装不创建工具事件 Hook 或默认运行时。兼容事件辅助函数仍可被显式审计工具调用；单次调用中的存储缓存不跨调用复用，也不缓存验证结果。项目明确采用的验收和权限边界仍需执行。
 
 ## 显式平台任务验收
 

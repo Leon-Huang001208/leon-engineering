@@ -16,6 +16,46 @@ function makeProject(t) {
   return project;
 }
 
+test("each resumed Hook bounds Git discovery without caching across calls", context => {
+  const project = makeProject(context);
+  assert.equal(spawnSync("git", ["init", "-q", project], {encoding: "utf8"}).status, 0);
+  const hookModule = new URL("../scripts/harness-hook.mjs", import.meta.url).href;
+  const script = `
+    import childProcess from "node:child_process";
+    import fs from "node:fs";
+    import {syncBuiltinESMExports} from "node:module";
+    const originalSpawn = childProcess.spawnSync;
+    let gitCalls = 0;
+    childProcess.spawnSync = (...args) => {
+      if (args[0] === "git") gitCalls += 1;
+      return originalSpawn(...args);
+    };
+    syncBuiltinESMExports();
+    const {handleHarnessHook} = await import(process.argv[2]);
+    const input = {cwd: process.argv[1], session_id: "bounded-discovery", tool_name: "Write"};
+    handleHarnessHook({phase: "pre", input, host: "codex"});
+    const samples = [];
+    for (const phase of ["pre", "post"]) {
+      gitCalls = 0;
+      const result = handleHarnessHook({phase, input, host: "codex"});
+      samples.push({phase, gitCalls, decision: result.decision});
+    }
+    const events = fs.readFileSync(process.argv[1] + "/.git/leon-engineering/harness/events.jsonl", "utf8").trim().split("\\n").map(line => JSON.parse(line));
+    process.stdout.write(JSON.stringify({samples, events}));
+  `;
+  const result = spawnSync(process.execPath, ["--input-type=module", "-e", script, project, hookModule], {encoding: "utf8"});
+  assert.equal(result.status, 0, result.stderr);
+  const output = JSON.parse(result.stdout);
+  for (const sample of output.samples) {
+    assert.equal(sample.decision, "allow");
+    assert.ok(sample.gitCalls > 0, "a new Hook must discover current storage");
+    assert.ok(sample.gitCalls <= 4, `${sample.phase} ran ${sample.gitCalls} Git queries`);
+  }
+  assert.equal(output.events.filter(event => event.event === "task_started").length, 1);
+  assert.equal(output.events.filter(event => event.event === "policy_decision").length, 2);
+  assert.equal(output.events.filter(event => event.event === "tool_completed").length, 1);
+});
+
 test("Claude pre and post hooks create one opaque session and record no tool input", t => {
   const project = makeProject(t);
   const input = {

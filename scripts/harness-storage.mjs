@@ -5,6 +5,18 @@ import {spawnSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
 
 export const HARNESS_RELATIVE_DIRECTORY = path.join(".ai", "harness");
+let activeStorageCache = null;
+
+export function withHarnessStorageContext(action) {
+  if (typeof action !== "function") throw new Error("Harness storage action is required");
+  const previous = activeStorageCache;
+  activeStorageCache = new Map();
+  try {
+    return action();
+  } finally {
+    activeStorageCache = previous;
+  }
+}
 
 function runGit(projectRoot, args) {
   return spawnSync("git", ["-C", projectRoot, ...args], {encoding: "utf8"});
@@ -30,6 +42,23 @@ function resolvedCommonDirectory(repositoryRoot, value) {
 
 export function resolveHarnessStorage({projectRoot}) {
   const root = existingDirectory(projectRoot);
+  if (activeStorageCache?.has(root)) {
+    const storage = activeStorageCache.get(root);
+    const boundary = storage.commonDirectory ?? storage.projectRoot;
+    const stat = fs.lstatSync(boundary);
+    if (stat.isSymbolicLink() || !stat.isDirectory() || fs.realpathSync(boundary) !== boundary) {
+      throw new Error("invalid Harness storage boundary");
+    }
+    const workspaceLegacy = path.join(storage.workspaceRoot, HARNESS_RELATIVE_DIRECTORY);
+    const repositoryLegacy = path.join(storage.projectRoot, HARNESS_RELATIVE_DIRECTORY);
+    return {...storage, legacyDirectory: fs.existsSync(workspaceLegacy) ? workspaceLegacy : repositoryLegacy};
+  }
+  const storage = discoverHarnessStorage(root);
+  activeStorageCache?.set(root, storage);
+  return {...storage};
+}
+
+function discoverHarnessStorage(root) {
   const repository = runGit(root, ["rev-parse", "--show-toplevel"]);
   const common = runGit(root, ["rev-parse", "--git-common-dir"]);
   if (repository.status !== 0 || common.status !== 0) {

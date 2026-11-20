@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import crypto from "node:crypto";
 import {spawnSync} from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -21,6 +22,19 @@ import {
 import {installHarnessRuntime} from "../scripts/harness-runtime.mjs";
 
 const sourceRoot = path.resolve(import.meta.dirname, "..");
+const LEGACY_CORE_SKILL_NAMES = [
+  "agent-routing", "bugfix-evidence", "feature-loop", "iteration-delivery", "project-adapter",
+  "project-bootstrap", "project-constraints", "project-harness", "review-ship"
+];
+const LEGACY_CATALOGS = [
+  {count: 9, names: LEGACY_CORE_SKILL_NAMES},
+  {count: 21, names: [
+    ...LEGACY_CORE_SKILL_NAMES, "logging-observability", "skill-health",
+    "socratic-clarification", "first-principles", "reverse-engineering", "dual-layer-explanation",
+    "horizontal-vertical-analysis", "expert-perspectives", "steelman-comparison", "cross-domain-transfer",
+    "fact-checking", "minimal-experiment"
+  ]}
+];
 
 function makeTarget(t) {
   const target = fs.mkdtempSync(path.join(os.tmpdir(), "leon-codex-adapter-"));
@@ -32,6 +46,26 @@ function makeCodexHome(t) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "leon-codex-global-"));
   t.after(() => fs.rmSync(home, {recursive: true, force: true}));
   return home;
+}
+
+function writeLegacyCatalog(targetRoot, names) {
+  fs.mkdirSync(targetRoot, {recursive: true});
+  const contents = {};
+  const skills = {};
+  for (const name of names) {
+    const content = `previous managed ${name} skill\n`;
+    fs.mkdirSync(path.join(targetRoot, name));
+    fs.writeFileSync(path.join(targetRoot, name, "SKILL.md"), content);
+    contents[name] = content;
+    skills[name] = crypto.createHash("sha256").update("SKILL.md\0").update(content).update("\0").digest("hex");
+  }
+  fs.writeFileSync(path.join(targetRoot, ".leon-engineering.json"), `${JSON.stringify({
+    schemaVersion: 1,
+    adapter: "leon-engineering",
+    frameworkVersion: "0.16.3",
+    skills
+  }, null, 2)}\n`);
+  return {contents, skills};
 }
 
 function makeSourceClone(t) {
@@ -54,6 +88,35 @@ function makeSourceClone(t) {
   return clone;
 }
 
+function legacyHooksContent() {
+  return `${JSON.stringify({
+    description: "leon-engineering legacy Harness",
+    hooks: {
+      PreToolUse: [{matcher: "Bash|Edit|Write", hooks: [{
+        type: "command",
+        command: "node /Users/example/.agents/leon-engineering/runtime/harness-hook.mjs --phase pre --host codex"
+      }]}],
+      PostToolUse: [{matcher: "Bash|Edit|Write", hooks: [{
+        type: "command",
+        command: "node /Users/example/.agents/leon-engineering/runtime/harness-hook.mjs --phase post --host codex"
+      }]}]
+    }
+  }, null, 2)}\n`;
+}
+
+function attachLegacyHooks(codexHome, content = legacyHooksContent()) {
+  const hooksPath = path.join(codexHome, "hooks.json");
+  fs.writeFileSync(hooksPath, content);
+  const file = path.join(codexHome, ".leon-engineering-global.json");
+  const manifest = JSON.parse(fs.readFileSync(file, "utf8"));
+  manifest.hooks = {
+    checksum: crypto.createHash("sha256").update(content).digest("hex"),
+    hadHooksFile: false
+  };
+  fs.writeFileSync(file, `${JSON.stringify(manifest, null, 2)}\n`);
+  return content;
+}
+
 test("installs the global framework without replacing custom global rules", t => {
   const codexHome = makeCodexHome(t);
   const original = "# User rules\n\nKeep this text.\n";
@@ -69,21 +132,22 @@ test("installs the global framework without replacing custom global rules", t =>
   assert.match(agents, /^# User rules/m);
   assert.match(agents, /Keep this text\./);
   assert.match(agents, /leon-engineering:global-framework:start/);
-  const hooks = JSON.parse(fs.readFileSync(path.join(codexHome, "hooks.json"), "utf8"));
-  assert.match(hooks.hooks.PreToolUse[0].hooks[0].command, /harness-hook\.mjs --phase pre --host codex/);
+  assert.equal(fs.existsSync(path.join(codexHome, "hooks.json")), false);
   const manifest = JSON.parse(fs.readFileSync(path.join(codexHome, ".leon-engineering-global.json"), "utf8"));
-  assert.match(manifest.hooks.checksum, /^[0-9a-f]{64}$/);
+  assert.equal(manifest.hooks, undefined);
   for (const name of GLOBAL_DOCUMENT_NAMES) {
     assert.equal(fs.existsSync(path.join(codexHome, "docs", name)), true);
   }
 });
 
-test("installs the decision-based clarification rule and four skill routing examples", t => {
+test("installs short global instructions with the on-demand clarification rule and four routing examples", t => {
   const codexHome = makeCodexHome(t);
   installGlobalFramework({sourceRoot, codexHome});
 
   const agents = fs.readFileSync(path.join(codexHome, "AGENTS.md"), "utf8");
-  assert.match(agents, /按全局 `docs\/SKILLS_GUIDE\.md` 澄清影响范围、方案或验收的歧义/);
+  assert.match(agents, /agent-routing/);
+  assert.match(agents, /不注册自动 Hook/);
+  assert.match(agents, /不默认建立 Harness 账本/);
 
   const guide = fs.readFileSync(path.join(codexHome, "docs", "SKILLS_GUIDE.md"), "utf8");
   const rule = guide.match(/^### 需求澄清\n\n([^\n]+)/m)?.[1];
@@ -120,67 +184,206 @@ test("refuses to replace a foreign global hook file", t => {
   assert.equal(fs.existsSync(path.join(codexHome, ".leon-engineering-global.json")), false);
 });
 
+test("a dangling global hook registration is not mistaken for absence", t => {
+  const codexHome = makeCodexHome(t);
+  installGlobalFramework({sourceRoot, codexHome});
+  const hooksPath = path.join(codexHome, "hooks.json");
+  fs.symlinkSync(path.join(codexHome, "missing-hook-target.json"), hooksPath);
+
+  assert.deepEqual(verifyGlobalFramework({sourceRoot, codexHome}).drift, ["hooks"]);
+  assert.throws(() => installGlobalFramework({sourceRoot, codexHome}), /global hooks\.json is not a file/);
+  assert.equal(fs.lstatSync(hooksPath).isSymbolicLink(), true);
+});
+
 test("detects global hook drift and refuses to roll it back", t => {
   const codexHome = makeCodexHome(t);
   installGlobalFramework({sourceRoot, codexHome});
+  attachLegacyHooks(codexHome);
   fs.appendFileSync(path.join(codexHome, "hooks.json"), "\nchanged");
 
   assert.deepEqual(verifyGlobalFramework({sourceRoot, codexHome}).drift, ["hooks"]);
+  assert.throws(() => installGlobalFramework({sourceRoot, codexHome}), /drifted global hooks/);
   assert.throws(() => rollbackGlobalFramework({sourceRoot, codexHome}), /drifted global framework/);
 });
 
-test("recreates a missing manifest-owned global hook file", t => {
+test("restores owned legacy hooks when a later guide write fails", context => {
+  const codexHome = makeCodexHome(context);
+  installGlobalFramework({sourceRoot, codexHome});
+  const originalHooks = attachLegacyHooks(codexHome);
+  const manifestPath = path.join(codexHome, ".leon-engineering-global.json");
+  const originalManifest = fs.readFileSync(manifestPath, "utf8");
+  const writeFile = fs.writeFileSync;
+  fs.writeFileSync = (destination, ...args) => {
+    if (path.dirname(String(destination)) === path.join(codexHome, "docs")) {
+      throw Object.assign(new Error("injected guide write failure"), {code: "EACCES"});
+    }
+    return writeFile(destination, ...args);
+  };
+  try {
+    assert.throws(() => installGlobalFramework({sourceRoot, codexHome}), /injected guide write failure/);
+  } finally {
+    fs.writeFileSync = writeFile;
+  }
+  assert.equal(fs.readFileSync(path.join(codexHome, "hooks.json"), "utf8"), originalHooks);
+  assert.equal(fs.readFileSync(manifestPath, "utf8"), originalManifest);
+});
+
+test("failed hook retirement preserves a replacement and reports its recovery backup", context => {
+  const codexHome = makeCodexHome(context);
+  installGlobalFramework({sourceRoot, codexHome});
+  const originalHooks = attachLegacyHooks(codexHome);
+  const hooksPath = path.join(codexHome, "hooks.json");
+  const replacement = '{"hooks":{"foreign":[]}}\n';
+  const writeFile = fs.writeFileSync;
+  let failure;
+  fs.writeFileSync = (destination, ...args) => {
+    if (path.dirname(String(destination)) === path.join(codexHome, "docs")) {
+      writeFile(hooksPath, replacement);
+      throw new Error("injected concurrent hook replacement");
+    }
+    return writeFile(destination, ...args);
+  };
+  try {
+    installGlobalFramework({sourceRoot, codexHome});
+  } catch (error) {
+    failure = error;
+  } finally {
+    fs.writeFileSync = writeFile;
+  }
+  assert.match(failure?.message ?? "", /injected concurrent hook replacement/);
+  assert.match(failure.message, /legacy hooks backup:/);
+  assert.equal(fs.readFileSync(hooksPath, "utf8"), replacement);
+  assert.equal(fs.readFileSync(failure.removedLegacyHooks.backupPath, "utf8"), originalHooks);
+});
+
+test("retires checksum-owned legacy hooks to a backup without recreating them", t => {
   const codexHome = makeCodexHome(t);
   installGlobalFramework({sourceRoot, codexHome});
+  const original = attachLegacyHooks(codexHome);
+  const hooksPath = path.join(codexHome, "hooks.json");
+  assert.deepEqual(verifyGlobalFramework({sourceRoot, codexHome}).drift, ["hooks"]);
+  const migrated = installGlobalFramework({sourceRoot, codexHome});
+
+  assert.equal(fs.existsSync(hooksPath), false);
+  assert.equal(fs.readFileSync(migrated.removedLegacyHooks.backupPath, "utf8"), original);
+  assert.equal(migrated.manifest.hooks, undefined);
+  assert.equal(migrated.activation.status, "restart_required");
+  assert.equal(migrated.activation.scope, "codex_host_process");
+  assert.equal(verifyGlobalFramework({sourceRoot, codexHome}).valid, true);
+  assert.equal(installGlobalFramework({sourceRoot, codexHome}).removedLegacyHooks, undefined);
+  assert.equal(fs.existsSync(hooksPath), false);
+});
+
+test("does not restore a missing legacy hook from its old manifest", t => {
+  const codexHome = makeCodexHome(t);
+  installGlobalFramework({sourceRoot, codexHome});
+  attachLegacyHooks(codexHome);
   const hooksPath = path.join(codexHome, "hooks.json");
   fs.rmSync(hooksPath);
 
   installGlobalFramework({sourceRoot, codexHome});
-
   assert.equal(verifyGlobalFramework({sourceRoot, codexHome}).valid, true);
-  const hooks = JSON.parse(fs.readFileSync(hooksPath, "utf8"));
-  assert.match(hooks.hooks.PreToolUse[0].hooks[0].command, /harness-hook\.mjs --phase pre --host codex/);
+  assert.equal(fs.existsSync(hooksPath), false);
+  const manifest = JSON.parse(fs.readFileSync(path.join(codexHome, ".leon-engineering-global.json")));
+  assert.equal(manifest.hooks, undefined);
 });
 
-test("repairs a canonical managed hook subset without accepting foreign hook content", t => {
+test("does not adopt legacy-looking hooks without checksum ownership", t => {
   const codexHome = makeCodexHome(t);
   installGlobalFramework({sourceRoot, codexHome});
   const hooksPath = path.join(codexHome, "hooks.json");
-  const hooks = JSON.parse(fs.readFileSync(hooksPath, "utf8"));
-  delete hooks.hooks.PreToolUse;
-  fs.writeFileSync(hooksPath, `${JSON.stringify(hooks, null, 2)}\n`);
+  const matchingLegacyHooks = legacyHooksContent();
+  fs.writeFileSync(hooksPath, matchingLegacyHooks);
 
-  installGlobalFramework({sourceRoot, codexHome});
-  assert.equal(verifyGlobalFramework({sourceRoot, codexHome}).valid, true);
-  assert.equal(
-    JSON.parse(fs.readFileSync(hooksPath, "utf8")).hooks.PreToolUse[0].hooks[0].type,
-    "command"
-  );
-
-  const drifted = JSON.parse(fs.readFileSync(hooksPath, "utf8"));
-  drifted.hooks.PostToolUse.push({matcher: ".*", hooks: []});
-  fs.writeFileSync(hooksPath, `${JSON.stringify(drifted, null, 2)}\n`);
-  assert.throws(
-    () => installGlobalFramework({sourceRoot, codexHome}),
-    /drifted global hooks/
-  );
-});
-
-test("adopts a matching legacy hook file and preserves it on rollback", t => {
-  const codexHome = makeCodexHome(t);
-  installGlobalFramework({sourceRoot, codexHome});
-  const hooksPath = path.join(codexHome, "hooks.json");
-  const matchingLegacyHooks = fs.readFileSync(hooksPath, "utf8");
-  const manifestPath = path.join(codexHome, ".leon-engineering-global.json");
-  const legacyManifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  delete legacyManifest.hooks;
-  fs.writeFileSync(manifestPath, `${JSON.stringify(legacyManifest, null, 2)}\n`);
-
-  installGlobalFramework({sourceRoot, codexHome});
-  assert.equal(verifyGlobalFramework({sourceRoot, codexHome}).valid, true);
-  rollbackGlobalFramework({sourceRoot, codexHome});
-
+  assert.throws(() => installGlobalFramework({sourceRoot, codexHome}), /foreign global hooks/);
   assert.equal(fs.readFileSync(hooksPath, "utf8"), matchingLegacyHooks);
+});
+
+test("preserves mixed foreign hook commands even when an old manifest checksum matches", t => {
+  const codexHome = makeCodexHome(t);
+  installGlobalFramework({sourceRoot, codexHome});
+  const mixed = JSON.parse(legacyHooksContent());
+  mixed.hooks.PreToolUse[0].hooks.push({type: "command", command: "echo foreign"});
+  const content = attachLegacyHooks(codexHome, `${JSON.stringify(mixed, null, 2)}\n`);
+
+  assert.throws(() => installGlobalFramework({sourceRoot, codexHome}), /foreign global hooks/);
+  assert.equal(fs.readFileSync(path.join(codexHome, "hooks.json"), "utf8"), content);
+});
+
+test("does not retire disguised, compound, or mismatched legacy commands with matching checksums", t => {
+  const script = "/Users/example/.agents/leon-engineering/runtime/harness-hook.mjs";
+  const commands = [
+    `echo ${script} --phase pre --host codex`,
+    `node ${script} --phase pre --host codex && echo foreign`,
+    `node ${script} --phase pre --host codex; echo foreign`,
+    `node ${script} --phase pre --host codex | tee foreign`,
+    `/tmp/node ${script} --phase pre --host codex`,
+    `node ${script} --phase post --host codex`,
+    `node ${script} --phase pre --host claude`
+  ];
+
+  for (const command of commands) {
+    const codexHome = makeCodexHome(t);
+    installGlobalFramework({sourceRoot, codexHome});
+    const hooks = JSON.parse(legacyHooksContent());
+    hooks.hooks.PreToolUse[0].hooks[0].command = command;
+    const content = attachLegacyHooks(codexHome, `${JSON.stringify(hooks, null, 2)}\n`);
+    const beforeManifest = fs.readFileSync(path.join(codexHome, ".leon-engineering-global.json"), "utf8");
+
+    assert.throws(() => installGlobalFramework({sourceRoot, codexHome}), /foreign global hooks/, command);
+    assert.equal(fs.readFileSync(path.join(codexHome, "hooks.json"), "utf8"), content);
+    assert.equal(fs.readFileSync(path.join(codexHome, ".leon-engineering-global.json"), "utf8"), beforeManifest);
+    assert.equal(fs.existsSync(path.join(codexHome, ".leon-engineering-backups")), false);
+  }
+});
+
+test("retires exact legacy Node commands including quoted absolute script paths", t => {
+  const script = "/Users/example profile/.agents/leon-engineering/runtime/harness-hook.mjs";
+  for (const node of ["node", process.execPath, "/opt/homebrew/bin/node"]) {
+    const codexHome = makeCodexHome(t);
+    installGlobalFramework({sourceRoot, codexHome});
+    const hooks = JSON.parse(legacyHooksContent());
+    hooks.hooks.PreToolUse[0].hooks[0].command = `"${node}" "${script}" --phase pre --host codex`;
+    const content = attachLegacyHooks(codexHome, `${JSON.stringify(hooks, null, 2)}\n`);
+
+    const result = installGlobalFramework({sourceRoot, codexHome});
+    assert.equal(fs.readFileSync(result.removedLegacyHooks.backupPath, "utf8"), content);
+    assert.equal(fs.existsSync(path.join(codexHome, "hooks.json")), false);
+  }
+});
+
+test("preserves legacy-looking commands with shell glob characters even when quoted", t => {
+  for (const pattern of ["*", "?", "[ab]", "{a,b}"]) {
+    for (const quote of ["", '"', "'"]) {
+      const codexHome = makeCodexHome(t);
+      installGlobalFramework({sourceRoot, codexHome});
+      const hooks = JSON.parse(legacyHooksContent());
+      const script = `/Users/example${pattern}/.agents/leon-engineering/runtime/harness-hook.mjs`;
+      const command = `node ${quote}${script}${quote} --phase pre --host codex`;
+      hooks.hooks.PreToolUse[0].hooks[0].command = command;
+      const content = attachLegacyHooks(codexHome, `${JSON.stringify(hooks, null, 2)}\n`);
+      const manifestPath = path.join(codexHome, ".leon-engineering-global.json");
+      const beforeManifest = fs.readFileSync(manifestPath, "utf8");
+
+      assert.throws(() => installGlobalFramework({sourceRoot, codexHome}), /foreign global hooks/, command);
+      assert.equal(fs.readFileSync(path.join(codexHome, "hooks.json"), "utf8"), content);
+      assert.equal(fs.readFileSync(manifestPath, "utf8"), beforeManifest);
+      assert.equal(fs.existsSync(path.join(codexHome, ".leon-engineering-backups")), false);
+    }
+  }
+});
+
+test("detects stale plugin-cache hook registration after a same-version source refresh", t => {
+  const codexHome = makeCodexHome(t);
+  installGlobalFramework({sourceRoot, codexHome});
+  const version = JSON.parse(fs.readFileSync(path.join(sourceRoot, ".claude-plugin", "plugin.json"))).version;
+  const cachedHooks = path.join(codexHome, "plugins", "cache", "leon-local", "leon-engineering", version, "hooks", "hooks.json");
+  fs.mkdirSync(path.dirname(cachedHooks), {recursive: true});
+  fs.writeFileSync(cachedHooks, legacyHooksContent());
+
+  assert.deepEqual(verifyGlobalFramework({sourceRoot, codexHome}).drift, ["hooks:plugin-registration"]);
+  fs.rmSync(cachedHooks);
+  assert.equal(verifyGlobalFramework({sourceRoot, codexHome}).valid, true);
 });
 
 test("rejects a foreign global document before installing the framework", t => {
@@ -236,7 +439,94 @@ test("installs and verifies the global framework through the command line", t =>
   );
   assert.equal(verified.status, 0, verified.stderr);
   assert.match(verified.stdout, /"valid": true/);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(runtimeRoot, ".leon-engineering-harness-runtime.json"), "utf8")).sourceRoot, sourceRoot);
+  assert.equal(fs.existsSync(runtimeRoot), false);
+  assert.equal(fs.existsSync(path.join(codexHome, "hooks.json")), false);
+  assert.equal(JSON.parse(verified.stdout).runtime.status, "NOT_INSTALLED");
+});
+
+test("basic current verification does not require an optional runtime", t => {
+  const codexHome = makeCodexHome(t);
+  const targetRoot = path.join(codexHome, "skills");
+  const runtimeRoot = path.join(codexHome, "runtime");
+  install({sourceRoot, targetRoot});
+  migrateToPluginDistribution({sourceRoot, targetRoot});
+  installGlobalFramework({sourceRoot, codexHome});
+
+  const report = verifyCurrentCodexState({sourceRoot, targetRoot, codexHome, runtimeRoot});
+  assert.equal(report.valid, true);
+  assert.deepEqual(report.runtime, {valid: true, drift: [], installed: false, status: "NOT_INSTALLED"});
+  assert.equal(fs.existsSync(runtimeRoot), false);
+
+  fs.mkdirSync(runtimeRoot);
+  const partial = verifyCurrentCodexState({sourceRoot, targetRoot, codexHome, runtimeRoot});
+  assert.equal(partial.valid, false);
+  assert.equal(partial.runtime.valid, false);
+});
+
+test("a dangling runtime path is invalid rather than reported as not installed", t => {
+  const codexHome = makeCodexHome(t);
+  const targetRoot = path.join(codexHome, "skills");
+  const runtimeRoot = path.join(codexHome, "runtime");
+  install({sourceRoot, targetRoot});
+  migrateToPluginDistribution({sourceRoot, targetRoot});
+  installGlobalFramework({sourceRoot, codexHome});
+  fs.symlinkSync(path.join(codexHome, "missing-runtime-target"), runtimeRoot, "dir");
+
+  const report = verifyCurrentCodexState({sourceRoot, targetRoot, codexHome, runtimeRoot});
+  assert.equal(report.valid, false);
+  assert.equal(report.runtime.valid, false);
+  assert.notEqual(report.runtime.status, "NOT_INSTALLED");
+});
+
+test("global CLI leaves an existing optional runtime directory untouched", t => {
+  const codexHome = makeCodexHome(t);
+  const runtimeRoot = path.join(codexHome, "runtime");
+  fs.mkdirSync(runtimeRoot);
+  fs.writeFileSync(path.join(runtimeRoot, "existing-runtime-file"), "keep exact bytes\n");
+  const script = path.join(sourceRoot, "scripts", "install-codex-adapter.mjs");
+
+  const installed = spawnSync(process.execPath, [
+    script, "--install-global", "--codex-home", codexHome, "--runtime-root", runtimeRoot
+  ], {encoding: "utf8"});
+  assert.equal(installed.status, 0, installed.stderr);
+  assert.deepEqual(fs.readdirSync(runtimeRoot), ["existing-runtime-file"]);
+  assert.equal(fs.readFileSync(path.join(runtimeRoot, "existing-runtime-file"), "utf8"), "keep exact bytes\n");
+});
+
+test("global CLI returns a verifiable backup reference when retiring legacy hooks", t => {
+  const codexHome = makeCodexHome(t);
+  installGlobalFramework({sourceRoot, codexHome});
+  const original = attachLegacyHooks(codexHome);
+  const script = path.join(sourceRoot, "scripts", "install-codex-adapter.mjs");
+  const installed = spawnSync(process.execPath, [
+    script, "--install-global", "--codex-home", codexHome
+  ], {encoding: "utf8"});
+
+  assert.equal(installed.status, 0, installed.stderr);
+  const report = JSON.parse(installed.stdout);
+  assert.equal(fs.readFileSync(report.removedLegacyHooks.backupPath, "utf8"), original);
+  assert.equal(report.removedLegacyHooks.checksum, crypto.createHash("sha256").update(original).digest("hex"));
+  assert.equal(report.activation.status, "restart_required");
+  assert.equal(report.activation.scope, "codex_host_process");
+  assert.equal(fs.existsSync(path.join(codexHome, "hooks.json")), false);
+});
+
+test("global CLI reports restart for a legacy manifest even when its hook file is already absent", t => {
+  const codexHome = makeCodexHome(t);
+  installGlobalFramework({sourceRoot, codexHome});
+  attachLegacyHooks(codexHome);
+  fs.rmSync(path.join(codexHome, "hooks.json"));
+  const script = path.join(sourceRoot, "scripts", "install-codex-adapter.mjs");
+
+  const installed = spawnSync(process.execPath, [
+    script, "--install-global", "--codex-home", codexHome
+  ], {encoding: "utf8"});
+  assert.equal(installed.status, 0, installed.stderr);
+  const report = JSON.parse(installed.stdout);
+  assert.equal(report.activation.status, "restart_required");
+  assert.equal(report.activation.scope, "codex_host_process");
+  assert.equal(report.removedLegacyHooks, undefined);
+  assert.equal(fs.existsSync(path.join(codexHome, "hooks.json")), false);
 });
 
 test("migration-aware default verification composes plugin, global, and runtime health", t => {
@@ -262,7 +552,7 @@ test("migration-aware default verification composes plugin, global, and runtime 
     runtime: {valid: true, drift: []}
   });
 
-  fs.rmSync(path.join(codexHome, "hooks.json"));
+  fs.appendFileSync(path.join(runtimeRoot, "harness-storage.mjs"), "\n// drift\n");
   const drifted = verifyCurrentCodexState({
     sourceRoot,
     targetRoot,
@@ -272,9 +562,9 @@ test("migration-aware default verification composes plugin, global, and runtime 
   });
   assert.equal(drifted.valid, false);
   assert.equal(drifted.pluginDistribution.valid, true);
-  assert.equal(drifted.globalFramework.valid, false);
-  assert.equal(drifted.runtime.valid, true);
-  assert.deepEqual(drifted.drift, ["global:hooks"]);
+  assert.equal(drifted.globalFramework.valid, true);
+  assert.equal(drifted.runtime.valid, false);
+  assert.ok(drifted.drift.some(item => item.startsWith("runtime:")));
 });
 
 test("default verify CLI reports composed current Codex health", t => {
@@ -338,11 +628,13 @@ test("redacts user AGENTS.md text from successful global CLI installation output
       fs.readFileSync(path.join(sourceRoot, ".claude-plugin", "plugin.json"), "utf8")
     ).version,
     activation: {
-      status: "restart_required",
-      scope: "codex_host_process",
-      note: "New tasks created before the Codex host restarts may still use cached hooks."
+      status: "new_session_required",
+      scope: "codex_instructions",
+      note: "No automatic hooks or Harness runtime are installed. Start a new session to load changed instructions."
     }
   });
+  assert.equal(fs.existsSync(runtimeRoot), false);
+  assert.equal(fs.existsSync(path.join(codexHome, "hooks.json")), false);
 });
 
 test("installs every canonical skill and writes a checksum manifest", t => {
@@ -461,6 +753,60 @@ test("plugin-only migration accepts a new canonical version when installed skill
   assert.equal(result.retiredSkills.length, SKILL_NAMES.length);
   assert.equal(verifyPluginDistribution({sourceRoot: changingSource, targetRoot: target}).valid, true);
 });
+
+for (const {count, names} of LEGACY_CATALOGS) {
+  test(`upgrades a complete legacy ${count}-skill catalog to the grouped catalog`, t => {
+    const targetRoot = makeTarget(t);
+    assert.equal(names.length, count);
+    writeLegacyCatalog(targetRoot, names);
+    fs.mkdirSync(path.join(targetRoot, "foreign-skill"));
+    fs.writeFileSync(path.join(targetRoot, "foreign-skill", "SKILL.md"), "preserve foreign bytes\n");
+
+    const result = install({sourceRoot, targetRoot});
+
+    assert.deepEqual(Object.keys(result.manifest.skills).sort(), [...SKILL_NAMES].sort());
+    assert.equal(result.skills.length, 11);
+    for (const name of names.filter(name => !SKILL_NAMES.includes(name))) {
+      assert.equal(fs.existsSync(path.join(targetRoot, name)), false, name);
+    }
+    assert.equal(fs.readFileSync(path.join(targetRoot, "foreign-skill", "SKILL.md"), "utf8"), "preserve foreign bytes\n");
+    assert.equal(verify({sourceRoot, targetRoot}).valid, true);
+  });
+
+  test(`migrates and restores a complete legacy ${count}-skill catalog without weakening ownership checks`, t => {
+    const codexHome = makeCodexHome(t);
+    const targetRoot = path.join(codexHome, "skills");
+    const {contents, skills} = writeLegacyCatalog(targetRoot, names);
+    const manifestBefore = fs.readFileSync(path.join(targetRoot, ".leon-engineering.json"), "utf8");
+
+    const migrated = migrateToPluginDistribution({sourceRoot, targetRoot});
+
+    assert.deepEqual(migrated.manifest.retiredSkills, skills);
+    assert.equal(migrated.retiredSkills.length, count);
+    assert.equal(verifyPluginDistribution({targetRoot}).valid, true);
+    for (const [name, content] of Object.entries(contents)) {
+      assert.equal(fs.existsSync(path.join(targetRoot, name)), false, name);
+      assert.equal(fs.readFileSync(path.join(migrated.manifest.backupRoot, name, "SKILL.md"), "utf8"), content);
+    }
+
+    const restored = path.join(targetRoot, "feature-loop");
+    fs.mkdirSync(restored);
+    fs.writeFileSync(path.join(restored, "SKILL.md"), "foreign recreated entry\n");
+    assert.deepEqual(verifyPluginDistribution({targetRoot}).drift, ["restored:feature-loop"]);
+    assert.throws(() => rollbackPluginDistribution({targetRoot}), /refusing to rollback drifted distribution/);
+    assert.equal(fs.readFileSync(path.join(restored, "SKILL.md"), "utf8"), "foreign recreated entry\n");
+    fs.rmSync(restored, {recursive: true});
+
+    rollbackPluginDistribution({targetRoot});
+
+    for (const [name, content] of Object.entries(contents)) {
+      assert.equal(fs.readFileSync(path.join(targetRoot, name, "SKILL.md"), "utf8"), content);
+    }
+    assert.equal(fs.readFileSync(path.join(targetRoot, ".leon-engineering.json"), "utf8"), manifestBefore);
+    assert.equal(fs.existsSync(path.join(targetRoot, ".leon-engineering-distribution.json")), false);
+    assert.equal(fs.existsSync(migrated.manifest.backupRoot), false);
+  });
+}
 
 test("upgrades a legacy catalog without removing foreign retired-name directories", async t => {
   const {createHash} = await import("node:crypto");

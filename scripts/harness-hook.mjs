@@ -6,6 +6,7 @@ import {fileURLToPath} from "node:url";
 import {appendHarnessEvent, startHarnessSession} from "./harness-project.mjs";
 import {defaultHarnessRuntimeRoot, verifyHarnessRuntime} from "./harness-runtime.mjs";
 import {resumeProjectResources} from "./resource-lifecycle.mjs";
+import {withHarnessStorageContext} from "./harness-storage.mjs";
 
 const MODULE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const SOURCE_RUNTIME = path.basename(MODULE_DIRECTORY) === "scripts"
@@ -284,7 +285,11 @@ function taskIdFor(host, sessionId) {
   return `task-${crypto.createHash("sha256").update(`${host}:${sessionId}`).digest("hex").slice(0, 20)}`;
 }
 
-export function handleHarnessHook({
+export function handleHarnessHook(options) {
+  return withHarnessStorageContext(() => handleScopedHarnessHook(options));
+}
+
+function handleScopedHarnessHook({
   phase,
   input,
   host = "claude",

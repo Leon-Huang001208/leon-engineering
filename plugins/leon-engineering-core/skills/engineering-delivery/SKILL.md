@@ -11,4 +11,4 @@ Follow [review and evidence](references/review-ship.md) to map the diff to tests
 
 ### Publish only with current-task authorization
 
-Use [managed delivery](references/iteration-delivery.md) only when the user authorized this task’s remote operation. Follow the project rules for publication and CI. If the authorized route is PR-only or unspecified, do not call a controller that attempts a direct push. Resolve the remote default branch, verify the integrated result, and run cleanup only when its own requirements and authorization are satisfied.
+Follow the project's release or PR path. Read [managed delivery](references/iteration-delivery.md) only when project rules or the current task explicitly select that controller; remote authorization alone does not select a ledger. If the route is PR-only or unspecified, do not invoke a controller that attempts a direct push. Resolve the remote default branch, verify the integrated result, and clean up only when its requirements and authorization are satisfied.

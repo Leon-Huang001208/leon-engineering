@@ -1,28 +1,11 @@
-# 全局工程工作流：设置边界
+# 设置与所有权边界
 
-全局安装器不管理模型提供商、认证信息、插件开关、MCP 服务、批准策略、沙箱、通知、浏览器配置或受信任项目列表。这些设置具有安全和账户影响，必须由用户或其明确授权的配置流程单独变更。唯一的独立例外是显式运行 `codex-profile.mjs`：它只允许改变 `model_reasoning_effort` 和已经存在的插件 `enabled` 布尔值，不属于安装器的隐式副作用。
+全局安装器只维护 `AGENTS.md` 中的标记策略块、六份指南及 `.leon-engineering-global.json`。它不注册或恢复自动 Hook，也不默认安装 Harness 运行时。
 
-全局安装器只管理：
+模型、认证、MCP、批准策略、沙箱、受信项目和其他插件保持原样。迁移历史全局 Hook 时，只有旧 manifest 的校验和能证明归属才可处理；外来或混合配置保留并报告冲突。未受管规则、文档、符号链接或漂移不因安装命令而获得覆盖授权。
 
-- `AGENTS.md` 内带有 `leon-engineering` 标记的策略区块；
-- `docs/` 内六份同名工作流文档；
-- `hooks.json` 内仅属于 `leon-engineering` 的 Harness Hook；
-- 记录这些内容校验和的 `.leon-engineering-global.json`。
+新 manifest 不再声明 Hook。校验仍应报告遗留的本框架自动注册，尤其同版本插件刷新后残留在缓存中的 `hooks/hooks.json`。有该残留时，先备份，再使用宿主原生卸载/安装流程刷新目标插件；不手改缓存，不误删其他来源。
 
-首次安装只会创建不存在的 `hooks.json`，或安全接管与框架模板完全一致的旧文件；任何其他已有 Hook 文件都会被拒绝，绝不覆盖。验证会报告漂移，回滚只删除未被修改且由框架新建的受管内容。凭据、令牌、私钥和项目机密不应写入全局文档、技能、任务报告或测试夹具。
+基本规则和 Skills 不依赖运行时。已显式安装的运行时按实际内容校验，缺失时如实报告未安装；需要账本或交付工具的项目再明确安装和调用。
 
-受管 PreToolUse 在 Harness 初始化失败时不会开放一般 Shell：只放行明确分类的只读诊断，所有修改、安装、Git 写入和未知命令仍拒绝。诊断信息只包含错误阶段、稳定代码、受管路径和恢复命令，不包含完整环境变量、会话标识或工具参数。
-
-## 可回滚 Profile
-
-Profile JSON 只接受 `schemaVersion`、`model_reasoning_effort` 和 `plugins`。默认 preview 返回精确 allowlisted before/after 与配置/profile 哈希，不输出其他 TOML 内容。`--apply` 需要显式私有 backup/receipt 路径，逐行只替换目标值并保留注释、顺序和其他字节；原子写入后立即 readback。`--rollback` 只有在当前配置仍等于 applied 哈希且 backup 仍等于 original 哈希时才恢复：
-
-```bash
-node "$HOME/.agents/leon-engineering/runtime/codex-profile.mjs" --config "$HOME/.codex/config.toml" --profile /absolute/profile.json
-node "$HOME/.agents/leon-engineering/runtime/codex-profile.mjs" --apply --config "$HOME/.codex/config.toml" --profile /absolute/profile.json --backup /absolute/private-backup.toml --receipt /absolute/private-receipt.json
-node "$HOME/.agents/leon-engineering/runtime/codex-profile.mjs" --rollback --config "$HOME/.codex/config.toml" --backup /absolute/private-backup.toml --receipt /absolute/private-receipt.json
-```
-
-Profile 只在重启后的固定样本 A/B 同时满足 input、non-cached input 与 weighted usage 严格下降，且质量、错误、工具、权限和必需硬门不变时才晋级。静态 prompt 下降本身不足以修改默认设置。
-
-有关项目级规则优先级见 [代理与项目适配](AGENTS_GUIDE.md)，有关技能安装流程见 [技能治理](SKILLS_GUIDE.md)。
+`codex-profile.mjs` 仍是独立显式工具，只能改 reasoning effort 和已存在的插件 enabled 值，保留其他配置与可回滚备份；不属于全局安装的隐式副作用。静态文档字节下降不等于 Token 或整任务提速。
