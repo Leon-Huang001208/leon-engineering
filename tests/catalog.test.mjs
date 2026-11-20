@@ -178,42 +178,76 @@ test("splits the plugin catalog into a compatible core and opt-in workflows exte
   assert.ok(marketplace.plugins.every(plugin => plugin.version === "0.19.4"));
 });
 
-test("packages mapped source commands in a default-disabled optional plugin", () => {
+test("preserves all retired command identities in a metadata-only compatibility package", () => {
   const pluginRoot = path.join(root, "plugins", "leon-engineering-commands");
   const codex = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".codex-plugin", "plugin.json"), "utf8"));
   const claude = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".claude-plugin", "plugin.json"), "utf8"));
   const commandMap = JSON.parse(fs.readFileSync(path.join(pluginRoot, "command-map.json"), "utf8"));
   const marketplace = JSON.parse(fs.readFileSync(path.join(root, ".claude-plugin", "marketplace.json"), "utf8"));
-  const directories = fs.readdirSync(path.join(pluginRoot, "skills"), {withFileTypes: true})
-    .filter(entry => entry.isDirectory()).map(entry => entry.name).sort();
+  const workReferences = "plugins/leon-engineering-core/skills/engineering-work/references/";
+  const reviewReference = "plugins/leon-engineering-core/skills/engineering-delivery/references/review-ship.md";
+  const expectedRetired = [
+    ...["aside", "build-fix", "feature-dev", "plan", "review-pr"].map(name => ({
+      name: `source-command-${name}`,
+      reason: "core-covered",
+      replacement: name === "aside" ? "none" : name === "build-fix" ? `${workReferences}bugfix-evidence.md`
+        : name === "review-pr" ? reviewReference : `${workReferences}feature-loop.md`
+    })),
+    ...["auto-update", "setup-pm", "skill-health", "evolve", "instinct-export", "instinct-import", "instinct-status", "projects", "promote", "prune", "hookify", "hookify-configure", "hookify-help", "hookify-list", "save-session", "resume-session"].map(name => ({
+      name: `source-command-${name}`,
+      reason: "legacy-system",
+      replacement: name === "skill-health" ? "plugins/leon-engineering-workflows/skills/skill-health/SKILL.md" : "none"
+    })),
+    ...["cpp-build", "cpp-review", "cpp-test", "flutter-build", "flutter-review", "flutter-test", "go-build", "go-review", "gradle-build", "kotlin-build", "kotlin-test", "python-review", "rust-build", "rust-review", "refactor-clean", "test-coverage", "update-codemaps", "update-docs", "learn", "learn-eval", "skill-create"].map(name => ({
+      name: `source-command-${name}`,
+      reason: "reference-retained",
+      replacement: name.endsWith("-review") ? reviewReference : `${workReferences}engineering-methods.md`
+    }))
+  ].sort((left, right) => left.name.localeCompare(right.name));
 
   assert.equal(codex.name, "leon-engineering-commands");
   assert.equal(claude.name, "leon-engineering-commands");
   assert.equal(codex.version, "0.19.4");
   assert.equal(claude.version, "0.19.4");
-  assert.deepEqual(codex.skills, "./skills/");
-  assert.deepEqual(claude.skills, ["./skills/"]);
+  for (const manifest of [codex, claude]) {
+    assert.match(manifest.description, /retired.*metadata-only/i);
+    for (const key of ["skills", "agents", "hooks", "mcpServers", "commands"]) {
+      assert.equal(Object.hasOwn(manifest, key), false, `retired package declares ${key}`);
+    }
+  }
+  assert.equal(Object.hasOwn(codex.interface, "capabilities"), false);
+  assert.deepEqual(fs.readdirSync(pluginRoot).sort(), [".claude-plugin", ".codex-plugin", "README.md", "command-map.json"]);
+  for (const directory of [".claude-plugin", ".codex-plugin"]) {
+    assert.deepEqual(fs.readdirSync(path.join(pluginRoot, directory)), ["plugin.json"]);
+  }
   assert.equal(commandMap.schemaVersion, 1);
-  assert.deepEqual(commandMap.commands.map(item => item.name).sort(), directories);
-  assert.equal(commandMap.commands.length, 42);
-  assert.ok(commandMap.commands.every(item => ["self-contained", "agent"].includes(item.kind) && typeof item.target === "string" && item.target.length > 0));
+  assert.deepEqual(commandMap.commands, []);
+  assert.equal(commandMap.retired.length, 42);
+  assert.equal(new Set(commandMap.retired.map(item => item.name)).size, 42);
+  assert.deepEqual(commandMap.retired.map(({name, reason, replacement}) => ({name, reason, replacement})), expectedRetired);
+  for (const item of commandMap.retired) {
+    if (item.replacement === "none") {
+      assert.match(item.note, /\S/);
+    } else {
+      assert.equal(path.isAbsolute(item.replacement), false);
+      assert.equal(item.replacement.split("/").includes(".."), false);
+      assert.ok(fs.lstatSync(path.join(root, item.replacement)).isFile(), item.replacement);
+    }
+  }
   assert.deepEqual(commandMap.quarantined, [
     {name: "source-command-hello", reason: "retired-placeholder"},
     {name: "source-command-jira", reason: "missing-jira-integration-capability"}
   ]);
-  assert.equal(directories.includes("source-command-hello"), false);
-  assert.equal(directories.includes("source-command-jira"), false);
-  for (const name of directories) {
-    const source = fs.readFileSync(path.join(pluginRoot, "skills", name, "SKILL.md"), "utf8");
-    const metadata = frontmatter(source);
-    assert.equal(metadata.name.replace(/^"|"$/g, ""), name);
-    assert.match(metadata.description, /\S/);
-  }
+  assert.ok(commandMap.retired.every(item => !["source-command-hello", "source-command-jira"].includes(item.name)));
+  const readme = fs.readFileSync(path.join(pluginRoot, "README.md"), "utf8");
+  assert.match(readme, /retired.*metadata-only/i);
+  for (const name of [...CORE_SKILL_NAMES, ...EXTENDED_SKILL_NAMES]) assert.ok(readme.includes(`\`${name}\``));
+  assert.match(readme, /historical.*records/i);
   const entry = marketplace.plugins.find(plugin => plugin.name === "leon-engineering-commands");
   assert.deepEqual(entry, {
     name: "leon-engineering-commands",
     source: "./plugins/leon-engineering-commands",
-    description: "Optional migrated source-command wrappers",
+    description: "Retired metadata-only command compatibility package",
     version: "0.19.4"
   });
 });

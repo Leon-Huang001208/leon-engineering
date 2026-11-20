@@ -17,7 +17,7 @@
     {
       "name": "leon-engineering-commands",
       "source": "./plugins/leon-engineering-commands",
-      "description": "Optional migrated source-command wrappers",
+      "description": "Retired metadata-only command compatibility package",
       "version": "0.19.4"
     }
   ]

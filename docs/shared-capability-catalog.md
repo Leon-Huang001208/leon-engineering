@@ -22,7 +22,7 @@
 
 审查中有 52 个入口与 `.agents/skills` 或 `.cc-switch/skills` 的来源内容一致；其中 `data-connector-development` 目前只在 Claude 直接目录可发现，Codex 没有对应入口。因此“同源”不等于“已跨宿主可用”，它不计入上述 51 个共享运行时工作流。
 
-`leon-engineering` 自己管理的 6 个核心工程入口是：`agent-routing`、`project-onboarding`、`engineering-work`、`engineering-delivery`、`project-constraints`、`project-harness`。`logging-observability` 和 `skill-health` 属于可选扩展。42 个兼容命令通过可选命令包分发。
+`leon-engineering` 自己管理的 6 个核心工程入口是：`agent-routing`、`project-onboarding`、`engineering-work`、`engineering-delivery`、`project-constraints`、`project-harness`。`logging-observability` 和 `skill-health` 属于可选扩展。42 个旧命令入口已经退役，旧插件 ID 仅保留退休元数据；必要方法在已有参考资料中承接，见[退役说明](commands-retirement.md)。
 
 当前日常主入口是 `agent-routing`，按需读取 `engineering-work` 或 `engineering-delivery` 的规范参考。`feature-loop`、`bugfix-evidence`、`review-ship` 保留为旧方法 ID，不再单独恢复为默认 Skill；旧主入口参考路径保留短转发。项目接入按实际需要触发，Harness 与受管交付由项目或任务显式选择，详见 [工程工作流](engineering-workflow.md)。上文数量是历史审查基线，不代表当前宿主加载数。
 

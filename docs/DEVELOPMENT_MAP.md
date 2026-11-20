@@ -15,7 +15,7 @@
 | Governance | `lib/governance/`、Skill/profile 工具 | `ARCHITECTURE.md`、共享能力目录 | `architecture-map.test.mjs`、catalog/Skill tests | 模块归属、Skill 生命周期、文档分类或地图格式变化 |
 | Token audit | `token-audit.mjs` | Token/Harness v0.19.0 设计 | `token-audit.test.mjs` | 指标、隐私、输入发现或输出预算变化 |
 | Adapters | `adapters/`、`install-*-adapter.mjs` | Codex-Claude adapter 设计 | `codex-adapter.test.mjs`、`claude-adapter.test.mjs` | 受管文件、manifest、Hook 或宿主生命周期变化 |
-| Plugins | `.claude-plugin/`、`plugins/` | `shared-capability-catalog.md` | `catalog.test.mjs`、reasoning Skill tests | 插件 ID/版本、缓存刷新、Skill 分组或默认启用状态变化 |
+| Plugins | `.claude-plugin/`、`plugins/` | `shared-capability-catalog.md`、`commands-retirement.md` | `catalog.test.mjs`、reasoning Skill tests | 插件 ID/版本、缓存刷新、Skill 分组、命令退休或默认启用状态变化 |
 | 手动审计与角色 | `agents/`、显式 hook/audit/guard helpers | `harness-v1.md` 与 adapter 文档 | hook/audit/guard/catalog tests | Hook 输出协议、来源分工、Pre/Post事件退休、事件分类、恢复白名单、角色范围或非递归委派变化 |
 
 ## 文档类别
@@ -26,9 +26,9 @@ Harness 兼容辅助函数的 `withHarnessStorageContext` 只包围一次显式�
 
 默认仅按需加载工程 Skills，不安装 Hook、不自动建立 Harness 账本。日常工程主入口为 `agent-routing`，功能/修复规范正文在 `engineering-work/references/`，评审/交付在 `engineering-delivery/references/`；旧主入口参考保持短转发，六核心布局与历史 manifest 迁移继续兼容。操作与边界见 [工程工作流](engineering-workflow.md)，路由、引用与平铺安装合同见 `tests/engineering-workflow.test.mjs`。
 
-主入口正文预算及普通聊天/已知只读命令的反触发由同一固定合同检查；真实自然触发和宿主开销另用独立会话采样，不把文件字节或静态合同冒充 Token/整任务提速。外部同名入口仍按来源与用户授权处置，不降低分发验证器的 restored 检查。
+主入口正文预算及普通聊天/已知只读命令的反触发由同一固定合同检查；真实自然触发和宿主开销另用独立会话采样，不把文件字节或静态合同冒充 Token/整任务提速。42 个旧命令仅保留集中退休映射，发现规划器只使用 core/workflows 活动根；用户同名文件不因源码退休而被自动删除。外部同名入口仍按来源与用户授权处置，不降低分发验证器的 restored 检查。
 
-测试设计与任务范围内的架构判断维护在 [engineering-work 的共享工程方法](../plugins/leon-engineering-core/skills/engineering-work/references/engineering-methods.md)，由功能与修复子流程引用。方法来源与许可证保留；它不新增工作流或验收路由。引用、触发范围与来源许可仍由 `tests/catalog.test.mjs` 固定合同检查。
+语言诊断、测试设计、有界维护与任务范围内的架构判断维护在 [engineering-work 的共享工程方法](../plugins/leon-engineering-core/skills/engineering-work/references/engineering-methods.md)，由功能与修复子流程按需引用。语言审查要点并入现有 review-ship；方法来源与许可证保留，不新增入口、工作流或验收路由。引用、触发范围与来源许可仍由 `tests/catalog.test.mjs` 固定合同检查。
 
 - 当前入口：根 README/AGENTS、`ARCHITECTURE.md`、本文件及模块现行指南；任务状态和证据不是宿主模型运行时。
 - 决策：设计文档与明确的架构取舍。

@@ -4,7 +4,7 @@ import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {auditSkillTree} from "./skill-portfolio.mjs";
 
-const PLUGINS = ["leon-engineering-core", "leon-engineering-workflows", "leon-engineering-commands"];
+const PLUGINS = ["leon-engineering-core", "leon-engineering-workflows"];
 
 class DiscoveryError extends Error {
   constructor(code) {
