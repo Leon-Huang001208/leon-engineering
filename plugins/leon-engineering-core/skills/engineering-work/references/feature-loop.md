@@ -1,9 +1,9 @@
 # Feature Loop
 
-Confirm the outcome, non-goals, acceptance criteria, affected contracts, and evidence before editing. Use a worktree for concurrent, risky, or public-contract changes; keep a narrow, non-conflicting change in the main checkout.
+Confirm outcome, non-goals, acceptance criteria, affected contracts and evidence before editing. Use the risk route from agent-routing; keep the project's required isolation and checks.
 
-Implement the smallest complete slice. Add or update the closest test before behavior changes, run focused verification, inspect the diff, and request a review proportional to risk. Do not claim browser, platform, or CI results that were not observed.
+Implement the smallest complete slice. Add or update the closest test before behavior changes, run focused verification, inspect the diff and request review proportional to risk. Focused checks do not replace mandatory acceptance.
 
-Use the [engineering methods reference](engineering-methods.md) when designing tests or considering an architecture change within the accepted scope.
+Read the [engineering methods reference](engineering-methods.md) only for test design or an architecture decision within the accepted scope. Clear tasks do not require another interview.
 
-Hand off changed files, commands and results, omitted checks, rollout risks, and follow-up work.
+Hand off changed files, real commands/results, omitted checks, rollout risks and follow-up work. Do not claim unobserved browser, platform or CI success.

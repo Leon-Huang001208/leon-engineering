@@ -32,11 +32,13 @@ node scripts/harness-storage.mjs --migrate --project /absolute/project
 
 用户为目标项目启用强制 Harness 后，所有会形成项目交付、改动或调研结论的新任务必须由 Agent 自动使用 `harness-session.mjs --start --new-task` 创建；任务延续时恢复同一不透明任务键。用户不需要手动运行该命令。纯聊天和未指定项目的问答不创建项目记录。
 
-完成时必须先实际运行验证，再写入结果并运行 `harness-enforce.mjs --project <目录> --task-id <ID>`。只有完整交付档在启动时添加 `--delivery-required`，并在完成时添加 `--require-delivery`；该硬门除开始事件、最新 `completed/passed` 结果、验证命令、实测耗时和验证完成事件外，还实时检查 receipt 中的远端提交、CI、分支和 worktree 状态。它不运行记录的命令，也不执行 Git 写操作。Codex 与 Claude 都在本地工具边界通过 `PreToolUse`/`PostToolUse` Hook 自动建立或恢复会话并记录非敏感事件。会话文件按宿主与不透明 session ID 联合摘要隔离；旧同宿主文件可迁移恢复，旧异宿主文件保持不变。读取端接受结构兼容的 v1/v2 会话记录，并仍校验摘要键、宿主和对应任务；损坏或不匹配记录不会被静默信任。
+完成时必须先实际运行验证，再写入结果并运行 `harness-enforce.mjs --project <目录> --task-id <ID>`。只有完整交付档在启动时添加 `--delivery-required`，并在完成时添加 `--require-delivery`；该硬门除开始事件、最新 `completed/passed` 结果、验证命令、实测耗时和验证完成事件外，还实时检查 receipt 中的远端提交、CI、分支和 worktree 状态。它不运行记录的命令，也不执行 Git 写操作。默认分发不注册工具 Hook。只有项目或任务显式选用 Harness 时，调用方通过命令记录相应事件；普通工具调用不自动建账本。会话文件按宿主与不透明 session ID 联合摘要隔离；旧同宿主文件可迁移恢复，旧异宿主文件保持不变。读取端接受结构兼容的 v1/v2 会话记录，并仍校验摘要键、宿主和对应任务；损坏或不匹配记录不会被静默信任。
 
-Codex 的 Plugin `PreToolUse` 运行 `guard.mjs` 做权限保护；User adapter 的 Pre/Post Hook 运行 `harness-hook.mjs`，是 Codex 项目账本的有效记录入口。Codex 环境同时提供 `PLUGIN_ROOT` 和兼容变量 `CLAUDE_PLUGIN_ROOT`；共享 Plugin 的 Harness 处理器在 Codex 下不再重复记录，Claude Plugin 仍照常记录。Codex guard 对普通操作不返回权限决定，交给宿主原生审批；拒绝操作返回 `deny`；需确认操作因当前 Codex `PreToolUse` 不支持 `ask` 而保守阻止，须由用户审阅并直接执行或建立单独的精确授权流程。不要用 `PermissionRequest` 假定所有工具调用都会进入审批。
+`scripts/harness-hook.mjs`、`audit.mjs` 和 `guard.mjs` 仅保留为显式审计与旧事件协议兼容入口，不由插件或全局工具事件调用。实际权限由宿主、项目策略及当前任务授权控制，角色文字和审计分类都不产生新权限。
 
 `PostToolUse` 的 `tool_completed` 仅说明受支持的工具已返回，非零退出也可记录；它不表示 Hook 自身完成所有副作用，更不表示项目 verifier 通过。完成硬门仍单独要求 `verification_completed`、最新 `completed/passed` outcome 及适用的交付回执。
+
+一次显式事件处理通过 `withHarnessStorageContext` 复用按真实项目根定位的存储描述，避免每层会话与事件辅助函数再次启动相同 Git 查询。作用域在成功或抛错后立即结束，下一次处理重新发现存储；不同 checkout/worktree 分别定位。复用返回独立描述副本并重新检查存储边界，账本内容、事件、runtime 校验和旧目录迁移证据都不缓存。独立 CLI 调用不自动进入该作用域。
 
 初始化失败时，Hook 进入受限恢复模式：只有 `pwd`、配置/指令读取、`rg`、只读 `sed`、Git 只读命令和受管 runtime `--verify` 等明确 `diagnostic_read` 操作可继续；已知 `mutation` 和无法证明只读的 `unknown` 都拒绝。诊断只输出阶段、稳定错误码、受管 runtime/manifest 路径与恢复建议，不回显 session ID、命令、路径参数、源代码或原始异常。交付仍由硬门和项目 CI 机械验收，Hook 不能替代真实验证证据。
 
@@ -81,10 +83,10 @@ P2 不是任务看板服务、DAG 自动执行器或常驻工作队列。它自�
 
 ## Map 新鲜度与运行时生命周期
 
-Harness 运行时由 Codex 全局框架和 Claude 受管策略的安装命令自动部署、校验到 `$HOME/.agents/leon-engineering/runtime`。Codex 全局适配器同时受管 `$HOME/.codex/hooks.json` 中的 Harness Hook：只创建不存在的文件，或接管与模板完全一致的旧文件；发现其他已有 Hook 或漂移时拒绝覆盖。项目根目录不应复制 `scripts/harness-*.mjs`。
+Harness 运行时是可选组件，全局规则安装不再自动部署它，也不创建 `$HOME/.codex/hooks.json`。明确需要时，从选定权威源执行 `node scripts/harness-runtime.mjs --install --runtime-root "$HOME/.agents/leon-engineering/runtime"`，再校验安装。项目根目录不应复制 `scripts/harness-*.mjs`。
 
 runtime 清单记录权威源根目录，使安装后的 `harness-runtime.mjs --verify` 能同时校验安装内容、安装清单与当前权威源。若权威源不可用，验证返回 `canonical source unavailable`，不得把仅内部校验和一致解释为当前版本有效。
-若 Hook 报告 runtime 缺失或清单漂移，先执行错误中的恢复命令。确认来源后，从 `/Users/leon/Developer/claude-engineering` 权威源重新运行 Codex 全局安装器，禁止把安装副本当作源码手工维护。
+显式使用运行时时若发现缺失或清单漂移，先执行只读校验；确认来源后，通过该来源的显式运行时安装命令恢复。不要运行全局规则安装来补装运行时，也不把安装副本当源码手改。
 
 安装副本直接执行 `harness-runtime.mjs --verify` 时只按清单检查自身，不把安装目录误当成权威源码，也不会为了验证创建缺失目录。Codex/Claude 适配器从权威仓库验证时显式传入源码根，因此仍会拒绝相对源码陈旧但内部清单一致的安装。
 

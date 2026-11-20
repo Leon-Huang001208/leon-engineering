@@ -1,9 +1,9 @@
 # Bugfix Evidence
 
-Reproduce the reported failure before editing. Record the command, input, observed result, and expected result. Trace the narrowest root cause; distinguish it from adjacent weaknesses and avoid unrelated refactors.
+Reproduce the reported failure before editing. Record input, command, observed and expected results. Trace the narrowest root cause; separate adjacent weaknesses and avoid unrelated refactors.
 
-Write or update the closest regression test, make the minimal corrective change, and rerun the reproduction and focused test. If reproduction is impossible, state the hypothesis and the missing evidence instead of claiming a fix.
+Add or update the closest regression test, make the minimal fix and rerun the reproduction and focused checks under the common risk route. If reproduction is impossible, state the hypothesis and missing evidence instead of claiming a fix.
 
-Use the [engineering methods reference](engineering-methods.md) for regression-test design; architecture judgment applies only when the fix requires an architecture change.
+Use the shared [engineering methods reference](engineering-methods.md) for relevant regression tests; architecture judgment applies only when needed by the fix.
 
-Hand off the root cause, changed files, verification output, unverified environments, and remaining risk.
+Hand off root cause, changed files, real verification, unverified environments and remaining risks. Mandatory project gates still apply.

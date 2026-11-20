@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import {execFileSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
-import {installHarnessRuntime, verifyHarnessRuntime} from "./harness-runtime.mjs";
+import {defaultHarnessRuntimeRoot, verifyHarnessRuntime} from "./harness-runtime.mjs";
 import {install as installSkills, rollback as rollbackSkills, verify as verifySkills} from "./install-codex-adapter.mjs";
 
 const SOURCE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -610,21 +610,37 @@ function parseCli(args) {
   };
 }
 
+function verifyOptionalRuntime(runtimeRoot = defaultHarnessRuntimeRoot()) {
+  try {
+    fs.lstatSync(runtimeRoot);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return {valid: true, drift: [], installed: false, status: "NOT_INSTALLED"};
+    }
+    throw fail("cannot inspect optional runtime", "invalid_runtime");
+  }
+  try {
+    return verifyHarnessRuntime({sourceRoot: SOURCE_ROOT, runtimeRoot});
+  } catch {
+    return {valid: false, drift: ["runtime verification"]};
+  }
+}
+
 function main(args) {
   const {action, claudeHome, runtimeRoot} = parseCli(args);
   if (action === "--install") {
     installClaudeSkills({sourceRoot: SOURCE_ROOT, claudeHome});
     const {manifest} = installClaudePolicy({claudeHome});
-    installHarnessRuntime({sourceRoot: SOURCE_ROOT, ...(runtimeRoot ? {runtimeRoot} : {})});
     console.log(JSON.stringify({installed: true, frameworkVersion: manifest.frameworkVersion}));
   } else if (action === "--verify") {
     const verification = verifyClaudePolicy({claudeHome, logResult: false});
     const skills = verifyClaudeSkills({sourceRoot: SOURCE_ROOT, claudeHome});
-    const runtime = verifyHarnessRuntime({sourceRoot: SOURCE_ROOT, ...(runtimeRoot ? {runtimeRoot} : {})});
-    if (!verification.valid || !skills.valid || !runtime.valid) {
+    if (!verification.valid || !skills.valid) {
       throw fail("Claude policy drift detected", "drifted_policy");
     }
-    console.log(JSON.stringify(verification, null, 2));
+    const runtime = verifyOptionalRuntime(runtimeRoot);
+    if (!runtime.valid) throw fail("Claude runtime drift detected", "drifted_runtime");
+    console.log(JSON.stringify({...verification, runtime}, null, 2));
   } else {
     const skills = verifyClaudeSkills({sourceRoot: SOURCE_ROOT, claudeHome});
     if (!skills.valid) throw fail("Claude skill drift detected", "drifted_skills");

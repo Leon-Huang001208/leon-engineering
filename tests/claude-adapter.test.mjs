@@ -10,6 +10,7 @@ import {
   verifyClaudePolicy,
   rollbackClaudePolicy
 } from "../scripts/install-claude-adapter.mjs";
+import {installHarnessRuntime} from "../scripts/harness-runtime.mjs";
 
 const sourceRoot = path.resolve(import.meta.dirname, "..");
 const START = "<!-- leon-engineering:claude-policy:start -->";
@@ -83,7 +84,7 @@ test("detects policy drift and refuses to roll it back", t => {
 
   const policyFile = path.join(claudeHome, "CLAUDE.md");
   const installed = fs.readFileSync(policyFile, "utf8");
-  fs.writeFileSync(policyFile, installed.replace("Claude 平台差异", "外来改动"));
+  fs.writeFileSync(policyFile, installed.replace(START, `${START}\n外来改动`));
 
   assert.deepEqual(
     verifyClaudePolicy({sourceRoot, claudeHome}),
@@ -108,6 +109,12 @@ test("installs and verifies Claude policy through the command line", t => {
   assert.equal(installed.status, 0, installed.stderr);
   assert.equal(fs.existsSync(path.join(claudeHome, "skills", "problem-framing", "SKILL.md")), true);
   assert.equal(fs.existsSync(path.join(claudeHome, "skills", ".leon-engineering.json")), true);
+  assert.deepEqual(fs.readdirSync(path.join(claudeHome, "skills")).filter(name => !name.startsWith(".")).sort(), [
+    "agent-routing", "engineering-delivery", "engineering-work", "evidence-and-experiments",
+    "logging-observability", "problem-framing", "project-constraints", "project-harness",
+    "project-onboarding", "skill-health", "solution-comparison"
+  ]);
+  assert.equal(fs.existsSync(path.join(claudeHome, "hooks.json")), false);
 
   const verified = spawnSync(
     process.execPath,
@@ -116,7 +123,63 @@ test("installs and verifies Claude policy through the command line", t => {
   );
   assert.equal(verified.status, 0, verified.stderr);
   assert.match(verified.stdout, /"valid": true/);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(runtimeRoot, ".leon-engineering-harness-runtime.json"), "utf8")).sourceRoot, sourceRoot);
+  assert.equal(fs.existsSync(runtimeRoot), false);
+  assert.equal(JSON.parse(verified.stdout).runtime.status, "NOT_INSTALLED");
+});
+
+test("Claude global install preserves an existing optional runtime directory", t => {
+  const claudeHome = makeClaudeHome(t);
+  const runtimeRoot = path.join(claudeHome, "runtime");
+  const script = path.join(sourceRoot, "scripts", "install-claude-adapter.mjs");
+  fs.mkdirSync(runtimeRoot);
+  fs.writeFileSync(path.join(runtimeRoot, "existing-runtime-file"), "preserve exactly\n");
+
+  const installed = spawnSync(process.execPath, [
+    script, "--install", "--claude-home", claudeHome, "--runtime-root", runtimeRoot
+  ], {encoding: "utf8"});
+  assert.equal(installed.status, 0, installed.stderr);
+  assert.deepEqual(fs.readdirSync(runtimeRoot), ["existing-runtime-file"]);
+  assert.equal(fs.readFileSync(path.join(runtimeRoot, "existing-runtime-file"), "utf8"), "preserve exactly\n");
+});
+
+test("Claude verification checks an explicitly installed runtime and rejects real drift", t => {
+  const claudeHome = makeClaudeHome(t);
+  const runtimeRoot = path.join(claudeHome, "runtime");
+  const script = path.join(sourceRoot, "scripts", "install-claude-adapter.mjs");
+  installClaudeSkills({sourceRoot, claudeHome});
+  installClaudePolicy({sourceRoot, claudeHome});
+  installHarnessRuntime({sourceRoot, runtimeRoot});
+  const args = [script, "--verify", "--claude-home", claudeHome, "--runtime-root", runtimeRoot];
+
+  const verified = spawnSync(process.execPath, args, {encoding: "utf8"});
+  assert.equal(verified.status, 0, verified.stderr);
+  assert.equal(JSON.parse(verified.stdout).runtime.valid, true);
+  fs.appendFileSync(path.join(runtimeRoot, "harness-storage.mjs"), "\n// installed-runtime drift\n");
+  const drifted = spawnSync(process.execPath, args, {encoding: "utf8"});
+  assert.equal(drifted.status, 1, drifted.stderr);
+  assert.equal(drifted.stdout, "");
+  assert.match(drifted.stderr, /"code":"drifted_runtime"/);
+});
+
+test("Claude verification rejects a dangling optional runtime without exposing user rules", t => {
+  const claudeHome = makeClaudeHome(t);
+  const runtimeRoot = path.join(claudeHome, "runtime");
+  const script = path.join(sourceRoot, "scripts", "install-claude-adapter.mjs");
+  const sentinel = "USER_PRIVATE_SENTINEL_CLAUDE_RUNTIME";
+  fs.writeFileSync(path.join(claudeHome, "CLAUDE.md"), `${sentinel}\n`);
+  installClaudeSkills({sourceRoot, claudeHome});
+  installClaudePolicy({sourceRoot, claudeHome});
+  fs.symlinkSync(path.join(claudeHome, "missing-runtime-target"), runtimeRoot, "dir");
+
+  const verified = spawnSync(process.execPath, [
+    script, "--verify", "--claude-home", claudeHome, "--runtime-root", runtimeRoot
+  ], {encoding: "utf8"});
+
+  assert.equal(verified.status, 1, verified.stderr);
+  assert.equal(verified.stdout, "");
+  assert.match(verified.stderr, /"code":"drifted_runtime"/);
+  assert.doesNotMatch(verified.stderr, new RegExp(sentinel));
+  assert.equal(fs.lstatSync(runtimeRoot).isSymbolicLink(), true);
 });
 
 test("redacts user CLAUDE.md text from successful CLI installation output", t => {
@@ -158,7 +221,7 @@ test("fails CLI verification safely when the managed policy has drifted", t => {
   installClaudeSkills({sourceRoot, claudeHome});
   fs.writeFileSync(
     policyFile,
-    fs.readFileSync(policyFile, "utf8").replace("Claude 平台差异", "外来改动")
+    fs.readFileSync(policyFile, "utf8").replace(START, `${START}\n外来改动`)
   );
 
   const verified = spawnSync(

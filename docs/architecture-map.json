@@ -45,10 +45,6 @@
       "owner": "governance"
     },
     {
-      "path": "hooks",
-      "owner": "hooks-agents"
-    },
-    {
       "path": "lib",
       "owner": "governance"
     },
@@ -86,7 +82,9 @@
       "docs/iteration-delivery.md",
       "docs/shared-capability-catalog.md",
       "docs/platform-task-verification.md",
-      "docs/resource-lifecycle.md"
+      "docs/resource-lifecycle.md",
+      "docs/skill-discovery.md",
+      "docs/engineering-workflow.md"
     ],
     "decisions": [
       "docs/2026-07-31-global-project-framework-design.md",
@@ -111,10 +109,21 @@
     {
       "id": "resource-lifecycle",
       "responsibility": "Own host-scoped resource registration, leases, staged retirement, bounded evidence, cache budget and recoverable cleanup debt without deploying business services.",
-      "sources": ["lib/resources", "scripts/resource-lifecycle.mjs", "schemas/resource-lifecycle-v1.schema.json"],
-      "documentation": ["docs/resource-lifecycle.md"],
-      "tests": ["tests/resource-lifecycle.test.mjs", "tests/resource-integration.test.mjs"],
-      "documentationTriggers": ["Resource registration, cleanup, retention, proof, cache, debt or host event contracts change."]
+      "sources": [
+        "lib/resources",
+        "scripts/resource-lifecycle.mjs",
+        "schemas/resource-lifecycle-v1.schema.json"
+      ],
+      "documentation": [
+        "docs/resource-lifecycle.md"
+      ],
+      "tests": [
+        "tests/resource-lifecycle.test.mjs",
+        "tests/resource-integration.test.mjs"
+      ],
+      "documentationTriggers": [
+        "Resource registration, cleanup, retention, proof, cache, debt or host event contracts change."
+      ]
     },
     {
       "id": "harness",
@@ -251,19 +260,22 @@
         "scripts/codex-profile.mjs",
         "scripts/reasoning-skills.mjs",
         "scripts/skill-portfolio.mjs",
+        "scripts/skill-discovery-plan.mjs",
         "scripts/sync-cc-switch-skills.mjs"
       ],
       "documentation": [
         "docs/ARCHITECTURE.md",
         "docs/DEVELOPMENT_MAP.md",
         "docs/framework-learning.md",
-        "docs/reasoning-skills.md"
+        "docs/reasoning-skills.md",
+        "docs/skill-discovery.md"
       ],
       "tests": [
         "tests/architecture-map.test.mjs",
         "tests/codex-profile.test.mjs",
         "tests/reasoning-skills.test.mjs",
-        "tests/skill-portfolio.test.mjs"
+        "tests/skill-portfolio.test.mjs",
+        "tests/skill-discovery-plan.test.mjs"
       ],
       "documentationTriggers": [
         "Module ownership, document classification, Skill lifecycle or configuration profile behavior changes."
@@ -315,11 +327,13 @@
       "documentation": [
         "docs/shared-capability-catalog.md",
         "docs/2026-09-23-optional-commands-plugin.md",
+        "docs/engineering-workflow.md",
         "plugins/leon-engineering-core/skills/engineering-work/references/engineering-methods.md"
       ],
       "tests": [
         "tests/catalog.test.mjs",
-        "tests/reasoning-skills.test.mjs"
+        "tests/reasoning-skills.test.mjs",
+        "tests/engineering-workflow.test.mjs"
       ],
       "documentationTriggers": [
         "Plugin IDs, versions, Skill grouping, default enablement, marketplace entries or shared method references change."
@@ -327,10 +341,9 @@
     },
     {
       "id": "hooks-agents",
-      "responsibility": "Own host event connections, safe recovery classification and seven bounded shared agent roles.",
+      "responsibility": "Own explicit event audit compatibility helpers and seven bounded shared agent roles; ship no automatic Hook registration.",
       "sources": [
         "agents",
-        "hooks",
         "scripts/audit.mjs",
         "scripts/guard.mjs",
         "scripts/harness-hook.mjs"
@@ -346,7 +359,7 @@
         "tests/catalog.test.mjs"
       ],
       "documentationTriggers": [
-        "Hook events, degraded-mode classification, recovery allowlists, role scope or delegation boundaries change."
+        "Explicit event/audit compatibility, safe recovery classification, role scope or delegation boundaries change."
       ]
     }
   ]

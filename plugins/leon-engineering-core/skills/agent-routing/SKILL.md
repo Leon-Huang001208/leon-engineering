@@ -1,26 +1,35 @@
 ---
 name: agent-routing
-description: Route a coding task between the main session, one isolated read-only subagent, a worktree, or an opt-in agent team. Use when deciding delegation, parallelization, context isolation, or edit safety for an engineering task.
+description: Use when an engineering task needs planning, implementation, diagnosis or review. Primary entry; skip general chat and single known read/command requests that are read-only.
 ---
 
 # Agent Routing
 
-先检查当前已安装目录中的 skill、agent 和工具能否直接匹配任务；命中则按其触发条件使用，未命中才选择通用直做、只读调研、隔离 worktree 或代理。此检查属于快路径，不能把未检查可用能力合理化为直接执行；发现外部候选也不等于安装，安装仍须来源/权限审查和用户明确同意。
+Project rules first: goal, acceptance and workspace state. Stay in the selected project.
 
-跨宿主路由先查 `docs/shared-capability-catalog.md`：不把 Claude 专用 agent 或 skill 隐式当成共享能力。只使用目录已映射的工作流和七个规范职责代理；同名旧代理、行业 persona 和来源/权限不清的候选必须单独审查，不能借由“已安装”绕过边界。
+先用已安装且匹配的能力；外部候选不等于可用或授权安装。
 
-已知文件、窄范围改动或明确命令默认由主会话直接完成；不得为了流程而向用户提问；不得仅因可用就创建计划、代理或 worktree。只有在只读探索能减少主会话等待或上下文拥塞，或并行编辑有明确速度收益时才派发代理，并且须在派发前说明预期收益和边界。风险或耦合需要隔离时必须升级，必要时使用 worktree；该条件不以速度收益为前提。
+- `read-only`: inspect only; no mutation or worktree.
+- `local-only`: local, reversible, conflict-free; no public contract, schema, dependencies, CI, database, security, desktop or cross-platform impact. Focused project checks, no publication.
+- `isolated`: otherwise isolate implementation; retain project gates and publication boundaries.
+- `full-delivery`: follow project release/high-risk checks; [managed delivery](../engineering-delivery/references/iteration-delivery.md) requires explicit selection.
 
-## 主动框架学习
+Project `.agents/verification-policy.json` owns mandatory checks for the complete changed set. Retain fixed contracts and platform gates; no-push/read-only/review-only apply. Unknown impact upgrades verification, not authority. Missing evidence stays NOT_RUN/BLOCKED.
 
-执行错误、用户纠正或新证据若可跨项目复用，主动提炼为候选规则，不等待用户再次指出。只要有实际证据且不改变权限、秘密、依赖、远程、发布、迁移、CI/CD、系统配置或破坏性边界，自动更新受管源、回归测试、安装副本和学习记录；高风险或影响面不明时请求明确确认。不得把项目特定事实提升为全局规则。
+Harness is opt-in: only explicit project/task selection. Ordinary work needs no ledger. Dependency, remote, migration and release permissions remain separate.
 
-State the route and why. Give editing agents a clean worktree, acceptance criteria, changed-file summary, and validation. Never give a subagent authority to spawn another agent.
+Read only the matching subflow for substantive work; general chat and known read-only commands need no subflow.
 
-## Cross-project adapter
+| Task | Canonical subflow |
+| --- | --- |
+| Changed behavior | [Feature](../engineering-work/references/feature-loop.md) |
+| Defect/failure | [Repair](../engineering-work/references/bugfix-evidence.md) |
+| Diff/evidence | [Review](../engineering-delivery/references/review-ship.md) |
 
-Route only after identifying the target project and its local rules, verified commands, platform constraints, and current worktree state. Global defaults are a fallback, not permission to inspect or alter other projects. Keep one project profile per task; do not merge project-specific conclusions into shared policy without an explicit, separately reviewed promotion.
+State route; hand off changes, observed verification, omissions and blockers. Old workflow names forward here.
 
-## Codex delegation
+窄任务直做；只为独立产出的质量或速度收益委派，不增加流程性提问。风险需要时隔离。An agent team is opt-in.
 
-When using Codex subagents, read `references/codex-role-templates.md` and use exactly one role template. The prompt must name the role, scope, boundary, acceptance criteria, and evidence format. Verify the Git diff after a read-only role and the parent checkout after an implementer role.
+Delegation: read [role templates](references/codex-role-templates.md); no recursion. 不把 Claude 专用 agent 或 skill 隐式当成共享能力。
+
+框架学习不提升项目事实或扩大权限。
