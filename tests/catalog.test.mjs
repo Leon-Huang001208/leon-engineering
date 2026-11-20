@@ -9,8 +9,8 @@ const root = path.resolve(import.meta.dirname, "..");
 
 const skills = {
   "project-bootstrap": ["project instructions", "CI"],
-  "feature-loop": ["acceptance criteria", "worktree"],
-  "bugfix-evidence": ["reproduce", "root cause"],
+  "feature-loop": ["Compatibility entry", "feature-development.md"],
+  "bugfix-evidence": ["Compatibility entry", "defect-repair.md"],
   "review-ship": ["diff", "handoff"],
   "logging-observability": ["structured", "redact"],
   "agent-routing": ["worktree", "agent team"],
@@ -62,20 +62,17 @@ function readEffectivePolicy(host) {
   return `${readSharedPolicy()}\n${readPolicy(host)}`;
 }
 
-test("separates shared engineering principles from host-specific policy deltas", () => {
+test("keeps shared global policy short and puts specialist methods on demand", () => {
   const shared = readSharedPolicy();
   const codex = readPolicy("codex");
   const claude = readPolicy("claude");
 
-  for (const phrase of ["目标与约束", "事实与假设", "证据闭环", "系统边界", "期望效用", "不确定性", "反馈", "思考深度"]) {
-    assert.match(shared, new RegExp(phrase));
-  }
-  for (const method of [
-    "socratic-clarification", "dual-layer-explanation", "reverse-engineering", "horizontal-vertical-analysis",
-    "fact-checking", "expert-perspectives", "first-principles", "cross-domain-transfer",
-    "steelman-comparison", "minimal-experiment"
-  ]) assert.match(shared, new RegExp(method));
-  assert.match(codex, /Codex.*PreToolUse.*PostToolUse.*Hook/);
+  assert.ok(Buffer.byteLength(shared.trim()) + Buffer.byteLength(codex.trim()) + 2 <= 700);
+  assert.match(shared, /项目规则/);
+  assert.match(shared, /agent-routing/);
+  assert.doesNotMatch(shared, /socratic-clarification|first-principles|--delivery-required/);
+  assert.match(codex, /不注册自动 Hook/);
+  assert.match(claude, /不注册自动 Hook/);
   assert.match(claude, /^\{\{LEON_ENGINEERING_SHARED_POLICY_IMPORT\}\}/m);
   assert.doesNotMatch(claude, /目标与约束|期望效用|first-principles/);
 });
@@ -259,56 +256,46 @@ test("defines a stable project profile schema", () => {
   assert.equal(schema.properties.commands.items.properties.argv.items.type, "string");
 });
 
-test("routes work through four mechanical risk tiers without auto-publishing narrow edits", () => {
-  const shared = readSharedPolicy();
-  const policy = readEffectivePolicy("codex");
+test("routes risk through the on-demand Skill without automatic ledgers or publication", () => {
   const routing = readSkill("agent-routing");
-
-  assert.match(shared, /\| 只读快路径 \|[^\n]*\| `read-only` \|/);
-  assert.match(shared, /\| 窄小改本地环 \|[^\n]*\| `local-only` \|/);
-  assert.match(shared, /\| 中高风险隔离实现 \|[^\n]*\| `isolated` \|/);
-  assert.match(shared, /\| 明确发布\/高风险完整交付 \|[^\n]*\| `full-delivery` \|/);
-  assert.match(policy, /窄小改.*局部、可逆.*公开接口.*schema.*依赖.*CI.*数据库.*桌面.*并发冲突/s);
-  assert.match(policy, /窄小改本地环.*本地验证.*Harness.*不伪造远端 receipt/s);
-  assert.doesNotMatch(shared.match(/^\| 窄小改本地环 \|.*$/m)?.[0] ?? "", /iteration-delivery|delivery-required|require-delivery/);
-  assert.match(policy, /明确发布\/高风险完整交付.*`--delivery-required`.*`--require-delivery`/s);
-  assert.equal((shared.match(/--delivery-required/g) ?? []).length, 1);
-  assert.equal((shared.match(/--require-delivery/g) ?? []).length, 1);
-  assert.match(routing, /只有在.*明确速度收益.*时才派发代理/);
-  assert.match(routing, /不得为了流程而向用户提问/);
+  const delivery = readSkill("iteration-delivery");
+  for (const tier of ["read-only", "local-only", "isolated", "full-delivery"]) assert.ok(routing.includes(`\`${tier}\``));
+  assert.match(routing, /local, reversible, conflict-free.*schema.*dependencies.*CI.*database.*security.*desktop.*cross-platform/);
+  assert.match(routing, /Focused project checks, no publication/);
+  assert.match(routing, /Harness is opt-in/);
+  assert.match(routing, /verification-policy\.json.*mandatory checks/s);
+  assert.match(routing, /不增加流程性提问/);
+  assert.match(delivery, /explicitly selects this managed controller/);
+  assert.match(delivery, /--delivery-required.*--require-delivery/s);
+  assert.doesNotMatch(delivery, /standing delivery preference|A direct push is the default/);
 });
 
 test("governs automatic continuation and bounded receipts without weakening gates", () => {
   const shared = readSharedPolicy();
   const commands = fs.readFileSync(path.join(root, "adapters", "codex", "global-docs", "COMMANDS_GUIDE.md"), "utf8");
   const agents = fs.readFileSync(path.join(root, "adapters", "codex", "global-docs", "AGENTS_GUIDE.md"), "utf8");
-  const combined = `${shared}\n${commands}\n${agents}`;
-
-  assert.match(shared, /独立只读检查.*同一工具边界.*批量/);
-  assert.match(shared, /结构化摘要.*计数.*SHA-256.*日志引用/);
-  assert.match(shared, /等待.*授权.*不重复.*诊断/);
-  assert.match(shared, /一次简洁请求.*一次无变化审计.*blocked/);
-  assert.match(shared, /heartbeat.*状态未变化.*静默/i);
-  assert.match(shared, /同一进程.*session.*receipt.*复用/i);
-  assert.match(combined, /4\s*KiB/);
-  assert.match(combined, /8,000\s*(?:字符|字节)/);
-  assert.match(shared, /不得.*权限.*测试.*硬门.*削弱/s);
+  const combined = `${commands}\n${agents}`;
+  assert.match(commands, /只读检查批量执行/);
+  assert.match(combined, /私有日志.*错误.*退出码.*证据/s);
+  assert.match(combined, /重试复用已有进程.*任务.*证据/);
+  assert.match(combined, /状态未变化静默/);
+  assert.match(combined, /不得隐藏错误/);
+  assert.match(combined, /项目自己的 CI、平台和权限门仍保留/);
+  assert.doesNotMatch(shared, /一次无变化审计|自动开始/);
 });
 
 test("caps model-visible tool receipts without weakening evidence gates", () => {
   const shared = readSharedPolicy();
   const codex = readPolicy("codex");
+  const manual = fs.readFileSync(path.join(root, "docs", "harness-v1.md"), "utf8");
+  const routing = readSkill("agent-routing");
 
-  assert.ok(Buffer.byteLength(shared) + Buffer.byteLength(codex) <= 4400);
-  assert.match(shared, /独立只读检查.*同轮批量执行/);
-  assert.match(shared, /普通工具回执.*≤4\s*KiB/);
-  assert.match(shared, /宽查询.*8,000\s*字符/);
-  assert.match(shared, /全文留在本地.*摘要.*SHA-256.*定点回查/s);
-  assert.match(shared, /不重复读取相同输出/);
-  assert.match(shared, /CI\/线程.*状态变化.*超时.*需要操作/s);
-  assert.match(shared, /不得.*省略错误.*`\|\| true`.*减少必需验收.*Token/s);
-  assert.match(shared, /秘密.*依赖.*授权/s);
-  assert.match(shared, /真实.*平台硬门/s);
+  assert.ok(Buffer.byteLength(shared.trim()) + Buffer.byteLength(codex.trim()) + 2 <= 700);
+  assert.match(manual, /4\s*KiB/i);
+  assert.match(manual, /8\s*KiB/i);
+  assert.match(manual, /SHA-256/);
+  assert.match(routing, /fixed contracts and platform gates/);
+  assert.match(routing, /NOT_RUN\/BLOCKED/);
 });
 
 test("keeps Harness delivery documentation scoped to the full-delivery tier", () => {
@@ -320,9 +307,9 @@ test("keeps Harness delivery documentation scoped to the full-delivery tier", ()
 
 test("keeps fast path documentation aligned", () => {
   const documents = [
-    {name: "GETTING_STARTED.md", phrase: /快路径/},
-    {name: "AGENTS_GUIDE.md", phrase: /Claude Code.*Codex/},
-    {name: "COMMANDS_GUIDE.md", phrase: /不把项目档案/}
+    {name: "GETTING_STARTED.md", phrase: /已知单条只读请求不启动完整工程流程/},
+    {name: "AGENTS_GUIDE.md", phrase: /全局约定只放跨岗位共用/},
+    {name: "COMMANDS_GUIDE.md", phrase: /项目档案.*获准时写入/}
   ];
 
   for (const {name, phrase} of documents) {
@@ -356,20 +343,19 @@ test("checks installed capabilities before choosing the execution route", () => 
   );
   const routing = readSkill("agent-routing");
 
-  assert.match(codexPolicy, /优先检查已安装的 skill、agent 和工具/);
-  assert.match(claudePolicy, /优先检查已安装的 skill、agent 和工具/);
+  assert.match(codexPolicy, /agent-routing/);
+  assert.match(claudePolicy, /agent-routing/);
   assert.match(gettingStarted, /已安装能力/);
-  assert.match(skillsGuide, /发现外部候选不等于安装/);
+  assert.match(skillsGuide, /外部候选.*审查.*获准安装/);
   assert.match(skillsGuide, /project-harness/);
-  assert.match(routing, /不能把未检查可用能力合理化为直接执行/);
+  assert.match(routing, /已安装且匹配的能力.*外部候选不等于可用或授权安装/);
 });
 
-test("persists proactive framework corrections instead of leaving them in chat", () => {
-  const policy = readEffectivePolicy("codex");
-
-  assert.match(policy, /主动提炼跨项目可复用的错误和经验/);
-  assert.match(policy, /自动更新受管源、测试和安装副本/);
-  assert.match(policy, /受管源、测试和安装副本/);
+test("keeps source and documentation ownership on demand instead of global automatic writes", () => {
+  const workflow = fs.readFileSync(path.join(root, "docs", "engineering-workflow.md"), "utf8");
+  assert.match(workflow, /受管源.*合同.*宿主分发.*实际加载核验/);
+  assert.match(workflow, /不手改安装缓存/);
+  assert.doesNotMatch(readSharedPolicy(), /自动更新受管源/);
 });
 
 test("proactively promotes low-risk reusable framework learning", () => {
@@ -382,32 +368,29 @@ test("proactively promotes low-risk reusable framework learning", () => {
   const routing = readSkill("agent-routing");
   const learning = fs.readFileSync(path.join(root, "docs", "framework-learning.md"), "utf8");
 
-  for (const policy of [codexPolicy, claudePolicy]) {
-    assert.match(policy, /主动提炼跨项目可复用的错误和经验/);
-    assert.match(policy, /低风险.*自动/);
-    assert.match(policy, /高风险.*明确确认/);
-  }
-  assert.match(gettingStarted, /框架学习/);
-  assert.match(routing, /不等待用户再次指出/);
+  for (const policy of [codexPolicy, claudePolicy]) assert.doesNotMatch(policy, /自动更新受管源/);
+  assert.match(gettingStarted, /当前授权/);
+  assert.match(routing, /框架学习不提升项目事实或扩大权限/);
   for (const heading of ["## 触发条件", "## 自动推广", "## 升级确认", "## 记录格式"]) {
     assert.match(learning, new RegExp(heading));
   }
   assert.match(learning, /不记录项目特定的事实/);
 });
 
-test("requires automatic Harness start and a cross-host delivery hard gate", () => {
+test("keeps Harness explicit while retaining its selected project verification entrypoints", () => {
   const codexPolicy = readEffectivePolicy("codex");
   const claudePolicy = readEffectivePolicy("claude");
   const harness = readSkill("project-harness");
   const commands = fs.readFileSync(path.join(root, "adapters", "codex", "global-docs", "COMMANDS_GUIDE.md"), "utf8");
 
-  assert.match(codexPolicy, /自动开始 Harness/);
-  assert.match(codexPolicy, /Codex.*PreToolUse.*PostToolUse.*Hook/);
-  assert.match(claudePolicy, /自动开始 Harness/);
-  assert.match(harness, /Codex.*PreToolUse.*PostToolUse.*Hook/);
+  for (const policy of [codexPolicy, claudePolicy]) {
+    assert.match(policy, /不默认建立 Harness 账本/);
+    assert.match(policy, /显式选择/);
+    assert.doesNotMatch(policy, /PreToolUse|PostToolUse|自动开始 Harness/);
+  }
   assert.match(harness, /harness-session\.mjs/);
   assert.match(harness, /harness-enforce\.mjs/);
-  assert.match(commands, /交付硬门/);
+  assert.match(commands, /harness-enforce.*仅属于已选中的相应流程/);
 });
 
 test("documents observed verifier execution without changing the Codex tool schema", () => {
@@ -415,32 +398,17 @@ test("documents observed verifier execution without changing the Codex tool sche
   const commands = fs.readFileSync(path.join(root, "adapters", "codex", "global-docs", "COMMANDS_GUIDE.md"), "utf8");
   const harnessDoc = fs.readFileSync(path.join(root, "docs", "harness-v1.md"), "utf8");
 
-  for (const content of [harness, commands, harnessDoc]) {
-    assert.match(content, /harness-run\.mjs/);
-    assert.match(content, /verifier ID/i);
-    assert.match(content, /4\s*KiB/i);
-    assert.match(content, /8\s*KiB/i);
-    assert.match(content, /observation_recorded/);
-    assert.match(content, /observation_recalled/);
-  }
-  assert.match(harness, /task-index\.jsonl/);
-  assert.match(harness, /--all/);
-  assert.match(harness, /--rebuild-index/);
+  for (const pattern of [/harness-run\.mjs/, /verifier ID/i, /4\s*KiB/i, /8\s*KiB/i, /observation_recorded/, /observation_recalled/, /task-index\.jsonl/, /--all/, /--rebuild-index/, /runObserved\(spec\)/, /readObservation\(query\)/]) assert.match(harnessDoc, pattern);
+  assert.match(harness, /docs\/harness-v1\.md/);
+  assert.match(harness, /已登记的 verifier ID/);
   assert.match(commands, /verification-plan\.mjs/);
   assert.match(harnessDoc, /verification-plan\.mjs/);
-  assert.match(harness, /runObserved\(spec\)/);
-  assert.match(harness, /readObservation\(query\)/);
-  assert.match(commands, /functions\.exec/);
-  assert.match(commands, /补丁成功.*verifier/s);
-  assert.match(commands, /原生 `exec_command`/);
-  assert.match(commands, /不新增工具 schema/);
+  assert.match(commands, /已知只读命令直接使用原生工具/);
 });
 
-test("documents the Codex host restart boundary after global hook installation", () => {
-  const commands = fs.readFileSync(path.join(root, "adapters", "codex", "global-docs", "COMMANDS_GUIDE.md"), "utf8");
-
-  assert.match(commands, /Codex.*宿主进程.*重启/s);
-  assert.match(commands, /新建任务.*不会.*刷新/s);
+test("does not ship automatically discovered Codex or plugin hooks", () => {
+  assert.equal(fs.existsSync(path.join(root, "adapters", "codex", "hooks.json")), false);
+  assert.equal(fs.existsSync(path.join(root, "hooks", "hooks.json")), false);
 });
 
 test("governs the audited Claude catalog through explicit shared boundaries", () => {
@@ -453,13 +421,10 @@ test("governs the audited Claude catalog through explicit shared boundaries", ()
   const routing = readSkill("agent-routing");
   const catalog = fs.readFileSync(path.join(root, "docs", "shared-capability-catalog.md"), "utf8");
 
-  for (const policy of [codexPolicy, claudePolicy]) {
-    assert.match(policy, /共享能力目录/);
-    assert.match(policy, /不在共享目录/);
-    assert.match(policy, /skill.*同步.*文档/);
-    assert.match(policy, /Python.*依赖/);
-  }
-  assert.match(agentGuide, /七个规范职责代理/);
+  for (const policy of [codexPolicy, claudePolicy]) assert.match(policy, /项目规则/);
+  for (const name of Object.keys(agents)) assert.ok(agentGuide.includes(name), name);
+  assert.match(agentGuide, /宿主专用 persona 不隐式跨宿主复制/);
+  assert.match(agentGuide, /文字声明不能代替安装或授权/);
   assert.match(routing, /不把 Claude 专用 agent 或 skill 隐式当成共享能力/);
   for (const phrase of ["52 个", "51 个", "230 个", "11 个工程工作流", "10 个推理 Skill", "iteration-delivery", "project-constraints", "project-harness", "first-principles", "minimal-experiment", "ecc", "zq", "data-connector-development", "## 共享工作流", "## 共享推理 Skill", "## Claude 专用排除项"]) {
     assert.match(catalog, new RegExp(phrase));
@@ -490,13 +455,13 @@ test("reconciles CC-Switch flags from active directories and the enabled framewo
   ]);
 });
 
-test("keeps engineering methods in one reference without broadening workflow triggers", () => {
+test("keeps engineering methods shared through explicit compatibility entries", () => {
   const relative = "plugins/leon-engineering-core/skills/feature-loop/references/engineering-methods.md";
   const reference = fs.readFileSync(path.join(root, relative), "utf8");
   const feature = readSkill("feature-loop");
   const bugfix = readSkill("bugfix-evidence");
-  assert.equal(frontmatter(feature).description, "Use when delivering a scoped engineering feature from acceptance criteria through implementation, verification, review, and handoff.");
-  assert.equal(frontmatter(bugfix).description, "Use when correcting a regression or defect that needs a reproduced failure, narrow root-cause analysis, minimal fix, and verified evidence.");
+  assert.match(frontmatter(feature).description, /^Use when explicitly invoking feature-loop/);
+  assert.match(frontmatter(bugfix).description, /^Use when explicitly invoking bugfix-evidence/);
   for (const [directory, source] of [["feature-loop", feature], ["bugfix-evidence", bugfix]]) {
     const links = [...source.matchAll(/\]\(([^)]+engineering-methods\.md)\)/g)];
     assert.equal(links.length, 1);
@@ -513,7 +478,8 @@ test("keeps engineering methods in one reference without broadening workflow tri
     /small, clear task.*does not add.*interview.*approval/s,
     /does not trigger.*whole-repository scan.*HTML report.*parallel agents/s
   ]) assert.match(reference, pattern);
-  assert.match(feature, /Implement the smallest complete slice/);
+  const featureSubflow = fs.readFileSync(path.join(root, "plugins/leon-engineering-core/skills/agent-routing/references/feature-development.md"), "utf8");
+  assert.match(featureSubflow, /Implement the smallest complete slice/);
 });
 
 test("preserves architecture judgment and method provenance without a new skill", () => {

@@ -1,9 +1,13 @@
 {
   "name": "leon-engineering",
   "version": "0.19.4",
-  "description": "Core Codex and Claude engineering hooks, runtime, and delivery workflows",
-  "author": {"name": "Leon"},
+  "description": "On-demand engineering skills and optional project validation tools",
+  "author": {
+    "name": "Leon"
+  },
   "license": "UNLICENSED",
-  "skills": ["./plugins/leon-engineering-core/skills/"],
+  "skills": [
+    "./plugins/leon-engineering-core/skills/"
+  ],
   "mcpServers": {}
 }

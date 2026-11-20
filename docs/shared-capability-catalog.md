@@ -1,4 +1,8 @@
-# Claude 全量目录审查与共享能力裁决
+# 共享能力目录与历史审查
+
+当前核心为九个稳定工程 Skill，不附带自动 Hook，不默认安装 Harness 运行时。主入口按需读取功能、修复或评审正文；账本与受管交付只在项目规则或当前任务明确选择时使用。Skill 正文、角色职责和实际工具权限分开维护，不能从角色文件中的能力名称推断其已经可调用。
+
+以下数量与宿主比对是日期审查证据，当前可用性仍以实际安装和执行链为准。
 
 **审查日期：**2026-08-03  
 **范围：**`~/.claude/skills/`、`~/.claude/agents/`、`~/.claude/rules/`、用户级插件和当前共享框架源码。审查使用目录清单、逐文件元数据解析、来源比对、静态权限信号扫描和冲突检查；不执行候选 skill 或 agent 的未知命令。
@@ -19,6 +23,8 @@
 审查中有 52 个入口与 `.agents/skills` 或 `.cc-switch/skills` 的来源内容一致；其中 `data-connector-development` 目前只在 Claude 直接目录可发现，Codex 没有对应入口。因此“同源”不等于“已跨宿主可用”，它不计入上述 51 个共享运行时工作流。
 
 `leon-engineering` 自己管理的共享核心工程工作流仍是：`agent-routing`、`bugfix-evidence`、`feature-loop`、`iteration-delivery`、`logging-observability`、`project-adapter`、`project-bootstrap`、`project-constraints`、`project-harness`、`review-ship`、`skill-health`。
+
+当前日常主入口是 `agent-routing`，按任务读取其功能、缺陷修复或评审参考；`feature-loop`、`bugfix-evidence`、`review-ship` 作为显式兼容入口转发到同一正文。身份与插件发现目录保持兼容，不为子流程新增 Skill。项目接入按实际需要触发，Harness 与受管交付由项目或任务显式选择，详见 [工程工作流](engineering-workflow.md)。上文数量是历史审查基线，不代表当前宿主加载数。
 
 ## 共享推理 Skill
 

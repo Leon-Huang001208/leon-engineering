@@ -4,6 +4,8 @@
 
 Use one template per Codex subagent. Replace each angle-bracket value before delegation. Never create a nested agent. Escalate secret, destructive, dependency, remote mutation, release, migration, CI, and global-configuration actions.
 
+Every prompt names its role, scope, boundary, acceptance criteria and evidence format. Verify the Git diff after a read-only role and the parent checkout after an implementer role.
+
 ## repo-explorer
 
 Use for unfamiliar-code exploration. Read only the delegated paths. Do not edit, install packages, run destructive commands, or delegate. Return entry points, execution flow, key files, verified findings, uncertainties, and the smallest next action.

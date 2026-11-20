@@ -4,14 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import {execFileSync} from "node:child_process";
 import {fileURLToPath} from "node:url";
-import {defaultHarnessRuntimeRoot, installHarnessRuntime, verifyHarnessRuntime} from "./harness-runtime.mjs";
+import {defaultHarnessRuntimeRoot, verifyHarnessRuntime} from "./harness-runtime.mjs";
 import {REASONING_SKILL_NAMES} from "./reasoning-skills.mjs";
 
 const MANIFEST_NAME = ".leon-engineering.json";
 const DISTRIBUTION_MANIFEST_NAME = ".leon-engineering-distribution.json";
 const GLOBAL_MANIFEST_NAME = ".leon-engineering-global.json";
 const GLOBAL_HOOKS_NAME = "hooks.json";
-const RUNTIME_ROOT_PLACEHOLDER = "__LEON_ENGINEERING_RUNTIME_ROOT__";
 const SOURCE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const GLOBAL_POLICY_START = "<!-- leon-engineering:global-framework:start -->";
 const GLOBAL_POLICY_END = "<!-- leon-engineering:global-framework:end -->";
@@ -146,24 +145,6 @@ function canonicalGlobalDocuments(sourceRoot) {
     documents[name] = fs.readFileSync(file, "utf8");
   }
   return documents;
-}
-
-function canonicalGlobalHooks(sourceRoot) {
-  const file = path.join(sourceRoot, "adapters", "codex", GLOBAL_HOOKS_NAME);
-  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw new Error("missing canonical global hooks");
-  const template = fs.readFileSync(file, "utf8");
-  if (!template.includes(RUNTIME_ROOT_PLACEHOLDER)) throw new Error("invalid canonical global hooks");
-  const content = template.replaceAll(RUNTIME_ROOT_PLACEHOLDER, defaultHarnessRuntimeRoot());
-  let parsed;
-  try {
-    parsed = JSON.parse(content);
-  } catch {
-    throw new Error("invalid canonical global hooks");
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !parsed.hooks || typeof parsed.hooks !== "object") {
-    throw new Error("invalid canonical global hooks");
-  }
-  return content;
 }
 
 function markerRange(content) {
@@ -318,37 +299,61 @@ function readExistingAgents(codexHome) {
 
 function readExistingHooks(codexHome) {
   const file = globalHooksPath(codexHome);
-  if (!fs.existsSync(file)) return {content: "", hadFile: false};
-  const stat = fs.lstatSync(file);
+  let stat;
+  try {
+    stat = fs.lstatSync(file);
+  } catch (error) {
+    if (error.code === "ENOENT") return {content: "", hadFile: false};
+    throw error;
+  }
   if (stat.isSymbolicLink() || !stat.isFile()) throw new Error("global hooks.json is not a file");
   return {content: fs.readFileSync(file, "utf8"), hadFile: true};
 }
 
-function isCanonicalHooksSubset(existingContent, canonicalContent) {
-  let existing;
-  let canonical;
+function isLegacyLeonCommand(command, phase) {
+  if (/[\r\n;&|<>`$()*?\[\]{}]/.test(command)) return false;
+  const match = command.match(
+    /^(?:"([^"\r\n]+)"|'([^'\r\n]+)'|([^\s"']+))[ \t]+(?:"([^"\r\n]+)"|'([^'\r\n]+)'|([^\s"']+))[ \t]+--phase[ \t]+(pre|post)[ \t]+--host[ \t]+codex[ \t]*$/
+  );
+  if (!match || match[7] !== phase) return false;
+  const executable = match[1] ?? match[2] ?? match[3];
+  const script = match[4] ?? match[5] ?? match[6];
+  const knownNodeCommands = new Set([
+    "node", process.execPath, "/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node"
+  ]);
+  return knownNodeCommands.has(executable)
+    && (path.isAbsolute(script) || path.win32.isAbsolute(script))
+    && /\/leon-engineering\/runtime\/harness-hook\.mjs$/.test(script.replaceAll("\\", "/"));
+}
+
+function isLegacyLeonHooks(content) {
+  let parsed;
   try {
-    existing = JSON.parse(existingContent);
-    canonical = JSON.parse(canonicalContent);
+    parsed = JSON.parse(content);
   } catch {
     return false;
   }
   if (
-    !existing || typeof existing !== "object" || Array.isArray(existing)
-    || existing.description !== canonical.description
-    || !existing.hooks || typeof existing.hooks !== "object" || Array.isArray(existing.hooks)
+    !parsed || typeof parsed !== "object" || Array.isArray(parsed)
+    || !parsed.hooks || typeof parsed.hooks !== "object" || Array.isArray(parsed.hooks)
   ) return false;
-  const entries = Object.entries(existing.hooks);
-  return entries.length > 0 && entries.every(([event, hooks]) => (
-    Object.hasOwn(canonical.hooks, event)
-    && JSON.stringify(hooks) === JSON.stringify(canonical.hooks[event])
+  const events = Object.entries(parsed.hooks);
+  return events.length > 0 && events.every(([event, entries]) => (
+    (event === "PreToolUse" || event === "PostToolUse")
+    && Array.isArray(entries) && entries.length > 0
+    && entries.every(entry => (
+      Array.isArray(entry?.hooks) && entry.hooks.length > 0
+      && entry.hooks.every(hook => (
+        hook?.type === "command" && typeof hook.command === "string"
+        && isLegacyLeonCommand(hook.command, event === "PreToolUse" ? "pre" : "post")
+      ))
+    ))
   ));
 }
 
 function preflightGlobalFramework(sourceRoot, codexHome, existingManifest) {
   const policy = canonicalGlobalPolicy(sourceRoot);
   const documents = canonicalGlobalDocuments(sourceRoot);
-  const hooks = canonicalGlobalHooks(sourceRoot);
   const agents = readExistingAgents(codexHome);
   const existingHooks = readExistingHooks(codexHome);
   const range = markerRange(agents.content);
@@ -370,11 +375,13 @@ function preflightGlobalFramework(sourceRoot, codexHome, existingManifest) {
     existingManifest?.hooks
     && existingHooks.hadFile
     && textChecksum(existingHooks.content) !== existingManifest.hooks.checksum
-    && !isCanonicalHooksSubset(existingHooks.content, hooks)
   ) {
     throw new Error("drifted global hooks");
   }
-  if (!existingManifest?.hooks && existingHooks.hadFile && existingHooks.content !== hooks) {
+  if (
+    existingHooks.hadFile
+    && (!existingManifest?.hooks || !isLegacyLeonHooks(existingHooks.content))
+  ) {
     throw new Error("foreign global hooks");
   }
 
@@ -390,7 +397,7 @@ function preflightGlobalFramework(sourceRoot, codexHome, existingManifest) {
     }
   }
 
-  return {policy, documents, hooks, agents, existingHooks, range};
+  return {policy, documents, agents, existingHooks, range};
 }
 
 function installPolicyContent({agents, range, policy, existingManifest}) {
@@ -440,26 +447,44 @@ export function installGlobalFramework({sourceRoot = SOURCE_ROOT, codexHome}) {
       suffix: installedPolicy.suffix,
       hadAgentsFile: installedPolicy.hadAgentsFile
     },
-    documents,
-    hooks: {
-      checksum: textChecksum(prepared.hooks),
-      hadHooksFile: existingManifest?.hooks
-        ? existingManifest.hooks.hadHooksFile
-        : prepared.existingHooks.hadFile
-    }
+    documents
   };
 
   try {
+    let removedLegacyHooks;
+    if (prepared.existingHooks.hadFile) {
+      const backupRoot = path.join(codexHome, ".leon-engineering-backups", crypto.randomUUID());
+      fs.mkdirSync(backupRoot, {recursive: true, mode: 0o700});
+      const backupPath = path.join(backupRoot, GLOBAL_HOOKS_NAME);
+      fs.writeFileSync(backupPath, prepared.existingHooks.content, {flag: "wx", mode: 0o600});
+      if (
+        textChecksum(fs.readFileSync(backupPath, "utf8")) !== existingManifest.hooks.checksum
+        || textChecksum(readExistingHooks(codexHome).content) !== existingManifest.hooks.checksum
+      ) {
+        throw new Error("global hooks changed during retirement");
+      }
+      fs.rmSync(globalHooksPath(codexHome));
+      removedLegacyHooks = {backupPath, checksum: existingManifest.hooks.checksum};
+      log("legacy_hooks_removed", {backupCreated: true});
+    }
     const docsRoot = globalDocsPath(codexHome);
     fs.mkdirSync(docsRoot, {recursive: true});
     for (const [name, content] of Object.entries(prepared.documents)) {
       writeAtomically(path.join(docsRoot, name), content);
     }
-    writeAtomically(globalHooksPath(codexHome), prepared.hooks);
     writeAtomically(globalAgentsPath(codexHome), installedPolicy.content);
     writeAtomically(globalManifestPath(codexHome), `${JSON.stringify(manifest, null, 2)}\n`);
     log("global_installed", {documentCount: GLOBAL_DOCUMENT_NAMES.length});
-    return {documents: GLOBAL_DOCUMENT_NAMES, manifest};
+    const activation = existingManifest?.hooks ? {
+      status: "restart_required",
+      scope: "codex_host_process",
+      note: "Legacy hook registration is retired. Restart the Codex host to clear any hooks cached by an existing process."
+    } : {
+      status: "new_session_required",
+      scope: "codex_instructions",
+      note: "No automatic hooks or Harness runtime are installed. Start a new session to load changed instructions."
+    };
+    return {documents: GLOBAL_DOCUMENT_NAMES, manifest, activation, ...(removedLegacyHooks ? {removedLegacyHooks} : {})};
   } catch (error) {
     log("global_install_failed", {message: error.message});
     throw error;
@@ -497,17 +522,26 @@ export function verifyGlobalFramework({sourceRoot = SOURCE_ROOT, codexHome}) {
   }
 
   try {
-    const sourceHooks = canonicalGlobalHooks(sourceRoot);
-    const installedHooks = fs.readFileSync(globalHooksPath(codexHome), "utf8");
-    if (
-      !manifest.hooks
-      || textChecksum(installedHooks) !== manifest.hooks.checksum
-      || installedHooks !== sourceHooks
-    ) {
-      drift.push("hooks");
-    }
+    if (readExistingHooks(codexHome).hadFile) drift.push("hooks");
   } catch {
     drift.push("hooks");
+  }
+  try {
+    const version = frameworkVersion(sourceRoot);
+    if (typeof version !== "string" || !/^[A-Za-z0-9.+-]+$/.test(version)) {
+      throw new Error("invalid framework version");
+    }
+    const cachedHooks = path.join(
+      codexHome, "plugins", "cache", "leon-local", "leon-engineering", version, "hooks", GLOBAL_HOOKS_NAME
+    );
+    try {
+      fs.lstatSync(cachedHooks);
+      drift.push("hooks:plugin-registration");
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  } catch {
+    drift.push("hooks:plugin-registration");
   }
   for (const name of GLOBAL_DOCUMENT_NAMES) {
     if (drift.includes(`document:${name}`)) continue;
@@ -557,7 +591,6 @@ export function rollbackGlobalFramework({sourceRoot = SOURCE_ROOT, codexHome}) {
     } catch (error) {
       if (error.code !== "ENOTEMPTY" && error.code !== "ENOENT") throw error;
     }
-    if (manifest.hooks && !manifest.hooks.hadHooksFile) fs.rmSync(globalHooksPath(codexHome));
     if (!manifest.policy.hadAgentsFile && restored.length === 0) {
       fs.rmSync(agentsFile);
     } else {
@@ -805,6 +838,22 @@ function boundedVerification(run, fallback) {
   }
 }
 
+function verifyOptionalRuntime({sourceRoot, runtimeRoot}) {
+  try {
+    fs.lstatSync(runtimeRoot);
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      log("runtime_verification_failed", {code: error.code ?? "UNKNOWN"});
+      return {valid: false, drift: ["runtime verification"]};
+    }
+    return {valid: true, drift: [], installed: false, status: "NOT_INSTALLED"};
+  }
+  return boundedVerification(
+    () => verifyHarnessRuntime({sourceRoot, runtimeRoot}),
+    "runtime verification"
+  );
+}
+
 export function verifyCurrentCodexState({
   sourceRoot = SOURCE_ROOT,
   targetRoot,
@@ -827,10 +876,7 @@ export function verifyCurrentCodexState({
     () => verifyGlobalFramework({sourceRoot, codexHome}),
     "framework manifest"
   );
-  const runtime = boundedVerification(
-    () => verifyHarnessRuntime({sourceRoot, runtimeRoot}),
-    "runtime verification"
-  );
+  const runtime = verifyOptionalRuntime({sourceRoot, runtimeRoot});
   const drift = [...new Set([
     ...pluginDistribution.drift.map(item => `plugin:${item}`),
     ...globalFramework.drift.map(item => `global:${item}`),
@@ -873,24 +919,24 @@ function main(args) {
   }
 
   if (args.includes("--install-global")) {
-    const {documents, manifest} = installGlobalFramework({codexHome});
-    installHarnessRuntime({sourceRoot: SOURCE_ROOT, runtimeRoot});
+    const {documents, manifest, activation, removedLegacyHooks} = installGlobalFramework({codexHome});
     console.log(JSON.stringify({
       installed: true,
       documents,
       frameworkVersion: manifest.frameworkVersion,
-      activation: {
-        status: "restart_required",
-        scope: "codex_host_process",
-        note: "New tasks created before the Codex host restarts may still use cached hooks."
-      }
+      ...(removedLegacyHooks ? {removedLegacyHooks} : {}),
+      activation
     }));
     return;
   }
   if (args.includes("--verify-global")) {
     const verification = verifyGlobalFramework({codexHome});
-    const runtime = verifyHarnessRuntime({sourceRoot: SOURCE_ROOT, runtimeRoot});
-    const result = {valid: verification.valid && runtime.valid, drift: [...verification.drift, ...runtime.drift.map(item => `runtime:${item}`)]};
+    const runtime = verifyOptionalRuntime({sourceRoot: SOURCE_ROOT, runtimeRoot});
+    const result = {
+      valid: verification.valid && runtime.valid,
+      drift: [...verification.drift, ...runtime.drift.map(item => `runtime:${item}`)],
+      runtime
+    };
     console.log(JSON.stringify(result, null, 2));
     if (!result.valid) process.exitCode = 1;
     return;

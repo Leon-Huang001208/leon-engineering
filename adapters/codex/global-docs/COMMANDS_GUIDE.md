@@ -1,144 +1,34 @@
-# 全局工程工作流：命令与验证
+# 命令与验证
 
-全局框架不替项目选择构建或测试命令。先从目标仓库确认命令，再按只读快路径、窄小改本地环、中高风险隔离实现、明确发布/高风险完整交付执行最小充分验证。快路径不把项目档案生成混入普通交付；独立只读检查同轮批量执行。普通回执目标 ≤4 KiB、宽查询最多 8,000 字符，全文留本地并返回摘要、SHA-256 与定点回查方式。
+从目标项目确认实际测试与交付命令，按风险运行最小充分检查。只读检查批量执行；完整输出留在私有日志，回执保留错误、状态、退出码与证据引用。
 
-安装器仅维护它拥有的全局内容。以下命令需要从 `leon-engineering` 源仓库运行：
+以下命令从选定的框架源目录运行：
 
 ```bash
 node scripts/install-codex-adapter.mjs --install-global --codex-home "$HOME/.codex"
 node scripts/install-codex-adapter.mjs --verify --codex-home "$HOME/.codex"
 node scripts/install-codex-adapter.mjs --verify-global --codex-home "$HOME/.codex"
 node scripts/install-codex-adapter.mjs --rollback-global --codex-home "$HOME/.codex"
-node scripts/install-codex-adapter.mjs --verify --target /absolute/legacy-skill-directory
 ```
 
-不带 `--target` 的 `--verify` 是当前健康检查：插件分发、全局框架和 Harness runtime 分节返回并合成一个去重 drift 清单；插件化迁移后不会再要求已退役的直接 Skill 目录。显式 `--target` 保留旧版直接 Skill 校验。两种验证均为只读，绝不顺带修复。`--install-global` 会先拒绝与用户文件冲突的文档或未受管策略区块。`--verify-global` 只读检查策略、六份文档和 runtime。`--rollback-global` 只在内容未漂移时移除该框架拥有的文档和标记区块；它不会修改技能、插件、模型、MCP、凭据或项目。
+`--install-global` 只安装短策略、六份指南及 manifest；不安装自动 Hook，也不安装运行时。验证只读且不顺带修复；已有运行时按实际内容核对，未安装时不要求补装。旧直接 Skill 的 `--verify --target /absolute/skills` 兼容入口保留。回滚只处理归属明确且未漂移的框架内容，不恢复整个用户配置。
 
-Codex 会在本地宿主进程启动时载入全局 Hook。`--install-global` 成功只证明磁盘上的配置和 runtime 已更新；必须完整重启 Codex 本地宿主进程后，新 Hook 才会激活。重启前即使新建任务也可能继续使用宿主缓存；新建任务不会刷新宿主 Hook，不能把它当作刷新边界。安装器的 JSON 输出会返回 `activation.status=restart_required` 和 `activation.scope=codex_host_process`。
+插件刷新使用目标宿主支持的命令。例如 Codex 的 `codex plugin add leon-engineering@leon-local --json`。移除过注册文件的同版本更新需检查缓存残留；必要时备份后原生卸载再安装，不能把“剩余文件匹配”当成删除已生效。
 
-受管 manifest 仍完整但 `hooks.json` 整体缺失时，安装器可重建规范 Hook；文件存在且只剩规范模板中完全一致的事件子集时，也可补回缺失的受管事件。任何额外事件、matcher 或命令仍按外来漂移拒绝覆盖。
+## 运行时工具按需使用
 
-Harness 初始化故障时，Hook 只允许受控的只读诊断命令，并在拒绝原因中返回 `stage`、`code`、runtime/manifest 路径和恢复命令。先执行其中的 runtime 校验；校验失败后只能从权威框架源重新安装，不得直接维护安装副本：
-
-```bash
-node "$HOME/.agents/leon-engineering/runtime/harness-runtime.mjs" --verify --runtime-root "$HOME/.agents/leon-engineering/runtime"
-```
-
-本地 Claude 插件已经安装时，`claude plugin install` 只会报告“已安装”，不会刷新缓存版本。框架源码的插件版本升级后，应使用下面命令，并在现有 Claude Code 会话中重启后才会生效：
+只有项目规则或当前任务明确选择时才安装、调用：
 
 ```bash
-claude plugin update leon-engineering@leon-local --scope user
-claude plugin list
-```
-
-技能安装与全局文档安装是独立操作。不要用全局框架命令代替目标项目的测试、lint、构建、浏览器检查或平台验证。实际运行过的命令和结果才可作为交付证据。
-
-## 脱敏 Token 审计
-
-Token 审计只接受一个显式 session JSONL，或一个显式 thread ID 加 session root。它流式统计会话/回合/模型/工具调用、input/cached/non-cached/output/reasoning、工具输出字节分位数、哈希化重复调用、稳定工具分类和每个源文件的 SHA-256；不会返回消息、Prompt、工具参数、命令、路径、输出正文或用户内容：
-
-```bash
-node "$HOME/.agents/leon-engineering/runtime/token-audit.mjs" --session-jsonl /absolute/session.jsonl
-node "$HOME/.agents/leon-engineering/runtime/token-audit.mjs" --thread-id opaque-thread-id --session-root /absolute/session-root --output /absolute/private-report.json
-```
-
-默认 stdout 最多 4 KiB；完整报告只写到显式绝对路径并使用 `0600`。线程扫描拒绝符号链接。损坏或部分 JSONL 返回 `complete:false`、文件序号/行号和非零退出码，不能静默记为零。
-
-## 自动续跑与输出纪律
-
-- 相互独立的只读检查在同一工具边界批量提交；先定位再定点读取，不重复加载已确认的大文件或相同输出。
-- 已知高噪命令把完整 stdout/stderr 留在权限受限的本地日志，模型侧只收结构化摘要、计数、错误、退出码、SHA-256 与精确日志引用；普通回执 ≤4 KiB，显式宽回执 ≤8,000 字节。
-- 仅等待用户授权时不重复运行不能改变决策的诊断。同一阻塞先发一次简洁请求，再做一次无变化审计；达到受管阈值后写入真实 `blocked`，不得用自动续跑制造重复回合。
-- 状态未变化的 heartbeat 静默。重试继续使用现有进程、session、thread cursor、delivery/Harness receipt；不要启动同一工作的副本。
-- 以上规则只减少重复上下文和无效回合，不得隐藏错误、放宽权限、减少测试、跳过 CI/Harness/平台硬门或改变项目验收范围。
-
-## 已登记 verifier 的观察执行
-
-Harness 初始化或刷新 Agent Map 时会写入机器可读的 verifier 清单和稳定 verifier ID。只对清单中已知、非交互的 verifier 使用受管执行入口；未知命令继续使用原生 `exec_command`：
-
-```bash
-node "$HOME/.agents/leon-engineering/runtime/harness-run.mjs" --project /absolute/project --task-id task-id --verifier-id verifier-test-0123456789ab
-node "$HOME/.agents/leon-engineering/runtime/harness-run.mjs" --project /absolute/project --task-id task-id --read-observation observation-0123456789abcdef01234567
-```
-
-Codex 的 patch→verify 仍使用现有 `functions.exec` 顺序调用：先执行 `apply_patch`，确认补丁成功后才调用 `harness-run.mjs` 运行 verifier；补丁失败不得启动 verifier。该集成不新增工具 schema，也不把任意命令塞入观察层。
-
-完整 stdout/stderr 以 `0600` 留在 `.ai/harness/logs/<task-id>/`，路径穿越和符号链接会被拒绝，日志不会自动删除。普通调用最多返回 4 KiB，显式 `wideReceipt: true` 最多 8 KiB；超限时保留头、尾、错误上下文、状态、退出码、超时原因、SHA-256和日志引用。疑似秘密永不进入回执或回查，主归档失败则落到持久本地 fallback。`observation_recorded` / `observation_recalled` 指标不保存命令、日志或输出。
-
-对用户指定的陌生项目，可从源仓库运行以下只读命令：
-
-```bash
+node scripts/harness-runtime.mjs --install
+node scripts/harness-runtime.mjs --verify
 node scripts/profile-project.mjs --project /absolute/project --format markdown
+node scripts/verification-plan.mjs --project /absolute/project --base <base-sha>
+node scripts/project-constraints.mjs --project /absolute/project --changed-file services/example.py
 ```
 
-它只检查固定的指令、清单、CI 和平台路径，输出的命令均标为 `candidate`，不会执行。只有用户针对该项目明确授权后，才可加入 `--write-profile` 创建 `.ai/project-profile.json`；已有档案还需要 `--replace-profile` 才会更新。安装全局框架本身不会调用该命令或扫描任何项目。
+运行时安装与全局策略安装独立；失败按真实状态处理，不手改受管副本或伪造通过。项目档案、静态约束副本和 CI 修改仍只在该项目获准时写入。候选命令不是执行证据。
 
-对已启用强制 Harness 的目标项目，Agent 自动开始新任务；用户不需要先运行命令。窄小改不带 delivery flag，只有完整交付加入 `--delivery-required`：
+显式选用账本、观察执行、任务 DAG、Token 审计或 Git 交付时，分别读取 `project-harness`、`iteration-delivery` Skill 及源目录的现行指南，不为普通小改预读这些协议。`harness-enforce` 和 delivery flags 仅属于已选中的相应流程；项目自己的 CI、平台和权限门仍保留。
 
-```bash
-node "$HOME/.agents/leon-engineering/runtime/harness-session.mjs" --start --new-task --project /absolute/project --host codex --session-id opaque-task-key --task-id task-id --goal "目标" --acceptance "验收标准"
-node "$HOME/.agents/leon-engineering/runtime/harness-session.mjs" --start --new-task --project /absolute/project --host codex --session-id opaque-task-key --task-id task-id --goal "目标" --acceptance "验收标准" --delivery-required
-```
-
-会话键包含宿主，Claude 与 Codex 即使收到相同 opaque session ID 也不会争用文件。若 Hook 报告 Harness 初始化失败，先执行下述受管 runtime 自检；该命令属于允许的只读恢复诊断。其他写入与无法证明只读的操作保持拒绝，stderr 的结构化诊断不回显项目路径、命令或 session ID：
-
-```bash
-node "$HOME/.agents/leon-engineering/runtime/harness-runtime.mjs" --verify
-```
-
-安装副本自检通过清单回指权威源并校验两侧内容；从权威仓库运行 `--verify-global` 时也会比较源码，能够识别陈旧安装。失败输出只提供阶段、稳定错误码、runtime/manifest 路径和恢复建议。恢复期间只有 `pwd`、配置/指令读取、`rg`/只读 `sed`、Git 只读命令和上述自检可放行；修改类与无法证明只读的命令仍拒绝。若自检失败，从 `leon-engineering` 权威源重新运行全局安装器后再次校验，不要手工修改安装副本。
-
-完成任务后先运行验证，再记录实测结果。窄小改运行普通交付硬门 `harness-enforce`；只有完整交付使用 `--require-delivery`，它读取真实远端 receipt：
-
-```bash
-node "$HOME/.agents/leon-engineering/runtime/harness-enforce.mjs" --project /absolute/project --task-id task-id
-node "$HOME/.agents/leon-engineering/runtime/harness-enforce.mjs" --project /absolute/project --task-id task-id --require-delivery
-```
-
-明确发布或高风险 Git 任务由交付控制器管理；窄小改不得启动下列发布链。`start` 返回功能 worktree，`prepare` 创建集成 worktree，验证后 `publish`，只在状态变化、超时或需要操作时查询 CI，最后 `cleanup`：
-
-```bash
-node "$HOME/.agents/leon-engineering/runtime/iteration-delivery.mjs" --start --project /absolute/project --task-id task-id --slug short-slug
-node "$HOME/.agents/leon-engineering/runtime/iteration-delivery.mjs" --prepare --project /absolute/project --task-id task-id
-node "$HOME/.agents/leon-engineering/runtime/iteration-delivery.mjs" --publish --project /absolute/project --task-id task-id --verification-command "实际命令" --verification-status passed --verification-duration-seconds 12
-node "$HOME/.agents/leon-engineering/runtime/iteration-delivery.mjs" --status --project /absolute/project --task-id task-id
-node "$HOME/.agents/leon-engineering/runtime/iteration-delivery.mjs" --cleanup --project /absolute/project --task-id task-id
-```
-
-远端在发布前推进时，再次运行 `--prepare`，并在新的集成 worktree 重新验证。CI 修复提交使用 `--publish --repair`，最多三轮；之后只有控制器的独占 tip 检查和回滚后验证均通过时才能 `--rollback`。控制器禁止 force-push、脏 worktree 强删和未归并提交删除。完整协议见 `docs/iteration-delivery.md`。
-
-要查看该项目已记录的交付指标，运行只读评估；它不会创建文件、执行账本内命令或扫描其他项目：
-
-```bash
-node scripts/harness-evaluate.mjs --project /absolute/project --all --format json
-node scripts/harness-evaluate.mjs --project /absolute/project --all --format markdown
-node scripts/harness-evaluate.mjs --project /absolute/project --task-id task-id --format markdown
-node scripts/harness-evaluate.mjs --project /absolute/project --rebuild-index
-```
-
-`--task-id` 只读取指定普通 JSON 任务文件；`--all` 读取轻量索引并各读取一次 events/metrics。未索引或损坏证据返回部分报告、`complete: false` 和退出码 2。`--rebuild-index` 是显式写操作，逐文件超时且不下载 dataless 内容。不指定范围会失败。
-
-最小充分验收由只读规划器生成。未知路径、契约、schema、依赖、CI、安全和桌面变更只能升级，不能手工降级：
-
-```bash
-node "$HOME/.agents/leon-engineering/runtime/verification-plan.mjs" --project /absolute/project --risk-tier local-only --change-kind internal --changed-file services/example.py
-```
-
-对已经初始化 Harness 的依赖任务、中断恢复或显式重试，先预览项目内任务计划；它不创建控制文件、不运行任务命令：
-
-```bash
-node scripts/harness-control.mjs --project /absolute/project --task-plan /absolute/project/control-plan.json
-```
-
-只有获得对该项目的明确写入授权后才加 `--write-control-plane`。状态转换、失败/阻塞重试和 worktree 登记均须使用独立显式命令与实际理由。该脚本不创建、切换或删除 worktree，不自动重试，也不运行 Git、测试、构建或任务命令；登记的 worktree 路径、分支和基准提交只是恢复定位信息。
-
-需要把用户已授权项目的架构、文档联动、日志/错误处理或平台规则作为机械检查时，使用受跟踪的项目配置和只读检查器：
-
-```bash
-node scripts/project-constraints.mjs --project /absolute/project
-node scripts/project-constraints.mjs --project /absolute/project --changed-file services/example.py --changed-file docs/CHANGELOG.md
-```
-
-检查器不执行 Git、测试或构建；CI 应自行取得相对变更路径并传给 `--changed-file`。创建或修改 `.agents/project-constraints.json` 与 CI 仍需要用户对该项目的明确授权。
-
-供 CI 调用的项目内副本也必须显式安装：`node scripts/install-project-constraints.mjs --project /absolute/project --write`。它只复制检查器到 `.agents/project-constraints.mjs`；升级已有副本必须额外传入 `--replace`。
+已知只读命令直接使用原生工具；只为真正的并行收益委派。重试复用已有进程、任务与证据；状态未变化静默。不得隐藏错误或用重复诊断替代执行。

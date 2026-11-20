@@ -9,7 +9,8 @@ import {
   resolveHarnessStorage,
   previewHarnessMigration,
   migrateHarnessStorage,
-  verifyHarnessMigration
+  verifyHarnessMigration,
+  withHarnessStorageContext
 } from "../scripts/harness-storage.mjs";
 import {recordOutcome, readHarnessTask, startHarnessSession} from "../scripts/harness-project.mjs";
 import {evaluateHarness} from "../scripts/harness-evaluate.mjs";
@@ -72,6 +73,41 @@ test("keeps non-Git Harness storage project-local", t => {
   assert.equal(storage.directory, path.join(fs.realpathSync(project), ".ai", "harness"));
   assert.equal(storage.legacyDirectory, storage.directory);
   assert.equal(fs.existsSync(storage.directory), false);
+});
+
+test("storage contexts isolate returned objects and expire on success or error", context => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), "leon-storage-scope-"));
+  context.after(() => fs.rmSync(project, {recursive: true, force: true}));
+  withHarnessStorageContext(() => {
+    const storage = resolveHarnessStorage({projectRoot: project});
+    storage.directory = "/tampered";
+    assert.notEqual(resolveHarnessStorage({projectRoot: project}).directory, "/tampered");
+  });
+  git(project, ["init", "-q"]);
+  assert.equal(resolveHarnessStorage({projectRoot: project}).kind, "git-common");
+  assert.throws(() => withHarnessStorageContext(() => {
+    resolveHarnessStorage({projectRoot: project});
+    throw new Error("scope failure");
+  }), /scope failure/);
+  fs.rmSync(path.join(project, ".git"), {recursive: true});
+  assert.equal(resolveHarnessStorage({projectRoot: project}).kind, "project-local");
+});
+
+test("a storage context rechecks common-dir safety and separates worktrees", context => {
+  const {root, repository, worktree} = makeGitFixture(context);
+  withHarnessStorageContext(() => {
+    const mainStorage = resolveHarnessStorage({projectRoot: repository});
+    const linkedStorage = resolveHarnessStorage({projectRoot: worktree});
+    assert.notEqual(mainStorage.workspaceRoot, linkedStorage.workspaceRoot);
+    assert.equal(mainStorage.directory, linkedStorage.directory);
+    const legacy = path.join(worktree, ".ai", "harness");
+    fs.mkdirSync(legacy, {recursive: true});
+    assert.equal(resolveHarnessStorage({projectRoot: worktree}).legacyDirectory, fs.realpathSync(legacy));
+    const displaced = path.join(root, "displaced-git");
+    fs.renameSync(mainStorage.commonDirectory, displaced);
+    fs.symlinkSync(displaced, mainStorage.commonDirectory);
+    assert.throws(() => resolveHarnessStorage({projectRoot: repository}), /invalid Harness storage boundary/);
+  });
 });
 
 function writeLegacyHarness(repository, entries = {}) {

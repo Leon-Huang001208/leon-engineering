@@ -1,14 +1,10 @@
 ---
 name: feature-loop
-description: Use when delivering a scoped engineering feature from acceptance criteria through implementation, verification, review, and handoff.
+description: Use when explicitly invoking feature-loop, the compatibility entry for agent-routing's feature-development subflow.
 ---
 
 # Feature Loop
 
-Confirm the outcome, non-goals, acceptance criteria, affected contracts, and evidence before editing. Use a worktree for concurrent, risky, or public-contract changes; keep a narrow, non-conflicting change in the main checkout.
+Compatibility entry: read [agent-routing](../agent-routing/SKILL.md), then its canonical [feature-development subflow](../agent-routing/references/feature-development.md). Apply the same project gates and authorization boundaries.
 
-Implement the smallest complete slice. Add or update the closest test before behavior changes, run focused verification, inspect the diff, and request a review proportional to risk. Do not claim browser, platform, or CI results that were not observed.
-
-Use the [engineering methods reference](references/engineering-methods.md) when designing tests or considering an architecture change within the accepted scope.
-
-Hand off changed files, commands and results, omitted checks, rollout risks, and follow-up work.
+The [engineering methods reference](references/engineering-methods.md) remains at its existing path; read it only for task-relevant test design or architecture judgment.

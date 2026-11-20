@@ -1,31 +1,20 @@
 ---
 name: iteration-delivery
-description: Use when a Git task explicitly requires publication or has high-risk impact and must complete isolated integration, remote default branch publication, CI, and safe cleanup.
+description: Use when project rules or the current task explicitly select the managed Git delivery controller, including its integration, publication, CI and cleanup receipts.
 ---
 
 # Iteration Delivery
 
-Classify work before invoking the controller:
+Start from current task authorization and the selected project's delivery policy. High risk requires appropriate checks and isolation; it does not itself authorize publication or select a ledger. Ordinary local edits use focused project checks without Harness records or delivery flags.
 
-- Read-only fast path: inspect directly and do not create a worktree.
-- Narrow local edit: only when it is local, reversible, conflict-free, and has no public API/schema, dependency, CI, database, security, desktop, or cross-platform impact. Run focused local verification, record the Harness result without delivery flags, and do not publish or invent a remote receipt.
-- Medium/high-risk isolated implementation: use an isolated worktree, but do not publish unless the task reaches the full-delivery tier.
-- Explicit ship/high-risk full delivery: use the managed controller at `$HOME/.agents/leon-engineering/runtime/iteration-delivery.mjs` and the full lifecycle `start` → implement/commit → `prepare` → merged-result verification → `publish` → status/CI → `cleanup`.
+Use the project's existing release or PR entrypoint unless the project or task explicitly selects this managed controller. The controller attempts a direct push before falling back to a PR; do not invoke publication when that behavior conflicts with a PR-only or no-push boundary. Never infer standing merge or deletion authorization from this Skill.
 
-Only the full-delivery tier starts Harness with `--delivery-required` and finishes with `harness-enforce.mjs --require-delivery`. Explicit publication or impact to public contracts, schema, dependencies, CI, databases, security, desktop/cross-platform behavior, or concurrent work requires this tier. When uncertain, upgrade the tier.
+For an explicitly selected managed delivery, verify the optional runtime and use `start` → implement → `prepare` → verify merged result → authorized `publish` → CI/status → safe `cleanup`. Only this selected flow uses Harness `--delivery-required` and `harness-enforce.mjs --require-delivery`; flags do not grant remote or release permission.
 
-Resolve the default branch from `origin/HEAD`; never assume `main` or `master`. A direct push is the default. If repository protection rejects it, the controller publishes the integration branch, creates a pull request, enables auto-merge, and waits for checks. This policy is already authorized as the user's standing delivery preference, so do not ask again whether to merge, push, or delete the completed branch.
+Resolve the remote default branch rather than assuming main/master. If it advances, prepare a new integration and repeat the checks affected by that change. Fix conflicts in the preserved worktree. When a prepared but unpublished candidate changes, use the controller's `--prepare --replace-prepared` checks; never publish an obsolete result to avoid those checks.
 
-Do not publish an explicit `no-push`, local-only, draft, research, review, or read-only task. Project instructions and platform gates remain authoritative. Secrets, new dependencies, releases, migrations, and other separately controlled actions still require their own authorization.
+Preserve the selected project's fixed contracts, actual CI and platform gates. Missing evidence stays NOT_RUN/BLOCKED. CI repair and rollback use the existing bounded controller checks; rollback requires exclusively owned remote state and verification of the reverted result. Do not silently waive a required check or claim deployment from a merge.
 
-If the remote default branch advances before publication, call `prepare` again. The controller preserves the stale integration commit in ancestry, rebuilds from the new remote base, and requires merged-result verification again. If a merge conflicts, resolve and commit it in the preserved integration worktree, then call `prepare` again before verification and publication.
+Cleanup only after CI is passed or explicitly not_configured, the integration is proven in the remote default branch, and worktrees are clean. Never force-push, force-remove dirty worktrees or delete unmerged work. Project resource registration and retirement apply only when that lifecycle policy was explicitly enabled; preserve active data, dependencies and recovery evidence.
 
-若审核发生在 `prepare` 之后、发布之前，并且功能分支新增了修复提交，使用 `--prepare --replace-prepared` 取代旧 prepared revision，不要先发布旧结果。控制器只在 receipt 仍为 `prepared`、功能与集成 worktree 均干净、功能 HEAD 已变化、远端默认分支仍等于原基线、旧集成提交未进入远端、且没有 CI run、PR 或发布元数据时允许替换。所有检查完成前不移动 receipt 或 worktree；成功后把旧 branch/worktree/commit 以 `status: "superseded"` 写入 `integrationHistory`，非强制移除旧集成 worktree，并要求对新 revision 重新验证。任一条件失败都保留旧 prepared 状态。
-
-CI failures may receive at most three evidence-based repair commits through `publish --repair`. After the third failure, use `rollback` only when the remote default tip is still exclusively owned by this delivery and the reverted result has passed verification. Otherwise preserve the branch and worktree and report the blocker.
-
-Run `cleanup` only after CI is `passed` or explicitly `not_configured`. Cleanup refuses dirty worktrees, confirms the integration commit is in the remote default branch, removes managed worktrees, and deletes local and remote task branches. Never force-push, force-remove a dirty worktree, or force-delete an unmerged branch.
-
-The full-delivery hard gate reads the real receipt and verifies the live remote default branch, CI, local branch, and worktree state; Harness itself does not run Git.
-
-启用事件驱动资源清理后（源码权威文档`docs/resource-lifecycle.md`），临时产物在写入完成时登记到本任务，交付与部署分别退休。缓存共用宿主20GiB预算；成功原始日志只留有界摘要。清理欠账不等于cleaned，不为清理再复制永久备份。存量先核对并逐类批准；特殊修复备份继续保护。没有定时任务，也不把合并成功当成部署成功。
+Commands and receipt recovery details remain in the selected source's `docs/iteration-delivery.md`. Manual runtime tools are optional; the project retains ownership of business acceptance and publication policy.

@@ -2,7 +2,7 @@
 
 当前分发版本为 **0.19.4**：包含事件驱动资源清理、真实Pre/Post工具边界恢复及回退日志登记。使用新的插件版本号确保宿主刷新缓存；核心与默认关闭的可选扩展保持版本一致，不自动开启扩展。
 
-`leon-engineering` 是面向 Codex、Claude 及其他 coding agents 的跨项目工程治理与验证层。它复用宿主的模型推理循环、工具协议和上下文运行时，提供可复用的项目规则、架构约束、变更影响分析、最小充分验收、证据回执、任务交接、Skill 治理、受管交付及薄宿主适配。项目保有自己的业务规则、验证命令和平台支持策略；跨宿主定位不表示所有宿主均已完成真实兼容验证。
+`leon-engineering` 提供按需工程 Skills 和可显式调用的项目验证、交付工具。默认不注册 Hook、不启动 Harness，也不替项目决定测试流程。项目规则拥有项目约束；调用方角色指令（例如 Paperclip 工程师）拥有岗位职责；宿主负责模型、工具和实际权限。跨宿主能力仍按实际验收记录区分。
 
 ## 从这里开始
 
@@ -10,6 +10,8 @@
 2. 用 [架构说明](docs/ARCHITECTURE.md) 确认职责边界。
 3. 用 [开发地图](docs/DEVELOPMENT_MAP.md) 找源码、权威文档、测试与文档同步条件。
 4. 在改动前运行现有测试基线，在改动后运行与风险相称的固定合同和项目计划。
+
+日常工程任务从 `leon-engineering:agent-routing` 进入：先确认项目与风险，再只读取功能开发、缺陷修复或评审中命中的一个子流程。`feature-loop`、`bugfix-evidence`、`review-ship` 的名称与路径保留为兼容转发，不再维护平行流程；发布按项目已有交付要求执行；明确选择受管交付工具时使用 `iteration-delivery`。详见 [工程工作流](docs/engineering-workflow.md)。
 
 ## 当前命令
 
@@ -43,6 +45,8 @@ node scripts/validate-verification-receipt.mjs \
 git diff --check
 ```
 
+重复 Skill 入口先用 [发现目录收敛指南](docs/skill-discovery.md) 生成只读迁移清单，再通过现有 portfolio 预览、应用和回滚。规范插件与全局同名副本分开核验；不会因为生成清单就修改全局目录。
+
 ## 关键边界
 
 开发产物使用[事件驱动生命周期](docs/resource-lifecycle.md)：交付、部署验收、明确退休及恢复事件触发回收；保留有限回滚和最小记录，不建立定时清理任务。安装与全局启用单独验收。
@@ -50,7 +54,7 @@ git diff --check
 - `lib/` 是宿主无关、项目无关的共享内核；`scripts/` 保留稳定 CLI、参数、输出和退出码。
 - `plugins/*/skills/*/SKILL.md` 是框架 Skill 正文的唯一维护位置；安装副本不手工编辑。
 - `adapters/` 只承载宿主差异；共享内核不反向依赖 Codex 或 Claude。
-- Codex 插件负责工具前的 guard；受管 User adapter 的 Pre/Post Hook 负责项目账本。同一调用只由一个 Codex Harness 路径登记；Hook 返回不代表命令或验收通过。
+- 默认插件和全局安装均不注册 PreToolUse/PostToolUse；`--install-global` 仅维护短规则与按需指南。Harness、审计和运行时由项目或任务显式选择，普通工具调用不会自动建账本。
 - 项目 `.agents/verification-policy.json` 是变更到验收的机器路由真源；项目配置拥有路径映射、验证命令、平台支持和工程约束。
 - 架构地图说明“谁拥有源码、文档和测试”；验收策略说明“本次改动必须证明什么”，两者不能相互替代。
 - 交付恢复必须证明登记候选与基线已进入所属集成分支；干净工作树不等于已归并。命令失败与内容冲突分别记录，诊断仅输出稳定分类和 stderr 字节数/哈希，见 [交付控制器](docs/iteration-delivery.md)。

@@ -1,5 +1,7 @@
 # Codex adapter pilot
 
+当前默认安装仅含短规则和按需指南，不注册 Hook 或自动部署 Harness runtime。下文保留宿主验证方式；历史 Hook/guard 检查不能当成当前自动启用要求。现行命令见 `adapters/codex/global-docs/COMMANDS_GUIDE.md`。
+
 Run every scenario in a disposable local Git repository containing only synthetic fixture files. Do not use production credentials, user data, remote repositories, package installation, destructive commands, or global configuration during runtime validation.
 
 ## Codex skill discovery

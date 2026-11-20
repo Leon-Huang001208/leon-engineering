@@ -1,13 +1,13 @@
 # Engineering methods within the existing workflow
 
-This reference supplements feature-loop and bugfix-evidence; it is not another workflow. Use it only for test design or an architecture decision needed by the accepted task. A small, clear task does not add a requirements interview or item-by-item approval. Reading this reference does not trigger a whole-repository scan, HTML report, or parallel agents. Existing authorization and project rules still apply.
+This reference supplements agent-routing's feature and defect subflows, including the feature-loop and bugfix-evidence compatibility entries; it is not another workflow. Use it only for test design or an architecture decision needed by the accepted task. A small, clear task does not add a requirements interview or item-by-item approval. Reading this reference does not trigger a whole-repository scan, HTML report, or parallel agents. Existing authorization and project rules still apply.
 
 ## Test design
 
 - Test primarily through agreed interfaces and assert observable behavior. Avoid unnecessary coupling to private functions, collaborator call order, or internal layout. An internal invariant can still need a focused test when that is the test's purpose.
 - Derive expected results from the specification, known-good examples, or another independent basis. Do not recompute the expected result using the implementation's logic; establish why the test could disagree with an incorrect implementation.
 - Mock or fake according to the test purpose: isolate an external dependency or force a failure when needed, and exercise real integration when that is the behavior being verified. Do not impose a blanket ban on mocks or treat mock behavior alone as product evidence.
-- Test design supplements the project's mandatory contracts and verification routing. User prioritizing selected behaviors does not waive other required checks. The existing feature-loop owns the smallest complete slice and test-before-change sequence; do not add a second loop here.
+- Test design supplements the project's mandatory contracts and verification routing. User prioritizing selected behaviors does not waive other required checks. The feature-development subflow owns the smallest complete slice and test-before-change sequence; do not add a second loop here.
 
 ## Architecture judgment
 

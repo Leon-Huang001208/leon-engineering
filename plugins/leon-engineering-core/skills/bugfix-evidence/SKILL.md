@@ -1,14 +1,10 @@
 ---
 name: bugfix-evidence
-description: Use when correcting a regression or defect that needs a reproduced failure, narrow root-cause analysis, minimal fix, and verified evidence.
+description: Use when explicitly invoking bugfix-evidence, the compatibility entry for agent-routing's defect-repair subflow.
 ---
 
 # Bugfix Evidence
 
-Reproduce the reported failure before editing. Record the command, input, observed result, and expected result. Trace the narrowest root cause; distinguish it from adjacent weaknesses and avoid unrelated refactors.
+Compatibility entry: read [agent-routing](../agent-routing/SKILL.md), then its canonical [defect-repair subflow](../agent-routing/references/defect-repair.md). Apply the same project gates and authorization boundaries.
 
-Write or update the closest regression test, make the minimal corrective change, and rerun the reproduction and focused test. If reproduction is impossible, state the hypothesis and the missing evidence instead of claiming a fix.
-
-Use the [engineering methods reference](../feature-loop/references/engineering-methods.md) for regression-test design; architecture judgment applies only when the fix requires an architecture change.
-
-Hand off the root cause, changed files, verification output, unverified environments, and remaining risk.
+The [engineering methods reference](../feature-loop/references/engineering-methods.md) remains shared with feature development; read it only for task-relevant regression-test design or architecture judgment.
