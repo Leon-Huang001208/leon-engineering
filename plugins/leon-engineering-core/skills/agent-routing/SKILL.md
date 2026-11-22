@@ -7,6 +7,8 @@ description: Use when an engineering task needs planning, implementation, diagno
 
 Project rules first: goal, acceptance and workspace state. Stay in the selected project.
 
+先用已安装且匹配的能力；外部候选不等于可用或授权安装。
+
 不采用防御式推进：已有授权内实现→相关检查→交付。Skill按需裁剪，不追加确认、全测或留存工程。
 
 - `read-only`: inspect only; no mutation or worktree.
@@ -28,8 +30,8 @@ Read only the matching subflow for substantive work; general chat and known read
 
 Hand off changes, observed checks and actual blockers.
 
-窄任务直做；只为独立产出的质量或速度收益委派，不增加流程性提问。风险需要时隔离。An agent team is opt-in.
+窄任务直做；按实际收益委派，不增加流程性提问。
 
 Delegation: read [role templates](references/codex-role-templates.md); no recursion. 不把 Claude 专用 agent 或 skill 隐式当成共享能力。
 
-框架学习不提升项目事实或扩大权限。
+
