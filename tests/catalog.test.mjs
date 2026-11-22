@@ -289,7 +289,7 @@ test("routes risk through the on-demand Skill without automatic ledgers or publi
   assert.match(routing, /Harness is opt-in/);
   assert.match(routing, /verification-policy\.json.*mandatory checks/s);
   assert.match(routing, /no-push\/read-only\/review-only apply/);
-  assert.match(routing, /Unknown impact upgrades verification, not authority/);
+  assert.match(routing, /Investigate actual uncertainty; do not expand work for hypothetical risks/);
   assert.match(routing, /Dependency, remote, migration and release permissions remain separate/);
   assert.match(routing, /不增加流程性提问/);
   assert.match(delivery, /explicitly selects this managed controller/);

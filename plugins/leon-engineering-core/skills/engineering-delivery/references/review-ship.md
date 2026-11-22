@@ -1,10 +1,10 @@
 # Review Ship
 
-Review is read-only by default. Inventory the diff by behavior, contract, configuration, migration, dependency, documentation and generated artifact; map each group to required test, review and rollout evidence.
+Review is read-only by default. Inventory the diff by behavior, contract, configuration, migration, dependency, documentation and generated artifact; select relevant checks. Do not demand a complete evidence package, all roles or a fresh full-suite run for each head.
 
 Inspect trust boundaries, authorization, input handling, secrets, remote effects, migrations, CI and platform constraints. Run only checks authorized by the task and label failed, omitted and unrun checks explicitly.
 
-Report concrete findings by severity with file/line evidence and minimum remediation. If none are found, state that and the unverified areas; do not infer readiness from intent alone. Fixes need an authorized defect-repair route. Publication uses iteration-delivery with its existing gates and authorization.
+Report concrete findings by severity with file/line evidence and minimum remediation. If none are found, state that and the unverified areas; do not infer readiness from intent alone. Fix actual defects within existing task authorization; do not seek approval again for ordinary corrections. Publication follows the project PR path; use iteration-delivery only when explicitly selected.
 
 ## Language-specific risks
 
