@@ -30,8 +30,8 @@ Read only the matching subflow for substantive work; general chat and known read
 
 Hand off changes, observed checks and actual blockers.
 
-窄任务直做；按实际收益委派，不增加流程性提问。
+窄任务直做；按实际收益使用 agent team，不增加流程性提问。
 
 Delegation: read [role templates](references/codex-role-templates.md); no recursion. 不把 Claude 专用 agent 或 skill 隐式当成共享能力。
 
-
+框架学习不提升项目事实或扩大权限。
