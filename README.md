@@ -11,7 +11,7 @@
 1. 阅读 [项目规则](AGENTS.md)。
 2. 用 [架构说明](docs/ARCHITECTURE.md) 确认职责边界。
 3. 用 [开发地图](docs/DEVELOPMENT_MAP.md) 找源码、权威文档、测试与文档同步条件。
-4. 在改动前运行现有测试基线，在改动后运行与风险相称的固定合同和项目计划。
+4. 实现后直接检查效果，按改动执行相关检查并复用仍有效的结果；不为普通修正重跑全仓、重复备份或另建验收工程。已有授权持续有效。
 
 日常工程任务从 `leon-engineering:agent-routing` 进入：先确认项目与风险，再按需读取 `engineering-work` 的功能/修复参考或 `engineering-delivery` 的评审/交付参考。保留 GitHub 已合并的六核心入口和三个推理入口；旧方法 ID、安装 manifest 迁移及参考链接继续受测。发布按项目授权流程执行，受管交付控制器仅在明确选用时调用。详见 [工程工作流](docs/engineering-workflow.md)。
 

@@ -26,7 +26,7 @@ Harness 兼容辅助函数的 `withHarnessStorageContext` 只包围一次显式�
 
 默认仅按需加载工程 Skills，不安装 Hook、不自动建立 Harness 账本。日常工程主入口为 `agent-routing`，功能/修复规范正文在 `engineering-work/references/`，评审/交付在 `engineering-delivery/references/`；旧主入口参考保持短转发，六核心布局与历史 manifest 迁移继续兼容。操作与边界见 [工程工作流](engineering-workflow.md)，路由、引用与平铺安装合同见 `tests/engineering-workflow.test.mjs`。
 
-主入口正文预算及普通聊天/已知只读命令的反触发由同一固定合同检查；真实自然触发和宿主开销另用独立会话采样，不把文件字节或静态合同冒充 Token/整任务提速。42 个旧命令仅保留集中退休映射，发现规划器只使用 core/workflows 活动根；用户同名文件不因源码退休而被自动删除。外部同名入口仍按来源与用户授权处置，不降低分发验证器的 restored 检查。
+工程方法服从当前任务授权与不采用防御式推进原则；局部修改只做相关检查，不引入重复确认、全测或完整失败根留存。主入口正文预算及普通聊天/已知只读命令的反触发由同一固定合同检查；真实自然触发和宿主开销另用独立会话采样，不把文件字节或静态合同冒充 Token/整任务提速。42 个旧命令仅保留集中退休映射，发现规划器只使用 core/workflows 活动根；用户同名文件不因源码退休而被自动删除。外部同名入口仍按来源与用户授权处置，不降低分发验证器的 restored 检查。
 
 语言诊断、测试设计、有界维护与任务范围内的架构判断维护在 [engineering-work 的共享工程方法](../plugins/leon-engineering-core/skills/engineering-work/references/engineering-methods.md)，由功能与修复子流程按需引用。语言审查要点并入现有 review-ship；方法来源与许可证保留，不新增入口、工作流或验收路由。引用、触发范围与来源许可仍由 `tests/catalog.test.mjs` 固定合同检查。
 
